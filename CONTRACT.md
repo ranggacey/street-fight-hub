@@ -108,9 +108,9 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 - Aturan rekor: KO → pemenang wins+1 & kos+1, kalah losses+1. Decision → wins+1 / losses+1. Draw → keduanya draws+1 (advancer tetap maju bracket).
 
 ## 7. Gemini (lib/gemini.ts)
-- `@google/generative-ai`, model `gemini-3.8-flash` (ganti dari `gemini-2.0-flash` 2026-11-07 — model lama dipensiunkan Google, API 404 "no longer available"). Prompt: bahasa Indonesia, minta JSON SAJA dengan field: nickname, styleSummary (1 kalimat), strengths (array 2 string), weakness (1 string), signatureMove, introLine, color (hex), gear (1 string). Temperature 0.9. Input: displayName, style (+styleOther), selfDescription.
+- `@google/generative-ai`, model `gemini-flash-lite-latest` (ganti dari `gemini-3.8-flash` 2026-11-07 — 3.8-flash overload: API 503 "high demand" + request menggantung sampai Vercel timeout 300 dtk; lite merespons instan untuk tugas JSON kecil). Sebelumnya `gemini-2.0-flash` (dipensiunkan Google, API 404). Prompt: bahasa Indonesia, minta JSON SAJA dengan field: nickname, styleSummary (1 kalimat), strengths (array 2 string), weakness (1 string), signatureMove, introLine, color (hex), gear (1 string). Temperature 0.9. Input: displayName, style (+styleOther), selfDescription.
 - Parse JSON dari respons (strip markdown fence). Validasi hasil: semua field ada, strengths tepat 2, color hex valid — kalau tidak valid, 1x retry dengan prompt yang sama, lalu throw.
-- Jika GEMINI_API_KEY kosong → throw error kode `GEMINI_NOT_CONFIGURED` (route ubah jadi 503).
+- Jika GEMINI_API_KEY kosong → throw error kode `GEMINI_NOT_CONFIGURED` (route ubah jadi 503). Timeout 45 dtk per percobaan → kode `GEMINI_TIMEOUT` (tidak di-retry); overload 503 → kode `GEMINI_BUSY` (retry 1x). Frontend juga timeout 75 dtk — tombol "AI sedang berpikir…" tidak boleh berputar selamanya.
 
 ## 8. Seed (scripts/seed.ts, jalankan `npm run seed`)
 - Butuh env: MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD (JANGAN hardcode; jika kosong → error jelas dan berhenti).

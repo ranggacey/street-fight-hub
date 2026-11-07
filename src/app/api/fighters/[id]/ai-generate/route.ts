@@ -39,6 +39,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       if (err instanceof GeminiError && err.code === 'GEMINI_INVALID_KEY') {
         throw unavailable('Kunci AI tidak valid — periksa GEMINI_API_KEY', 'GEMINI_INVALID_KEY');
       }
+      if (err instanceof GeminiError && err.code === 'GEMINI_TIMEOUT') {
+        throw unavailable('AI terlalu lama merespons — coba lagi sebentar', 'GEMINI_TIMEOUT');
+      }
+      if (err instanceof GeminiError && err.code === 'GEMINI_BUSY') {
+        throw unavailable('AI sedang sibuk — coba lagi sebentar', 'GEMINI_BUSY');
+      }
       throw err;
     }
 

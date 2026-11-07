@@ -79,7 +79,7 @@ src/lib/
   validation.ts   Validasi server-side (username, password, fighter, turnamen, persona)
   bracket.ts      Fungsi murni: largestPowerOfTwo, buildBracket, roundNameForTarget, nextRound
   draw.ts         mulberry32, damage model, simulateFight, decideMatch, advanceWinners
-  gemini.ts       generatePersona (gemini-3.8-flash, JSON, validasi + 1x retry)
+  gemini.ts       generatePersona (gemini-flash-lite-latest, JSON, validasi + 1x retry error cepat, timeout 45 dtk)
   audit.ts        Helper audit() → AdminAuditLog
   http.ts         Respons JSON seragam { ok, data } / { ok:false, error:{code,message} }
 src/models/       User, Fighter, Tournament, TournamentEntry, Match,

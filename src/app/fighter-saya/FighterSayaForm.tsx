@@ -177,14 +177,33 @@ export default function FighterSayaForm() {
     if (!fighter) return;
     setGenBusy(true);
     setError("");
-    const res = await clientApi<{ fighter: Fighter; regenLeft: number }>(
-      `/api/fighters/${getId(fighter)}/ai-generate`,
-      { method: "POST" },
-    );
+    // Timeout klien 75 dtk: JANGAN pernah biarkan tombol "AI sedang
+    // berpikir…" berputar selamanya (2026-11-07: user menunggu 10 menit
+    // tanpa respons). Abort → clientApi mengembalikan NETWORK.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 75_000);
+    let res;
+    try {
+      res = await clientApi<{ fighter: Fighter; regenLeft: number }>(
+        `/api/fighters/${getId(fighter)}/ai-generate`,
+        { method: "POST", signal: controller.signal },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
     setGenBusy(false);
     if (!res.ok) {
       if (res.error.status === 429) {
         setError("Jatah regenerate persona sudah habis (maksimal 3 kali).");
+      } else if (
+        res.error.code === "GEMINI_TIMEOUT" ||
+        res.error.code === "GEMINI_BUSY"
+      ) {
+        setError("AI lagi sibuk/lemot, coba lagi sebentar ya.");
+      } else if (res.error.code === "NETWORK") {
+        setError(
+          "Koneksi ke server terputus (AI-nya kelamaan). Coba lagi sebentar.",
+        );
       } else if (res.error.status === 503) {
         setError(
           "AI belum dikonfigurasi di server. Persona bisa dibuat manual di bawah — isi lalu simpan.",
