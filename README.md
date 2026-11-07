@@ -166,10 +166,15 @@ siap.
   guard (tanpa slug → 404, slug salah → 404, user biasa → 403, admin
   stats → 200), cek visual browser (home, detail turnamen, profil
   fighter, klasemen). Data TEST sudah dibersihkan — yang tersisa hanya
-  admin + turnamen contoh "Night Fight Championship #1". Satu-satunya
-  fitur yang belum bisa diverifikasi end-to-end: persona AI (butuh
-  `GEMINI_API_KEY` asli — env saat ini berisi bundle terenkripsi
-  Negara Emas, bukan key mentah; lihat `src/lib/gemini.ts`).
+  admin + turnamen contoh "Night Fight Championship #1".
+- **Persona AI TERVERIFIKASI 2026-11-07 14:08**: key Gemini asli rangga
+  (AQ., proyek 267485516177) dipasang sebagai `GEMINI_API_KEY`; model
+  diganti `gemini-2.0-flash` → `gemini-3.8-flash` (model lama
+  dipensiunkan Google, API 404). Tes live: fighter tes mendapat persona
+  lengkap Bahasa Indonesia (nickname "Si Kilat Simpang Lima"); data tes
+  dibersihkan. Catatan: free-tier Gemini kadang 503 overload (sementara);
+  regenerate persona maks 3x/fighter (percobaan yang timeout di sisi
+  klien tetap menghabiskan jatah).
   Perbaikan pasca-verifikasi: semua skema Mongoose didaftarkan di
   `src/lib/db.ts` (dulu `populate()` gagal `MissingSchemaError` di
   serverless instance dingin → halaman detail turnamen 404 acak),
