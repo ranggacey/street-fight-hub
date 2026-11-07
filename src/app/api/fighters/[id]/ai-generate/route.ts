@@ -36,6 +36,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       if (err instanceof GeminiError && err.code === 'GEMINI_NOT_CONFIGURED') {
         throw unavailable('AI belum dikonfigurasi', 'GEMINI_NOT_CONFIGURED');
       }
+      if (err instanceof GeminiError && err.code === 'GEMINI_INVALID_KEY') {
+        throw unavailable('Kunci AI tidak valid — periksa GEMINI_API_KEY', 'GEMINI_INVALID_KEY');
+      }
       throw err;
     }
 

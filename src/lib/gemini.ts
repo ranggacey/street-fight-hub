@@ -88,8 +88,21 @@ export async function generatePersona(input: GeneratePersonaInput): Promise<AiPe
       return parsePersonaJson(result.response.text());
     } catch (err) {
       lastError = err;
+      // Kunci API tidak valid → jangan retry, langsung beri kode jelas.
+      if (isInvalidKeyError(err)) {
+        throw new GeminiError(
+          'GEMINI_INVALID_KEY',
+          'Kunci API Gemini tidak valid — periksa GEMINI_API_KEY',
+        );
+      }
     }
   }
   if (lastError instanceof Error) throw lastError;
   throw new Error('Gagal generate persona AI');
+}
+
+/** Deteksi error "API key not valid" dari SDK Google (status 400). */
+function isInvalidKeyError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /API key not valid|API_KEY_INVALID/i.test(msg);
 }
