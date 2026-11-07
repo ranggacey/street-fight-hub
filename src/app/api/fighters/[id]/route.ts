@@ -35,18 +35,26 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       koTimeSec: number | null;
       reelUrl: string | null;
       decidedAt: string | null;
-      tournamentId: { id: string; name: string; slug: string } | null;
+      tournamentId:
+        | { id: string; name: string; slug: string }
+        | string
+        | null;
       fighterAId: { id: string; displayName: string } | string | null;
       fighterBId: { id: string; displayName: string } | string | null;
     };
 
     // Serialisasi dulu: lean() tidak membawa virtual `id`, jadi bandingkan
     // lewat `id` hasil serialize (bukan `._id` mentah / `.id` yang undefined).
+    // Bentuk riwayat mengikuti FightHistoryItem (types.ts): field DATAR
+    // (tournamentName / opponentName), BUKAN objek bersarang — halaman
+    // profil membaca field datar itu; versi sebelumnya mengembalikan
+    // objek sehingga halaman menampilkan "Turnamen" dan "Lawan: —".
     const serializedMatches = serialize(matches) as SerializedMatch[];
     const history = serializedMatches.map((m) => {
       const aId = typeof m.fighterAId === 'string' ? m.fighterAId : (m.fighterAId?.id ?? null);
       const isA = aId === id;
       const opponent = isA ? m.fighterBId : m.fighterAId;
+      const tour = m.tournamentId;
       let result: 'win' | 'loss' | 'draw' | 'bye' = 'draw';
       if (m.method === 'bye') result = 'bye';
       else if (m.method === 'draw') result = 'draw';
@@ -54,11 +62,15 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       else result = 'loss';
       return {
         matchId: m.id,
-        tournament: m.tournamentId,
+        tournamentId: typeof tour === 'string' ? tour : (tour?.id ?? null),
+        tournamentName: typeof tour === 'object' ? (tour?.name ?? null) : null,
+        tournamentSlug: typeof tour === 'object' ? (tour?.slug ?? null) : null,
         round: m.round,
-        opponent:
+        opponentId:
+          opponent && typeof opponent === 'object' ? opponent.id : null,
+        opponentName:
           opponent && typeof opponent === 'object'
-            ? { id: opponent.id, displayName: opponent.displayName }
+            ? opponent.displayName
             : null,
         result,
         method: m.method,

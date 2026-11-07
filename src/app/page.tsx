@@ -6,6 +6,7 @@ import {
   formatWIB,
   getId,
   IG_URL,
+  normalizeBracket,
   TOURNAMENT_STATUS_LABELS,
 } from "@/components/api";
 import type {
@@ -128,12 +129,21 @@ export default async function Home() {
       );
       if (champ) {
         championName = champ.aiPersona?.nickname ?? champ.displayName;
-      } else if (typeof detail.championId === "string") {
-        const entry = (detail.entries ?? []).find(
-          (e) => getId(asFighter(e.fighter ?? e.fighterId)) === detail.championId,
+      } else {
+        // Fallback: pemenang final dari bracket (entries turnamen selesai
+        // sudah tidak berstatus 'active', jadi lookup lewat entries gagal).
+        const finalMatch = normalizeBracket(detail.bracket).find(
+          (m) => m.round === "F" && m.status === "decided",
         );
-        const f = asFighter(entry?.fighter ?? entry?.fighterId);
-        if (f) championName = f.aiPersona?.nickname ?? f.displayName;
+        const fWinner = asFighter(
+          typeof finalMatch?.winnerId === "string"
+            ? null
+            : (finalMatch?.winnerId as Fighter | null),
+        );
+        if (fWinner) {
+          championName =
+            fWinner.aiPersona?.nickname ?? fWinner.displayName;
+        }
       }
     }
   }

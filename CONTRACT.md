@@ -29,6 +29,22 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 - `announcements`: text (max 200), active (boolean), createdBy, createdAt. (Satu yang active dipakai homepage.)
 - `adminAuditLogs`: adminUserId, action (string), targetType (string), targetId (string), detail (string), createdAt.
 
+### Aturan model Mongoose (bug nyata, ditemukan 2026-11-07)
+- **Semua skema WAJIB terdaftar di `src/lib/db.ts`** (import semua file
+  `src/models/*`). Setiap route handler hanya mengimpor model yang
+  dipakainya sendiri, jadi tanpa ini `populate()` ke model lain gagal
+  dengan `MissingSchemaError: Schema hasn't been registered` di serverless
+  instance yang dingin — route yang sama kadang 200 (instance hangat)
+  kadang 500 (instance dingin); halaman yang memanggil API itu lalu 404.
+  Model memakai guard `mongoose.models.X || mongoose.model(...)`, jadi
+  import ganda aman.
+- `GET /api/tournaments/[slug]` me-populate `championId` (nama juara
+  untuk kartu Champion + "Juara Terakhir" di home).
+- `GET /api/fighters/[id]` mengembalikan riwayat dalam bentuk DATAR
+  `FightHistoryItem` (`tournamentId` string, `tournamentName`,
+  `tournamentSlug`, `opponentId`, `opponentName`) — BUKAN objek
+  bersarang. Halaman profil membaca field datar itu.
+
 ## 3. Auth (lib/auth.ts)
 - bcryptjs hash 12 rounds. JWT HS256 via jose, secret dari env JWT_SECRET, payload { sub: userId, username, role }, exp 30 hari. Cookie `sfh_token`, httpOnly, SameSite=Lax, Secure jika production, Path=/, maxAge 30d.
 - Helper: `hashPassword`, `verifyPassword`, `signToken(user)`, `getSession()` (baca cookie di server component/route, return {userId, username, role} | null), `requireAuth()` (throw/return 401), `requireAdmin()` (401 jika tak login, 403 jika role bukan admin).

@@ -1,5 +1,20 @@
 import mongoose from 'mongoose';
 
+// Daftarkan SEMUA skema Mongoose di sini. Setiap route handler hanya
+// mengimpor model yang dipakainya sendiri, jadi tanpa ini populate() ke
+// model lain gagal dengan MissingSchemaError di serverless instance yang
+// dingin (route yang pertama kali dipanggil di instance itu belum pernah
+// memuat model yang di-populate). Semua route memakai connectDB(), jadi
+// semua skema selalu terdaftar sebelum query apa pun jalan.
+import '@/models/AdminAuditLog';
+import '@/models/Announcement';
+import '@/models/Fighter';
+import '@/models/Match';
+import '@/models/Tournament';
+import '@/models/TournamentEntry';
+import '@/models/User';
+import '@/models/VideoTask';
+
 /**
  * Koneksi Mongoose dengan cache global (pola resmi Next.js App Router).
  * Jika MONGODB_URI tidak ada, connectDB() throw error jelas — route harus

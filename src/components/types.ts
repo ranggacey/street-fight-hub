@@ -149,7 +149,7 @@ export interface FightHistoryItem {
   round?: RoundKey;
   opponentId?: string;
   opponentName?: string;
-  result?: "win" | "loss" | "draw";
+  result?: "win" | "loss" | "draw" | "bye";
   method?: MatchMethod | null;
   score?: { a: number; b: number } | null;
   reelUrl?: string | null;

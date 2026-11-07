@@ -12,7 +12,11 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   try {
     const { slug } = await params;
     await connectDB();
-    const tournament = await Tournament.findOne({ slug }).lean();
+    const tournament = await Tournament.findOne({ slug })
+      // championId di-populate supaya kartu Champion di halaman detail +
+      // "Juara Terakhir" di home bisa menampilkan nama juara.
+      .populate('championId', 'displayName igUsername style aiPersona')
+      .lean();
     if (!tournament) throw notFound('Turnamen tidak ditemukan');
 
     const entries = await TournamentEntry.find({ tournamentId: tournament._id, status: 'active' })
