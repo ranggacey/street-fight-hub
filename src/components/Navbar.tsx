@@ -16,11 +16,16 @@ const PUBLIC_SEGMENTS = new Set([
   "daftar",
   "masuk",
   "fighter-saya",
+  "game",
+  "tantangan",
+  "gelar",
 ]);
 
 const NAV_LINKS = [
   { href: "/turnamen", label: "Turnamen" },
   { href: "/klasemen", label: "Klasemen" },
+  { href: "/tantangan", label: "Tantangan" },
+  { href: "/gelar", label: "Gelar" },
 ];
 
 export default function Navbar() {

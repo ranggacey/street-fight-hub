@@ -14,24 +14,41 @@ import type {
   Fighter,
   FighterDetail,
   FightHistoryItem,
+  GameHistoryItem,
+  TitleHistoryItem,
 } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
+import { ButtonLink } from "@/components/Button";
 import StatChip from "@/components/StatChip";
 import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
-/** Backend mengembalikan { fighter, history }. */
+/** Backend mengembalikan { fighter, history, gameHistory, titleHistory }. */
 type FighterDetailResponse = {
   fighter: Fighter;
   history: FightHistoryItem[];
+  gameHistory?: GameHistoryItem[];
+  titleHistory?: TitleHistoryItem[];
 };
 
 function toDetail(raw: FighterDetailResponse | null): FighterDetail | null {
   if (!raw) return null;
-  return { ...raw.fighter, history: raw.history };
+  return {
+    ...raw.fighter,
+    history: raw.history,
+    gameHistory: raw.gameHistory ?? [],
+    titleHistory: raw.titleHistory ?? [],
+  };
 }
+
+const TITLE_EVENT_LABELS: Record<string, string> = {
+  race_10_win: "Menang Race 10 — jadi juara",
+  race_7_win: "Menang Race 7 — jadi juara",
+  takeover: "Merebut gelar juara",
+  vacated_inactivity: "Kehilangan gelar (6 hari tidak bertarung)",
+};
 
 export async function generateMetadata({
   params,
@@ -72,8 +89,11 @@ export default async function FighterProfilePage({
   if (!f) notFound();
 
   const record = f.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
+  const casual = f.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
   const color = styleColor(f.style);
   const history = f.history ?? f.matches ?? [];
+  const gameHistory = f.gameHistory ?? [];
+  const titleHistory = f.titleHistory ?? [];
 
   // Badge turunan dari rekor + riwayat.
   const isUndefeated = record.wins > 0 && record.losses === 0;
@@ -125,6 +145,12 @@ export default async function FighterProfilePage({
           <StatChip label="Kalah" value={record.losses} tone="red" />
           <StatChip label="Seri" value={record.draws} tone="paper" />
           <StatChip label="KO" value={record.kos} tone="red" />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatChip label="Rating Kasual" value={f.rating ?? 1000} tone="cyan" />
+          <StatChip label="Menang Kasual" value={casual.wins} tone="amber" />
+          <StatChip label="Kalah Kasual" value={casual.losses} tone="red" />
+          <StatChip label="KO Kasual" value={casual.kos} tone="red" />
         </div>
       </section>
 
@@ -213,6 +239,129 @@ export default async function FighterProfilePage({
                     </a>
                   ) : null}
                 </div>
+              </GlassCard>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Riwayat gelar */}
+      <section aria-labelledby="gelar-heading">
+        <h2
+          id="gelar-heading"
+          className="mb-4 font-display text-3xl uppercase tracking-wide"
+        >
+          Riwayat <span className="text-amber-brand">Gelar</span>
+        </h2>
+        {titleHistory.length === 0 ? (
+          <EmptyState
+            title="Belum Pernah Pegang Gelar"
+            description="Fighter ini belum pernah merebut atau memegang sabuk Juara Street Fight."
+          />
+        ) : (
+          <div className="space-y-3">
+            {titleHistory.map((t) => (
+              <GlassCard key={t.id ?? `${t.type}-${t.at}`} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-paper">
+                      {TITLE_EVENT_LABELS[t.type ?? ""] ?? t.type}
+                    </p>
+                    <p className="mt-0.5 text-sm text-paper-dim">
+                      {t.at ? formatWIB(t.at) : ""}
+                      {t.score !== null && t.score !== undefined
+                        ? ` • ${t.score} kemenangan race`
+                        : ""}
+                      {t.defensesAtEnd !== null && t.defensesAtEnd !== undefined
+                        ? ` • ${t.defensesAtEnd} defense di reign itu`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {t.role === "won" ? (
+                      <Badge tone="amber">Juara</Badge>
+                    ) : (
+                      <Badge tone="red">Kehilangan Gelar</Badge>
+                    )}
+                    {t.fightId ? (
+                      <Link
+                        href={`/game/${t.fightId}`}
+                        className="text-sm font-semibold text-amber-brand hover:underline"
+                      >
+                        Lihat fight →
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              </GlassCard>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Riwayat game kasual */}
+      <section aria-labelledby="game-heading">
+        <h2
+          id="game-heading"
+          className="mb-4 font-display text-3xl uppercase tracking-wide"
+        >
+          Riwayat <span className="text-amber-brand">Game</span>
+        </h2>
+        {gameHistory.length === 0 ? (
+          <EmptyState
+            title="Belum Ada Fight Game"
+            description="Fighter ini belum pernah bertarung di game Hub. Tantang lewat halaman Tantangan!"
+            action={<ButtonLink href="/tantangan">Ke Tantangan</ButtonLink>}
+          />
+        ) : (
+          <div className="space-y-3">
+            {gameHistory.map((g) => (
+              <GlassCard key={g.fightId} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-paper">
+                      vs {g.opponentName ?? "—"}
+                      {g.isTitleFight ? (
+                        <span className="ml-2">
+                          <Badge tone="amber">Title Fight</Badge>
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-sm text-paper-dim">
+                      {g.completedAt ? formatWIB(g.completedAt) : ""}
+                      {g.status === "disputed" ? " • Disputed" : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {g.result === "win" ? (
+                      <Badge tone="amber">Menang</Badge>
+                    ) : g.result === "loss" ? (
+                      <Badge tone="red">Kalah</Badge>
+                    ) : (
+                      <Badge tone="cyan">Seri</Badge>
+                    )}
+                    {g.method ? (
+                      <Badge tone="outline">
+                        {METHOD_LABELS[g.method] ?? g.method}
+                      </Badge>
+                    ) : null}
+                    {g.score ? (
+                      <span className="font-display text-lg tabular-nums text-paper">
+                        {g.score.a}:{g.score.b}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                {g.fightId ? (
+                  <div className="mt-2">
+                    <Link
+                      href={`/game/${g.fightId}`}
+                      className="text-sm font-semibold text-amber-brand hover:underline"
+                    >
+                      Tonton ulang / lihat hasil →
+                    </Link>
+                  </div>
+                ) : null}
               </GlassCard>
             ))}
           </div>

@@ -108,7 +108,35 @@ export const STYLE_LABELS: Record<string, string> = {
   silat: "Silat",
   wrestling: "Gulat",
   other: "Lainnya",
+  "kali-arnis": "Kali Arnis",
+  judo: "Judo",
+  kudo: "Kudo",
+  "jeet-kune-do": "Jeet Kune Do",
+  capoeira: "Capoeira",
+  wushu: "Wushu",
+  "kung-fu": "Kung Fu",
 };
+
+export const TEMPO_LABELS: Record<string, string> = {
+  agresif: "Agresif",
+  seimbang: "Seimbang",
+  bertahan: "Bertahan",
+};
+
+export const TEMPO_OPTIONS: { value: string; label: string }[] = Object.entries(
+  TEMPO_LABELS,
+).map(([value, label]) => ({ value, label }));
+
+export const MAP_LABELS: Record<string, string> = {
+  ring: "Ring Tinju",
+  gudang: "Gudang Underground",
+  jalanan: "Jalanan Malam",
+  dojo: "Dojo",
+};
+
+export const MAP_OPTIONS: { value: string; label: string }[] = Object.entries(
+  MAP_LABELS,
+).map(([value, label]) => ({ value, label }));
 
 export const STYLE_OPTIONS: { value: string; label: string }[] = Object.entries(
   STYLE_LABELS,
@@ -145,8 +173,62 @@ export const VIDEO_STATUS_LABELS: Record<string, string> = {
 };
 
 export function styleLabel(style?: string, styleOther?: string): string {
-  if (style === "other" && styleOther) return styleOther;
+  if (style === "other" && styleOther) {
+    // "Kali archis" (ejaan lama di data) = label kanonis "Kali Arnis".
+    // Tidak ada migrasi massal DB — cukup perlakukan saat tampil.
+    if (styleOther.trim().toLowerCase() === "kali archis") return "Kali Arnis";
+    return styleOther;
+  }
   return STYLE_LABELS[style ?? ""] ?? style ?? "-";
+}
+
+/** Label jurus khas (kind engine → label Indonesia, fallback kind mentah). */
+export function moveLabel(kind?: string | null): string {
+  if (!kind) return "—";
+  const labels: Record<string, string> = {
+    jab: "Jab",
+    cross: "Cross",
+    hook: "Hook",
+    uppercut: "Uppercut",
+    bodyshot: "Bodyshot",
+    lowkick: "Low Kick",
+    bodykick: "Body Kick",
+    headkick: "Head Kick",
+    frontkick: "Front Kick",
+    roundhouse: "Roundhouse",
+    spinkick: "Spinning Kick",
+    axekick: "Axe Kick",
+    overhand: "Overhand",
+    haymaker: "Haymaker",
+    shove: "Dorongan",
+    teep: "Teep",
+    knee: "Knee",
+    elbow: "Siku",
+    flyknee: "Flying Knee",
+    takedown: "Takedown",
+    clinch: "Clinch",
+    sweep: "Sapuan",
+    abaniko: "Abaniko",
+    sinawali: "Sinawali",
+    redonda: "Redonda",
+    seoinage: "Seoi Nage",
+    osotogari: "Osoto Gari",
+    uchimata: "Uchi Mata",
+    headbutt: "Sundulan",
+    yokogeri: "Yoko Geri",
+    straightlead: "Straight Lead",
+    sidekick: "Side Kick",
+    shuto: "Shuto Uchi",
+    gyakuzuki: "Gyaku Zuki",
+    maegeri: "Mae Geri",
+    armada: "Armada",
+    meialua: "Meia Lua",
+    queixada: "Queixada",
+    tornadokick: "Tornado Kick",
+    butterflykick: "Butterfly Kick",
+    lotuskick: "Lotus Kick",
+  };
+  return labels[kind] ?? kind;
 }
 
 /* ------------------------------------------------------------------ */
@@ -226,6 +308,13 @@ export const STYLE_COLORS: Record<string, string> = {
   silat: "#a78bfa",
   wrestling: "#34d399",
   other: "#f5a623",
+  "kali-arnis": "#fb923c",
+  judo: "#38bdf8",
+  kudo: "#f43f5e",
+  "jeet-kune-do": "#facc15",
+  capoeira: "#4ade80",
+  wushu: "#c084fc",
+  "kung-fu": "#c084fc",
 };
 
 export function styleColor(style?: string): string {

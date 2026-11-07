@@ -22,6 +22,7 @@ import Badge from "@/components/Badge";
 import { ButtonLink } from "@/components/Button";
 import FighterCard from "@/components/FighterCard";
 import EmptyState from "@/components/EmptyState";
+import GlobalChat from "@/components/GlobalChat";
 
 export const dynamic = "force-dynamic";
 
@@ -321,6 +322,62 @@ export default async function Home() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Game 1v1 + gelar */}
+      <section aria-labelledby="game-heading">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <h2
+            id="game-heading"
+            className="font-display text-3xl uppercase tracking-wide sm:text-4xl"
+          >
+            Gelud <span className="text-amber-brand">1v1</span>
+          </h2>
+          <Link
+            href="/tantangan"
+            className="shrink-0 text-sm font-bold text-amber-brand hover:underline"
+          >
+            Semua tantangan →
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <GlassCard className="flex flex-col items-start gap-3">
+            <Badge tone="red">Baru</Badge>
+            <h3 className="font-display text-2xl uppercase leading-tight tracking-wide">
+              Tantang Fighter Lain
+            </h3>
+            <p className="text-sm leading-relaxed text-paper-dim">
+              Tantang siapa pun, terima tantangan yang masuk, lalu gelud
+              langsung di Hub — 60 detik, hasil terverifikasi dari seed, foto
+              poster untuk game biasa.
+            </p>
+            <ButtonLink href="/tantangan">Buka Tantangan →</ButtonLink>
+          </GlassCard>
+          <GlassCard className="flex flex-col items-start gap-3 border-amber-brand/40">
+            <Badge tone="amber">Sabuk Juara</Badge>
+            <h3 className="font-display text-2xl uppercase leading-tight tracking-wide">
+              Perebutan Gelar
+            </h3>
+            <p className="text-sm leading-relaxed text-paper-dim">
+              Menang 10 fight duluan saat gelar kosong untuk jadi juara.
+              Holder yang kalah kehilangan sabuk; yang menang mempertahankannya.
+            </p>
+            <ButtonLink href="/gelar" variant="ghost">
+              Lihat Gelar →
+            </ButtonLink>
+          </GlassCard>
+        </div>
+      </section>
+
+      {/* Obrolan global */}
+      <section aria-labelledby="chat-heading">
+        <h2
+          id="chat-heading"
+          className="mb-4 font-display text-3xl uppercase tracking-wide sm:text-4xl"
+        >
+          Obrolan <span className="text-amber-brand">Global</span>
+        </h2>
+        <GlobalChat />
       </section>
 
       {/* CTA penutup */}
