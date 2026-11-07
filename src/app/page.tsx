@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { dataOr, serverApiGet } from "@/components/server-api";
+import { getSession } from "@/lib/auth";
 import {
   asFighter,
   formatWIB,
@@ -80,7 +81,7 @@ function TournamentCard({ t }: { t: Tournament }) {
 }
 
 export default async function Home() {
-  const [annRes, upcomingRes, liveRes, completedRes, topRes] =
+  const [annRes, upcomingRes, liveRes, completedRes, topRes, session] =
     await Promise.all([
       serverApiGet<{ announcement: Announcement | null }>(
         "/api/announcements/active",
@@ -95,6 +96,10 @@ export default async function Home() {
         "/api/tournaments?status=completed",
       ),
       serverApiGet<{ fighters: Fighter[] }>("/api/fighters?sort=wins"),
+      // Sesi dibaca server-side supaya CTA penutup tidak menawarkan
+      // "Daftar" ke user yang sudah login. Gagal baca sesi (mis. secret
+      // belum terkonfigurasi) dianggap belum login, bukan error halaman.
+      getSession().catch(() => null),
     ]);
 
   const announcement = dataOr(annRes, { announcement: null }).announcement;
@@ -380,28 +385,52 @@ export default async function Home() {
         <GlobalChat />
       </section>
 
-      {/* CTA penutup */}
+      {/* CTA penutup — beda untuk yang sudah login vs belum.
+          User yang sudah login tidak boleh ditawari "Daftar" lagi. */}
       <section aria-label="Ajakan bergabung">
         <GlassCard
           strong
           className="animate-glow-pulse border-amber-brand/40 px-6 py-10 text-center"
         >
-          <h2 className="font-display text-3xl uppercase leading-tight tracking-wide sm:text-5xl">
-            Siap Naik <span className="text-amber-brand">Ring?</span>
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-paper-dim">
-            Satu akun, satu fighter. Isi nama tampil, username IG, dan gaya
-            bertarungmu — lalu gabung turnamen dan biarkan undian menentukan
-            nasibmu di ring.
-          </p>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <ButtonLink href="/daftar" size="lg">
-              Daftar Sekarang
-            </ButtonLink>
-            <ButtonLink href="/fighter-saya" variant="ghost" size="lg">
-              Buat Fighter
-            </ButtonLink>
-          </div>
+          {session ? (
+            <>
+              <h2 className="font-display text-3xl uppercase leading-tight tracking-wide sm:text-5xl">
+                Lanjut <span className="text-amber-brand">Bertarung?</span>
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-paper-dim">
+                Kamu sudah masuk sebagai @{session.username}. Tantang lawan,
+                rebut sabuk juara, atau cek fighter-mu — ring sudah
+                menunggumu.
+              </p>
+              <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <ButtonLink href="/tantangan" size="lg">
+                  Tantang Lawan
+                </ButtonLink>
+                <ButtonLink href="/fighter-saya" variant="ghost" size="lg">
+                  Lihat Fighter Saya
+                </ButtonLink>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-3xl uppercase leading-tight tracking-wide sm:text-5xl">
+                Siap Naik <span className="text-amber-brand">Ring?</span>
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-paper-dim">
+                Satu akun, satu fighter. Isi nama tampil, username IG, dan gaya
+                bertarungmu — lalu gabung turnamen dan biarkan undian menentukan
+                nasibmu di ring.
+              </p>
+              <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <ButtonLink href="/daftar" size="lg">
+                  Daftar Sekarang
+                </ButtonLink>
+                <ButtonLink href="/fighter-saya" variant="ghost" size="lg">
+                  Buat Fighter
+                </ButtonLink>
+              </div>
+            </>
+          )}
         </GlassCard>
       </section>
     </div>

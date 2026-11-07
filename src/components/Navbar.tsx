@@ -32,12 +32,15 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [checked, setChecked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
     clientApi<{ user: SessionUser }>("/api/auth/me").then((res) => {
-      if (alive && res.ok) setUser(res.data.user);
+      if (!alive) return;
+      if (res.ok) setUser(res.data.user);
+      setChecked(true);
     });
     return () => {
       alive = false;
@@ -70,7 +73,13 @@ export default function Navbar() {
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-brand font-display text-lg text-on-amber">
             SF
           </span>
-          <span className="font-display text-lg uppercase leading-none tracking-wide sm:text-xl">
+          {/* Wordmark disembunyikan di layar kecil saat belum login, supaya
+              tombol Masuk/Daftar muat di header tanpa buka hamburger. */}
+          <span
+            className={`font-display text-lg uppercase leading-none tracking-wide sm:text-xl ${
+              checked && !user ? "max-sm:hidden" : ""
+            }`}
+          >
             Street Fight <span className="text-amber-brand">Hub</span>
           </span>
         </Link>
@@ -122,18 +131,35 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile hamburger */}
-        <button
-          type="button"
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/5 text-paper md:hidden"
-          aria-expanded={menuOpen}
-          aria-label={menuOpen ? "Tutup menu" : "Buka menu"}
-          onClick={() => setMenuOpen((v) => !v)}
-        >
-          <span aria-hidden="true" className="font-display text-xl">
-            {menuOpen ? "✕" : "☰"}
-          </span>
-        </button>
+        {/* Mobile: tombol Masuk/Daftar langsung terlihat di header saat
+            belum login — tidak perlu buka hamburger dulu. */}
+        <div className="flex items-center gap-2 md:hidden">
+          {checked && !user ? (
+            <>
+              <Link
+                href="/masuk"
+                className="rounded-lg px-2 py-2 text-sm font-semibold text-paper-dim transition-colors hover:text-paper"
+                onClick={() => setMenuOpen(false)}
+              >
+                Masuk
+              </Link>
+              <ButtonLink href="/daftar" size="sm">
+                Daftar
+              </ButtonLink>
+            </>
+          ) : null}
+          <button
+            type="button"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/5 text-paper"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Tutup menu" : "Buka menu"}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <span aria-hidden="true" className="font-display text-xl">
+              {menuOpen ? "✕" : "☰"}
+            </span>
+          </button>
+        </div>
       </nav>
 
       {/* Panel menu mobile */}
