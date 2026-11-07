@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palet warm analogous: deep charcoal + amber + red, 1 aksen cool (cyan) */
+  --color-ink-950: #0c0a09;
+  --color-ink-900: #171412;
+  --color-ink-800: #221d1a;
+  --color-ink-700: #332b26;
+  --color-amber-brand: #f5a623;
+  --color-red-brand: #e5382e;
+  --color-cyan-accent: #22d3ee;
+  --color-paper: #faf5ec;
+  --color-paper-dim: #d6cdbd;
+  --color-paper-mute: #a89e8c;
+  --color-on-amber: #1a1206;
+
+  /* Font: Anton (display) + Inter (body). Font dimuat via <link> Google Fonts
+     di layout.tsx dengan fallback stack di sini — build tidak pernah gagal
+     karena font. */
+  --font-display: "Anton", "Arial Narrow", Impact, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --animate-fade-up: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop-in: pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-glow-pulse: glow-pulse 3.2s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes glow-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 0.9;
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ink-950 font-body text-paper antialiased;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: var(--color-amber-brand);
+    color: var(--color-on-amber);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-amber-brand);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbar gelap yang konsisten */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-ink-900);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-700);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-amber-brand);
+  }
+}
+
+@layer components {
+  /* Glassmorphism — satu sumber kebenaran (CONTRACT §1) */
+  .glass {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .glass-strong {
+    background: rgba(23, 20, 18, 0.78);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 1rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Backdrop arena: glow radial amber/red + grain CSS (tanpa gambar eksternal) */
+  .arena-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    background:
+      radial-gradient(60rem 30rem at 85% -10%, rgba(245, 166, 35, 0.22), transparent 60%),
+      radial-gradient(50rem 26rem at -10% 30%, rgba(229, 56, 46, 0.16), transparent 60%),
+      radial-gradient(40rem 24rem at 50% 110%, rgba(245, 166, 35, 0.1), transparent 60%),
+      var(--color-ink-950);
+  }
+
+  .arena-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  }
+
+  /* Teks outline untuk hero */
+  .text-stroke {
+    -webkit-text-stroke: 1.5px rgba(250, 245, 236, 0.4);
+    color: transparent;
+  }
+
+  /* Stiker miring khas maximalism */
+  .sticker {
+    display: inline-block;
+    transform: rotate(-2deg);
+  }
+}
+
+/* Hormati prefers-reduced-motion: matikan semua animasi/transisi */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
