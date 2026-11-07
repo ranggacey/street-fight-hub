@@ -67,6 +67,48 @@ export interface BracketMatchInput {
   status: 'scheduled' | 'decided';
 }
 
+/**
+ * Bolehkan acak ulang bracket? Hanya jika bracket SUDAH dibuat tapi BELUM
+ * ada pertandingan sungguhan yang diundi: semua match masih di satu ronde
+ * yang sama (ronde pertama) dan tidak ada match non-bye yang decided.
+ * Bye boleh decided (bye diputuskan otomatis saat bracket dibuat).
+ * Setelah satu ronde diundi, ronde berikut sudah terbentuk → tidak boleh.
+ */
+export function canReshuffle(
+  matches: { round: string; isBye?: boolean; status?: string }[],
+): boolean {
+  if (matches.length === 0) return false;
+  const rounds = new Set(matches.map((m) => m.round));
+  if (rounds.size !== 1) return false;
+  return matches.every((m) => m.isBye === true || m.status === 'scheduled');
+}
+
+/**
+ * Urutan match dalam satu ronde untuk tampilan pohon: sama seperti yang
+ * dipakai advanceWinners (createdAt, lalu id) — pemenang match ke-i ronde
+ * ini dipasangkan ke match ke-floor(i/2) ronde berikut.
+ */
+export function sortMatchesForTree<T extends { createdAt?: string; id?: string; _id?: string }>(
+  matches: T[],
+): T[] {
+  return [...matches].sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (ta !== tb) return ta - tb;
+    return String(a.id ?? a._id ?? '').localeCompare(String(b.id ?? b._id ?? ''));
+  });
+}
+
+/**
+ * Path SVG siku (elbow) dari sisi kanan match asal ke sisi kiri match
+ * tujuan: horizontal → vertikal → horizontal. Kalau y sama, garis lurus.
+ */
+export function elbowPath(x1: number, y1: number, x2: number, y2: number): string {
+  const midX = (x1 + x2) / 2;
+  if (y1 === y2) return `M ${x1} ${y1} H ${x2}`;
+  return `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`;
+}
+
 export interface BuildBracketResult {
   target: number;
   rounds: RoundName[];

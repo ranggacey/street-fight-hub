@@ -216,7 +216,11 @@ export default async function TurnamenDetailPage({
         >
           Bracket
         </h2>
-        <BracketView bracket={t.bracket} />
+        <p className="mb-4 text-sm text-paper-mute">
+          🎲 Pasangan ronde pertama diacak otomatis saat bracket dibuat —
+          admin bisa mengacak ulang sebelum ada pertandingan yang diundi.
+        </p>
+        <BracketView bracket={t.bracket} champion={champion} />
       </section>
     </div>
   );

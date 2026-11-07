@@ -56,6 +56,7 @@ export default function AdminTournaments({ slug }: { slug: string }) {
   // Modal konfirmasi
   const [confirm, setConfirm] = useState<
     | { kind: "bracket"; t: Tournament }
+    | { kind: "reshuffle"; t: Tournament }
     | { kind: "close"; t: Tournament }
     | { kind: "cancel"; t: Tournament }
     | null
@@ -431,6 +432,16 @@ export default function AdminTournaments({ slug }: { slug: string }) {
                           Generate Bracket
                         </Button>
                       ) : null}
+                      {t.status === "in_progress" ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => setConfirm({ kind: "reshuffle", t })}
+                        >
+                          🎲 Acak Ulang Bracket
+                        </Button>
+                      ) : null}
                     </div>
                   )}
 
@@ -502,6 +513,30 @@ export default function AdminTournaments({ slug }: { slug: string }) {
           Bracket dibuat acak dari peserta yang terdaftar. Turnamen butuh
           minimal 4 peserta. Setelah bracket dibuat, status turnamen menjadi
           Berlangsung dan pendaftaran tidak bisa dibuka lagi.
+        </p>
+      </Modal>
+      <Modal
+        open={confirm?.kind === "reshuffle"}
+        onClose={() => setConfirm(null)}
+        title="Acak Ulang Bracket?"
+        confirmLabel="Ya, Acak Ulang"
+        onConfirm={() =>
+          confirm && confirm.kind === "reshuffle"
+            ? runAction(
+                confirm.t,
+                {},
+                `/api/admin/tournaments/${getId(confirm.t)}/reshuffle-bracket`,
+                `Bracket “${confirm.t.name}” diacak ulang — pasangan ronde pertama baru.`,
+              )
+            : undefined
+        }
+        busy={!!busyId}
+      >
+        <p>
+          Pasangan ronde pertama akan diacak ulang secara acak (termasuk
+          siapa yang dapat bye). Hanya bisa dilakukan sebelum ada
+          pertandingan yang diundi — kalau sudah ada yang diundi, tombol ini
+          akan ditolak server.
         </p>
       </Modal>
       <Modal

@@ -1,5 +1,8 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { MatchItem } from "./types";
+import type { FighterSummary, MatchItem } from "./types";
 import {
   asFighter,
   getId,
@@ -8,6 +11,7 @@ import {
   ROUND_LABELS,
   ROUND_ORDER,
 } from "./api";
+import { elbowPath, sortMatchesForTree } from "@/lib/bracket";
 import Badge from "./Badge";
 import EmptyState from "./EmptyState";
 
@@ -83,16 +87,128 @@ function MatchRow({ match }: { match: MatchItem }) {
 }
 
 /**
- * Bracket interaktif: mobile horizontal snap-scroll, desktop grid kolom
- * per ronde. Klik match untuk melihat detail pertandingan.
+ * Bracket pohon (tree): kolom per ronde dihubungkan garis siku, seperti
+ * bagan turnamen di atas kertas — pemenang maju ke match berikutnya,
+ * ujungnya kolom Juara. Mobile: geser horizontal.
+ *
+ * Pemetaan pohon mengikuti advanceWinners (lib/draw.ts): pemenang match
+ * ke-i ronde ini dipasangkan ke match ke-floor(i/2) ronde berikut, dengan
+ * urutan match = createdAt (sama seperti API bracket).
+ * Garis digambar SVG overlay dari posisi kartu yang diukur (useEffect +
+ * ResizeObserver), jadi tetap nyambung walau tinggi kartu beda-beda.
  */
 export default function BracketView({
   bracket,
+  champion,
 }: {
   bracket: MatchItem[] | Record<string, MatchItem[]> | null | undefined;
+  champion?: FighterSummary | null;
 }) {
-  const matches = normalizeBracket(bracket);
-  if (matches.length === 0) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [paths, setPaths] = useState<string[]>([]);
+  const [svgSize, setSvgSize] = useState({ w: 0, h: 0 });
+
+  const roundMatches = useMemo(() => {
+    const matches = normalizeBracket(bracket);
+    const byRound = new Map<string, MatchItem[]>();
+    for (const m of matches) {
+      const list = byRound.get(m.round) ?? [];
+      list.push(m);
+      byRound.set(m.round, list);
+    }
+    const rounds = ROUND_ORDER.filter((r) => byRound.has(r));
+    // Ronde di luar urutan standar tetap ditampilkan di akhir.
+    for (const r of byRound.keys()) {
+      if (!rounds.includes(r as (typeof ROUND_ORDER)[number])) {
+        rounds.push(r as (typeof ROUND_ORDER)[number]);
+      }
+    }
+    return rounds.map((r) => ({
+      round: r,
+      matches: sortMatchesForTree(byRound.get(r) ?? []),
+    }));
+  }, [bracket]);
+
+  const isEmpty = roundMatches.every((r) => r.matches.length === 0);
+
+  // Juara: dari prop (detail turnamen, lengkap dgn IG) atau fallback dari
+  // pemenang match final (winnerId ter-populate displayName).
+  const championName = useMemo(() => {
+    if (champion) return champion;
+    const last = roundMatches[roundMatches.length - 1];
+    const finalMatch = last?.matches[0];
+    if (!finalMatch) return null;
+    const w = asFighter(
+      (finalMatch.winnerId as unknown as FighterSummary | string | null) ?? null,
+    );
+    return w ?? null;
+  }, [champion, roundMatches]);
+
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const cRect = container.getBoundingClientRect();
+    // Posisi node diambil lewat data-bracket-node (bukan callback ref —
+    // react-hooks/refs melarang akses ref saat render).
+    const nodes = new Map<string, { x: number; y: number; right: number }>();
+    for (const el of container.querySelectorAll<HTMLElement>("[data-bracket-node]")) {
+      const key = el.getAttribute("data-bracket-node");
+      if (!key) continue;
+      const r = el.getBoundingClientRect();
+      nodes.set(key, {
+        x: r.left - cRect.left + container.scrollLeft,
+        y: r.top + r.height / 2 - cRect.top + container.scrollTop,
+        right: r.right - cRect.left + container.scrollLeft,
+      });
+    }
+    const point = (key: string, edge: "left" | "right") => {
+      const n = nodes.get(key);
+      if (!n) return null;
+      return { x: edge === "right" ? n.right : n.x, y: n.y };
+    };
+    const next: string[] = [];
+    roundMatches.forEach((col, ri) => {
+      col.matches.forEach((_m, mi) => {
+        const from = point(`${ri}:${mi}`, "right");
+        if (!from) return;
+        const isLastRound = ri === roundMatches.length - 1;
+        const to = isLastRound
+          ? point("champion", "left")
+          : point(`${ri + 1}:${Math.floor(mi / 2)}`, "left");
+        if (!to) return;
+        next.push(elbowPath(from.x, from.y, to.x, to.y));
+      });
+    });
+    setPaths((prev) => {
+      if (prev.length === next.length && prev.every((p, i) => p === next[i])) {
+        return prev;
+      }
+      return next;
+    });
+    setSvgSize((prev) => {
+      const w = container.scrollWidth;
+      const h = container.scrollHeight;
+      if (prev.w === w && prev.h === h) return prev;
+      return { w, h };
+    });
+  }, [roundMatches]);
+
+  useEffect(() => {
+    measure();
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(container);
+    // Ukur ulang setelah font dimuat (tinggi kartu bisa berubah).
+    document.fonts?.ready.then(() => measure()).catch(() => {});
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [measure]);
+
+  if (isEmpty) {
     return (
       <EmptyState
         title="Bracket Belum Dibuat"
@@ -101,48 +217,92 @@ export default function BracketView({
     );
   }
 
-  const byRound = new Map<string, MatchItem[]>();
-  for (const m of matches) {
-    const list = byRound.get(m.round) ?? [];
-    list.push(m);
-    byRound.set(m.round, list);
-  }
-  const rounds = ROUND_ORDER.filter((r) => byRound.has(r));
-  // Ronde di luar urutan standar tetap ditampilkan di akhir.
-  for (const r of byRound.keys()) {
-    if (!rounds.includes(r as (typeof ROUND_ORDER)[number])) {
-      rounds.push(r as (typeof ROUND_ORDER)[number]);
-    }
-  }
-
   return (
     <div
-      className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 lg:grid lg:snap-none lg:grid-flow-col lg:auto-cols-fr lg:overflow-visible"
+      ref={containerRef}
+      className="relative overflow-x-auto pb-4"
       aria-label="Bracket turnamen"
     >
-      {rounds.map((round) => {
-        const list = byRound.get(round) ?? [];
-        return (
+      <svg
+        className="pointer-events-none absolute left-0 top-0"
+        width={svgSize.w}
+        height={svgSize.h}
+        aria-hidden="true"
+      >
+        {paths.map((d, i) => (
+          <path
+            key={i}
+            d={d}
+            fill="none"
+            stroke="rgba(245, 166, 35, 0.55)"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ))}
+      </svg>
+      <div className="relative z-10 flex gap-14">
+        {roundMatches.map((col, ri) => (
           <section
-            key={round}
-            className="w-[280px] min-w-[280px] snap-start sm:w-[300px] lg:w-auto lg:min-w-0"
-            aria-label={ROUND_LABELS[round] ?? round}
+            key={col.round}
+            className="flex w-[280px] shrink-0 snap-start flex-col sm:w-[300px]"
+            aria-label={ROUND_LABELS[col.round] ?? col.round}
           >
             <h3 className="mb-3 flex items-center gap-2 font-display text-lg uppercase tracking-wide">
               <span className="rounded-md bg-amber-brand px-2 py-0.5 text-sm text-on-amber">
-                {round}
+                {col.round}
               </span>
-              <span className="text-paper">{ROUND_LABELS[round] ?? round}</span>
-              <span className="text-sm text-paper-mute">({list.length})</span>
+              <span className="text-paper">{ROUND_LABELS[col.round] ?? col.round}</span>
+              <span className="text-sm text-paper-mute">({col.matches.length})</span>
             </h3>
-            <div className="space-y-3">
-              {list.map((m, i) => (
-                <MatchRow key={getId(m) || `${round}-${i}`} match={m} />
+            <div className="flex flex-1 flex-col justify-around gap-3 py-1">
+              {col.matches.map((m, mi) => (
+                <div
+                  key={getId(m) || `${col.round}-${mi}`}
+                  data-bracket-node={`${ri}:${mi}`}
+                >
+                  <MatchRow match={m} />
+                </div>
               ))}
             </div>
           </section>
-        );
-      })}
+        ))}
+
+        {/* Kolom juara — ujung pohon */}
+        <section
+          className="flex w-[280px] shrink-0 snap-start flex-col sm:w-[300px]"
+          aria-label="Juara"
+        >
+          <h3 className="mb-3 flex items-center gap-2 font-display text-lg uppercase tracking-wide">
+            <span className="rounded-md bg-amber-brand px-2 py-0.5 text-sm text-on-amber">
+              🏆
+            </span>
+            <span className="text-paper">Juara</span>
+          </h3>
+          <div className="flex flex-1 flex-col justify-around py-1">
+            <div data-bracket-node="champion">
+              <div className="glass border-amber-brand/50 p-4 text-center">
+                {championName ? (
+                  <>
+                    <p className="font-display text-2xl uppercase leading-tight tracking-wide text-amber-brand">
+                      {championName.displayName}
+                    </p>
+                    {championName.igUsername ? (
+                      <p className="mt-1 text-xs text-paper-mute">
+                        @{championName.igUsername}
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-paper-mute">
+                    Juara belum ditentukan — final belum diundi.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

@@ -70,6 +70,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
   - `POST /api/admin/tournaments` { name, bracketSize, regOpenAt, regCloseAt, rules } → slug auto `night-fight-championship-N` (N = nomor urut turnamen, mulai 1). 201.
   - `PATCH /api/admin/tournaments/[id]` → edit name/rules/window; aksi khusus body { action: 'close' } → status 'closed'; { action: 'cancel' } → status 'cancelled' (hanya jika belum in_progress).
   - `POST /api/admin/tournaments/[id]/generate-bracket` → lib/bracket.ts (lihat §5). 400 jika peserta < 4 (pesan: turnamen butuh min 4 peserta) atau bracket sudah ada. Set status 'in_progress' (atau 'closed'→'in_progress'), simpan bracketSeed.
+- `POST /api/admin/tournaments/[id]/reshuffle-bracket` → acak ulang pasangan ronde pertama dengan seed baru (2026-11-07, permintaan rangga). Hanya sebelum ada match non-bye yang decided (guard `canReshuffle` di lib/bracket.ts); match lama dihapus, match baru dibuat, seed entry + bracketSeed diperbarui. 400 jika sudah ada yang diundi.
   - `POST /api/admin/tournaments/[id]/draw-round` { round } → lib/draw.ts (§6): putuskan semua match 'scheduled' di ronde itu (bye tidak di-draw), buat videoTask per match yang diputuskan, majukan pemenang ke ronde berikut (buat match ronde berikut bila kedua slot terisi; jika ronde = F → set champion, status 'completed', entry champion). 400 jika ronde belum siap / sudah diputuskan.
   - `PATCH /api/admin/video-tasks/[id]` { status, reelUrl?, note? } → status 'uploaded' wajib reelUrl (valid URL instagram.com/reel atau instagram.com/p); set match reelUrl + status 'video_done'. 'blocked' wajib note. 'in_production' tanpa syarat.
   - `GET /api/admin/video-tasks?status=` → list + match + fighter ringkas.
@@ -123,7 +124,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 ## 10. Halaman publik (frontend)
 - `/` home: hero display besar "NIGHT FIGHT CHAMPIONSHIP", banner pengumuman aktif, turnamen upcoming/live, juara terakhir, top 5 klasemen, CTA daftar/buat fighter, link IG @streetfightstickman (https://www.instagram.com/streetfightstickman).
 - `/turnamen`: list + filter status.
-- `/turnamen/[slug]`: detail + countdown deadline (client component, update tiap detik) + jumlah peserta live + daftar peserta + bracket interaktif + tombol Join/Leave (auth; konfirmasi 1x via window.confirm atau modal kecil).
+- `/turnamen/[slug]`: detail + countdown deadline (client component, update tiap detik) + jumlah peserta live + daftar peserta + bracket pohon interaktif (garis siku + kolom Juara, 2026-11-07) + tombol Join/Leave (auth; konfirmasi 1x via window.confirm atau modal kecil). Pasangan ronde pertama diacak otomatis saat bracket dibuat.
 - `/pertandingan/[id]`: dua fighter berdampingan, hasil, Reel (link + embed sederhana bila URL instagram), skor/KO time.
 - `/fighter/[id]`: profil publik (rekor, badge Champion/KO Artist/Undefeated, riwayat fight + link video, deskripsi diri).
 - `/klasemen`: leaderboard + filter style.

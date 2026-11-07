@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBracket,
+  canReshuffle,
+  elbowPath,
   largestPowerOfTwo,
   nextRound,
   roundNameForTarget,
+  sortMatchesForTree,
 } from '../bracket';
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `fighter-${i + 1}`);
@@ -94,5 +97,57 @@ describe('roundNameForTarget / nextRound', () => {
     expect(nextRound('QF')).toBe('SF');
     expect(nextRound('SF')).toBe('F');
     expect(nextRound('F')).toBeNull();
+  });
+});
+
+describe('canReshuffle', () => {
+  const sched = (round: string) => ({ round, isBye: false, status: 'scheduled' });
+  const bye = (round: string) => ({ round, isBye: true, status: 'decided' });
+  const decided = (round: string) => ({ round, isBye: false, status: 'decided' });
+
+  it('boleh: semua match di ronde pertama, belum ada yang decided', () => {
+    expect(canReshuffle([sched('QF'), sched('QF'), sched('QF'), sched('QF')])).toBe(true);
+  });
+
+  it('boleh: ada bye (decided otomatis) tapi belum ada match sungguhan yang decided', () => {
+    expect(canReshuffle([sched('QF'), sched('QF'), bye('QF'), bye('QF')])).toBe(true);
+  });
+
+  it('tidak boleh: sudah ada match non-bye yang decided', () => {
+    expect(canReshuffle([decided('QF'), sched('QF')])).toBe(false);
+  });
+
+  it('tidak boleh: sudah ada match di ronde berikut', () => {
+    expect(canReshuffle([sched('QF'), sched('SF')])).toBe(false);
+  });
+
+  it('tidak boleh: belum ada match sama sekali', () => {
+    expect(canReshuffle([])).toBe(false);
+  });
+});
+
+describe('sortMatchesForTree', () => {
+  it('urut createdAt, lalu id — sama seperti advanceWinners', () => {
+    const ms = [
+      { id: 'c', createdAt: '2026-11-07T10:00:02Z' },
+      { id: 'a', createdAt: '2026-11-07T10:00:00Z' },
+      { id: 'b', createdAt: '2026-11-07T10:00:01Z' },
+    ];
+    expect(sortMatchesForTree(ms).map((m) => m.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('tanpa createdAt: urutan asal dipertahankan (stabil)', () => {
+    const ms = [{ id: 'x' }, { id: 'y' }];
+    expect(sortMatchesForTree(ms).map((m) => m.id)).toEqual(['x', 'y']);
+  });
+});
+
+describe('elbowPath', () => {
+  it('garis lurus kalau y sama', () => {
+    expect(elbowPath(0, 50, 100, 50)).toBe('M 0 50 H 100');
+  });
+
+  it('siku: horizontal → vertikal → horizontal lewat titik tengah', () => {
+    expect(elbowPath(0, 10, 100, 90)).toBe('M 0 10 H 50 V 90 H 100');
   });
 });
