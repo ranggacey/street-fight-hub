@@ -1,0 +1,58 @@
+/**
+ * Limit harian game — dihitung per hari WIB (Asia/Jakarta, UTC+7, tanpa DST).
+ * Reset tengah malam WIB, dihitung server-side dari `createdAt`.
+ */
+import { GameFight } from '../../models/GameFight';
+import { Challenge } from '../../models/Challenge';
+
+export const DAILY_FIGHT_LIMIT = 3;
+export const DAILY_CHALLENGE_LIMIT = 5;
+
+export interface DayWindow {
+  start: Date;
+  end: Date;
+}
+
+/** Awal/akhir hari WIB yang memuat `now` (00:00–24:00 Asia/Jakarta). */
+export function wibDayWindow(now: Date = new Date()): DayWindow {
+  const WIB_MS = 7 * 60 * 60 * 1000;
+  const shifted = now.getTime() + WIB_MS;
+  const dayStartShifted = Math.floor(shifted / 86_400_000) * 86_400_000;
+  return {
+    start: new Date(dayStartShifted - WIB_MS),
+    end: new Date(dayStartShifted - WIB_MS + 86_400_000),
+  };
+}
+
+/** Berapa fight game (status apa pun yang sudah dibuat) fighter ini hari ini (WIB)? */
+export async function countFightsToday(
+  fighterId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const { start, end } = wibDayWindow(now);
+  return GameFight.countDocuments({
+    createdAt: { $gte: start, $lt: end },
+    $or: [{ fighterAId: fighterId }, { fighterBId: fighterId }],
+  });
+}
+
+/** Berapa tantangan yang dikirim fighter ini hari ini (WIB)? */
+export async function countChallengesSentToday(
+  fighterId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const { start, end } = wibDayWindow(now);
+  return Challenge.countDocuments({
+    createdAt: { $gte: start, $lt: end },
+    challengerFighterId: fighterId,
+  });
+}
+
+/** Sisa jatah tarung hari ini (WIB) untuk satu fighter. */
+export async function fightsRemainingToday(
+  fighterId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const used = await countFightsToday(fighterId, now);
+  return Math.max(0, DAILY_FIGHT_LIMIT - used);
+}
