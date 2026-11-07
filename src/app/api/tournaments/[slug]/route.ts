@@ -19,7 +19,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .lean();
     if (!tournament) throw notFound('Turnamen tidak ditemukan');
 
-    const entries = await TournamentEntry.find({ tournamentId: tournament._id, status: 'active' })
+    // Entries: semua kecuali yang mundur — turnamen selesai harus tetap
+    // menampilkan pesertanya (status 'eliminated'/'champion'), bukan
+    // "Belum ada peserta". Halaman sendiri yang menyaring 'withdrawn'.
+    const entries = await TournamentEntry.find({
+      tournamentId: tournament._id,
+      status: { $in: ['active', 'eliminated', 'champion'] },
+    })
       .populate('fighterId', 'displayName igUsername style record aiPersona status')
       .sort({ joinedAt: 1 })
       .lean();
