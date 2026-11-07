@@ -7,7 +7,6 @@ import { badRequest } from './http';
 
 export const USERNAME_RE = /^[a-z0-9_]+$/;
 export const IG_USERNAME_RE = /^[A-Za-z0-9._]+$/;
-export const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 export const FIGHTER_STYLES = [
   'boxing',
@@ -25,17 +24,6 @@ export const MATCH_ROUNDS = ['R32', 'R16', 'QF', 'SF', 'F'] as const;
 export type MatchRound = (typeof MATCH_ROUNDS)[number];
 
 export const BRACKET_SIZES = [8, 16, 32] as const;
-
-export interface AiPersona {
-  nickname: string;
-  styleSummary: string;
-  strengths: [string, string];
-  weakness: string;
-  signatureMove: string;
-  introLine: string;
-  color: string;
-  gear: string;
-}
 
 function reqString(body: Record<string, unknown>, key: string, label: string): string {
   const value = body[key];
@@ -129,13 +117,11 @@ export interface FighterPatch {
     styleOther?: string | null;
     selfDescription?: string;
   };
-  persona: Partial<AiPersona>;
 }
 
 /** Validasi PATCH fighter (owner maupun admin moderasi). Semua field opsional. */
 export function parseFighterPatch(body: Record<string, unknown>): FighterPatch {
   const top: FighterPatch['top'] = {};
-  const persona: Partial<AiPersona> = {};
 
   if (body.displayName !== undefined) {
     top.displayName = checkLength(reqString(body, 'displayName', 'Nama tampilan'), 1, 30, 'Nama tampilan');
@@ -169,75 +155,7 @@ export function parseFighterPatch(body: Record<string, unknown>): FighterPatch {
     );
   }
 
-  if (body.nickname !== undefined) persona.nickname = checkLength(reqString(body, 'nickname', 'Nickname'), 1, 30, 'Nickname');
-  if (body.styleSummary !== undefined) persona.styleSummary = checkLength(reqString(body, 'styleSummary', 'Ringkasan gaya'), 1, 200, 'Ringkasan gaya');
-  if (body.strengths !== undefined) {
-    const value = body.strengths;
-    if (
-      !Array.isArray(value) ||
-      value.length !== 2 ||
-      value.some((s) => typeof s !== 'string' || s.trim() === '' || s.trim().length > 50)
-    ) {
-      throw badRequest('Strengths harus array berisi tepat 2 string (maks 50 karakter)');
-    }
-    persona.strengths = [value[0].trim(), value[1].trim()] as [string, string];
-  }
-  if (body.weakness !== undefined) persona.weakness = checkLength(reqString(body, 'weakness', 'Kelemahan'), 1, 200, 'Kelemahan');
-  if (body.signatureMove !== undefined) persona.signatureMove = checkLength(reqString(body, 'signatureMove', 'Jurus andalan'), 1, 50, 'Jurus andalan');
-  if (body.introLine !== undefined) persona.introLine = checkLength(reqString(body, 'introLine', 'Kalimat pembuka'), 1, 200, 'Kalimat pembuka');
-  if (body.color !== undefined) {
-    const value = reqString(body, 'color', 'Warna');
-    if (!HEX_COLOR_RE.test(value)) throw badRequest('Warna harus format hex #rrggbb');
-    persona.color = value;
-  }
-  if (body.gear !== undefined) persona.gear = checkLength(reqString(body, 'gear', 'Gear'), 1, 100, 'Gear');
-
-  return { top, persona };
-}
-
-/**
- * Gabungkan patch persona dengan aiPersona yang sudah ada.
- * Return null jika tidak ada field persona di patch.
- * Throw 400 jika hasil gabungan tidak lengkap (semua 8 field wajib).
- */
-export function mergePersona(
-  existing: unknown,
-  patch: Partial<AiPersona>,
-): AiPersona | null {
-  if (Object.keys(patch).length === 0) return null;
-  const merged = { ...(existing && typeof existing === 'object' ? (existing as Record<string, unknown>) : {}), ...patch };
-  return validateAiPersona(merged);
-}
-
-/** Validasi objek aiPersona (dipakai Gemini + PATCH). Throw 400 jika tidak valid. */
-export function validateAiPersona(value: unknown): AiPersona {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw badRequest('Persona AI tidak valid');
-  }
-  const obj = value as Record<string, unknown>;
-  const req = (key: string, label: string, min: number, max: number): string => {
-    const v = obj[key];
-    if (typeof v !== 'string' || v.trim() === '') throw badRequest(`Persona AI: ${label} wajib diisi`);
-    return checkLength(v.trim(), min, max, `Persona AI: ${label}`);
-  };
-  const nickname = req('nickname', 'nickname', 1, 30);
-  const styleSummary = req('styleSummary', 'styleSummary', 1, 200);
-  const strengthsRaw = obj.strengths;
-  if (
-    !Array.isArray(strengthsRaw) ||
-    strengthsRaw.length !== 2 ||
-    strengthsRaw.some((s) => typeof s !== 'string' || s.trim() === '' || s.trim().length > 50)
-  ) {
-    throw badRequest('Persona AI: strengths harus berisi tepat 2 string');
-  }
-  const strengths = [strengthsRaw[0].trim(), strengthsRaw[1].trim()] as [string, string];
-  const weakness = req('weakness', 'weakness', 1, 200);
-  const signatureMove = req('signatureMove', 'signatureMove', 1, 50);
-  const introLine = req('introLine', 'introLine', 1, 200);
-  const colorRaw = req('color', 'color', 7, 7);
-  if (!HEX_COLOR_RE.test(colorRaw)) throw badRequest('Persona AI: color harus format hex #rrggbb');
-  const gear = req('gear', 'gear', 1, 100);
-  return { nickname, styleSummary, strengths, weakness, signatureMove, introLine, color: colorRaw, gear };
+  return { top };
 }
 
 // ---------------------------------------------------------------------------

@@ -11,8 +11,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     const { id } = await params;
     await connectDB();
     const match = await Match.findById(id)
-      .populate('fighterAId', 'displayName igUsername style record aiPersona')
-      .populate('fighterBId', 'displayName igUsername style record aiPersona')
+      .populate('fighterAId', 'displayName igUsername style record')
+      .populate('fighterBId', 'displayName igUsername style record')
       .populate('tournamentId', 'name slug status')
       .lean();
     if (!match) throw notFound('Pertandingan tidak ditemukan');

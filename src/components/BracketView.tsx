@@ -21,7 +21,7 @@ function MatchRow({ match }: { match: MatchItem }) {
   const decided = match.status === "decided" || match.status === "video_done";
   const score = match.score;
 
-  const name = (f: typeof a) => f?.aiPersona?.nickname ?? f?.displayName ?? "TBD";
+  const name = (f: typeof a) => f?.displayName ?? "TBD";
 
   const row = (f: typeof a, won: boolean, isByeSlot: boolean) => (
     <div

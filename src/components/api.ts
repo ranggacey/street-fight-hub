@@ -215,4 +215,19 @@ export function instagramEmbedUrl(url: string | null | undefined): string | null
 }
 
 export const IG_URL = "https://www.instagram.com/streetfightstickman";
-export const MAX_REGEN = 3;
+
+/** Warna khas per gaya bertarung (pengganti warna persona yang dihapus). */
+export const STYLE_COLORS: Record<string, string> = {
+  boxing: "#f5a623",
+  taekwondo: "#22d3ee",
+  "muay-thai": "#ef4444",
+  street: "#f97316",
+  karate: "#eab308",
+  silat: "#a78bfa",
+  wrestling: "#34d399",
+  other: "#f5a623",
+};
+
+export function styleColor(style?: string): string {
+  return STYLE_COLORS[style ?? ""] ?? "#f5a623";
+}

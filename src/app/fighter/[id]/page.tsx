@@ -7,6 +7,7 @@ import {
   IG_URL,
   METHOD_LABELS,
   ROUND_LABELS,
+  styleColor,
   styleLabel,
 } from "@/components/api";
 import type {
@@ -45,7 +46,7 @@ export async function generateMetadata({
     const f = toDetail(dataOr(res, null));
     if (f) {
       return {
-        title: f.aiPersona?.nickname ?? f.displayName,
+        title: f.displayName,
         description: `Profil fighter ${f.displayName} — ${styleLabel(f.style, f.styleOther)}, rekor ${f.record.wins} menang ${f.record.losses} kalah.`,
       };
     }
@@ -71,7 +72,7 @@ export default async function FighterProfilePage({
   if (!f) notFound();
 
   const record = f.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
-  const color = f.aiPersona?.color ?? "#f5a623";
+  const color = styleColor(f.style);
   const history = f.history ?? f.matches ?? [];
 
   // Badge turunan dari rekor + riwayat.
@@ -93,9 +94,8 @@ export default async function FighterProfilePage({
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="font-display text-4xl uppercase leading-tight tracking-wide sm:text-6xl">
-              {f.aiPersona?.nickname ?? f.displayName}
+              {f.displayName}
             </h1>
-            <p className="mt-1 text-lg text-paper-dim">{f.displayName}</p>
             <p className="mt-1 text-sm text-paper-mute">
               <a
                 href={`https://www.instagram.com/${f.igUsername}`}
@@ -127,83 +127,6 @@ export default async function FighterProfilePage({
           <StatChip label="KO" value={record.kos} tone="red" />
         </div>
       </section>
-
-      {/* Persona AI */}
-      {f.aiPersona ? (
-        <section aria-labelledby="persona-heading">
-          <h2
-            id="persona-heading"
-            className="mb-4 font-display text-3xl uppercase tracking-wide"
-          >
-            Persona <span className="text-amber-brand">AI</span>
-          </h2>
-          <GlassCard className="space-y-4">
-            {f.aiPersona.introLine ? (
-              <blockquote className="border-l-4 border-amber-brand pl-4 text-lg italic leading-relaxed text-paper">
-                “{f.aiPersona.introLine}”
-              </blockquote>
-            ) : null}
-            {f.aiPersona.styleSummary ? (
-              <p className="text-sm leading-relaxed text-paper-dim">
-                {f.aiPersona.styleSummary}
-              </p>
-            ) : null}
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wider text-paper-mute">
-                  Kekuatan
-                </dt>
-                <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                  {f.aiPersona.strengths.map((s) => (
-                    <Badge key={s} tone="amber">
-                      {s}
-                    </Badge>
-                  ))}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wider text-paper-mute">
-                  Kelemahan
-                </dt>
-                <dd className="mt-1.5 text-sm text-paper-dim">
-                  {f.aiPersona.weakness}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wider text-paper-mute">
-                  Jurus Andalan
-                </dt>
-                <dd className="mt-1.5 text-sm font-semibold text-paper">
-                  {f.aiPersona.signatureMove}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wider text-paper-mute">
-                  Perlengkapan
-                </dt>
-                <dd className="mt-1.5 text-sm text-paper-dim">
-                  {f.aiPersona.gear}
-                </dd>
-              </div>
-            </dl>
-            <div className="flex items-center gap-2 border-t border-white/10 pt-3 text-sm">
-              <span className="text-paper-mute">Warna khas:</span>
-              <span
-                className="inline-block h-5 w-5 rounded-full border border-white/30"
-                style={{ backgroundColor: color }}
-                aria-label={`Warna ${color}`}
-              />
-              <code className="text-paper-dim">{color}</code>
-            </div>
-          </GlassCard>
-        </section>
-      ) : (
-        <GlassCard>
-          <p className="text-sm text-paper-dim">
-            Fighter ini belum punya persona AI.
-          </p>
-        </GlassCard>
-      )}
 
       {/* Deskripsi diri */}
       {f.selfDescription ? (

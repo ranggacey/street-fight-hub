@@ -6,7 +6,7 @@ fighter, join turnamen single-elimination; hasil pertandingan diundi
 [@streetfightstickman](https://www.instagram.com/streetfightstickman).
 
 Stack: Next.js 15 App Router + TypeScript + Tailwind v4 + Mongoose +
-bcryptjs + jose (JWT) + @google/generative-ai (Gemini).
+bcryptjs + jose (JWT).
 
 > Detail kontrak (model, API, bracket, draw, auth): `CONTRACT.md` — satu-satunya
 > sumber kebenaran.
@@ -24,7 +24,6 @@ npm run dev                  # http://localhost:3000
 | Variabel | Keterangan |
 | --- | --- |
 | `MONGODB_URI` | Connection string MongoDB Atlas, database `street-fight-hub` |
-| `GEMINI_API_KEY` | Google Gemini API key (generate persona fighter) |
 | `JWT_SECRET` | String acak panjang (min 32 karakter) untuk tanda tangan sesi |
 | `ADMIN_SLUG` | Slug rahasia path admin, mis. `arena-control-xxxx` (tanpa slash) |
 | `ADMIN_USERNAME` | Username admin awal (dipakai `npm run seed`) |
@@ -76,17 +75,16 @@ src/lib/
   auth.ts         bcryptjs 12 rounds, JWT HS256 (jose, 30 hari), cookie httpOnly
                   sfh_token, throttling login (5 gagal / 15 mnt), cek Origin (CSRF),
                   guard admin (role + header x-admin-path == ADMIN_SLUG → 404)
-  validation.ts   Validasi server-side (username, password, fighter, turnamen, persona)
+  validation.ts   Validasi server-side (username, password, fighter, turnamen)
   bracket.ts      Fungsi murni: largestPowerOfTwo, buildBracket, roundNameForTarget, nextRound
   draw.ts         mulberry32, damage model, simulateFight, decideMatch, advanceWinners
-  gemini.ts       generatePersona (gemini-flash-lite-latest, JSON, validasi + 1x retry error cepat, timeout 45 dtk)
   audit.ts        Helper audit() → AdminAuditLog
   http.ts         Respons JSON seragam { ok, data } / { ok:false, error:{code,message} }
 src/models/       User, Fighter, Tournament, TournamentEntry, Match,
                   VideoTask, Announcement, AdminAuditLog
 src/app/api/
   auth/           register, login, logout, me
-  fighters/       create, list klasemen, [id] (GET/PATCH), [id]/ai-generate
+  fighters/       create, list klasemen, [id] (GET/PATCH)
   tournaments/    list, [slug], [slug]/join, [slug]/leave, [slug]/bracket
   matches/[id]    detail match
   announcements/active
@@ -103,8 +101,8 @@ src/app/
   page.tsx        Home: hero, banner pengumuman, turnamen upcoming/live/selesai, top fighter
   turnamen/       List (filter status) + detail [slug] (countdown, peserta, bracket, join/leave)
   pertandingan/[id]  Detail match (dua fighter, hasil, skor, KO time, Reel embed)
-  fighter/[id]    Profil publik fighter (persona, rekor, riwayat, badge)
-  fighter-saya/   Buat/edit fighter + generate persona AI (maks 3x regenerate)
+  fighter/[id]    Profil publik fighter (rekor, riwayat, badge, deskripsi diri)
+  fighter-saya/   Buat/edit fighter (4 isian) + CTA gabung turnamen
   klasemen/       Leaderboard (menang → KO → paling sedikit kalah, filter style)
   daftar/ masuk/  Register + login
   [adminSlug]/    Admin (path rahasia dari env ADMIN_SLUG, TIDAK di-link publik):
@@ -151,8 +149,6 @@ siap.
   generate-bracket, jadi pemenang bye ikut dipasangkan di ronde berikut.
 - **Fitur banned user DITUNDA (MVP)**: `PATCH /api/admin/users/[id]` hanya
   mengubah role; body berisi `banned` → 400.
-- **Gemini**: jika `GEMINI_API_KEY` kosong, `POST /api/fighters/[id]/ai-generate`
-  → 503 `"AI belum dikonfigurasi"`. Regenerate persona maks 3x per fighter.
 - **Verifikasi integrasi (2026-11-07)**: `npm run build` lolos, `typecheck` +
   `lint` bersih, 20 unit test lolos (2 integration test SKIP — butuh binary
   MongoDB, lihat atas). Server smoke test tanpa DB: home + 5 halaman publik
@@ -167,14 +163,8 @@ siap.
   stats → 200), cek visual browser (home, detail turnamen, profil
   fighter, klasemen). Data TEST sudah dibersihkan — yang tersisa hanya
   admin + turnamen contoh "Night Fight Championship #1".
-- **Persona AI TERVERIFIKASI 2026-11-07 14:08**: key Gemini asli rangga
-  (AQ., proyek 267485516177) dipasang sebagai `GEMINI_API_KEY`; model
-  diganti `gemini-2.0-flash` → `gemini-3.8-flash` (model lama
-  dipensiunkan Google, API 404). Tes live: fighter tes mendapat persona
-  lengkap Bahasa Indonesia (nickname "Si Kilat Simpang Lima"); data tes
-  dibersihkan. Catatan: free-tier Gemini kadang 503 overload (sementara);
-  regenerate persona maks 3x/fighter (percobaan yang timeout di sisi
-  klien tetap menghabiskan jatah).
+- **Persona AI DIHAPUS 2026-11-07 (perintah rangga)**: generate persona menggantung ~10 menit (Gemini overload 503 + tanpa timeout). Sempat diperbaiki (model `gemini-flash-lite-latest` + timeout 45/75 dtk, deploy-main7 — terverifikasi jawab ~4 dtk), lalu dihapus total atas perintahnya ("Jgn kasih persona persona" + "Hapus"): route ai-generate, `lib/gemini.ts`, field `aiPersona`/`regenCount`, semua tampilan persona, env `GEMINI_API_KEY` Vercel. Key Gemini asli rangga tetap tersimpan di `~/.config/street-fight-hub/gemini-key-real` (chmod 600) bila persona mau dihidupkan lagi. Fighter kini hanya identitas inti + warna dari gaya bertarung (`styleColor`).
+
   Perbaikan pasca-verifikasi: semua skema Mongoose didaftarkan di
   `src/lib/db.ts` (dulu `populate()` gagal `MissingSchemaError` di
   serverless instance dingin → halaman detail turnamen 404 acak),

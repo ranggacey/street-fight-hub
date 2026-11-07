@@ -47,17 +47,6 @@ export interface SessionUser {
   role: "user" | "admin";
 }
 
-export interface AiPersona {
-  nickname: string;
-  styleSummary: string;
-  strengths: string[];
-  weakness: string;
-  signatureMove: string;
-  introLine: string;
-  color: string;
-  gear: string;
-}
-
 export interface FighterRecord {
   wins: number;
   losses: number;
@@ -74,10 +63,8 @@ export interface Fighter {
   style: StyleKey;
   styleOther?: string;
   selfDescription?: string;
-  aiPersona?: AiPersona | null;
   record: FighterRecord;
   status?: "active" | "retired";
-  regenCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }

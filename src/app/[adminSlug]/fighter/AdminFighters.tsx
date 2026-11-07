@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { clientApi, getId, styleLabel } from "@/components/api";
-import type { AdminUserRow, AiPersona, Fighter } from "@/components/types";
+import type { AdminUserRow, Fighter } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
-import { Input, Textarea } from "@/components/Input";
+import { Input } from "@/components/Input";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
@@ -20,19 +20,6 @@ export default function AdminFighters({ slug }: { slug: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState("");
-
-  // Edit persona
-  const [editing, setEditing] = useState<Fighter | null>(null);
-  const [persona, setPersona] = useState<AiPersona>({
-    nickname: "",
-    styleSummary: "",
-    strengths: ["", ""],
-    weakness: "",
-    signatureMove: "",
-    introLine: "",
-    color: "#f5a623",
-    gear: "",
-  });
 
   // Konfirmasi ubah role
   const [roleTarget, setRoleTarget] = useState<AdminUserRow | null>(null);
@@ -82,59 +69,6 @@ export default function AdminFighters({ slug }: { slug: string }) {
     });
   }, [slug]);
 
-  const openEdit = (f: Fighter) => {
-    setEditing(f);
-    setPersona({
-      nickname: f.aiPersona?.nickname ?? "",
-      styleSummary: f.aiPersona?.styleSummary ?? "",
-      strengths: [
-        f.aiPersona?.strengths?.[0] ?? "",
-        f.aiPersona?.strengths?.[1] ?? "",
-      ],
-      weakness: f.aiPersona?.weakness ?? "",
-      signatureMove: f.aiPersona?.signatureMove ?? "",
-      introLine: f.aiPersona?.introLine ?? "",
-      color: f.aiPersona?.color ?? "#f5a623",
-      gear: f.aiPersona?.gear ?? "",
-    });
-  };
-
-  const savePersona = async () => {
-    if (!editing) return;
-    if (persona.strengths.some((s) => s.trim().length === 0)) {
-      setError("Persona harus punya tepat 2 kekuatan.");
-      return;
-    }
-    const id = getId(editing);
-    setBusyId(id);
-    setError("");
-    const res = await clientApi<{ fighter: Fighter }>(
-      `/api/admin/fighters/${id}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({
-          nickname: persona.nickname.trim(),
-          styleSummary: persona.styleSummary.trim(),
-          strengths: persona.strengths.map((s) => s.trim()),
-          weakness: persona.weakness.trim(),
-          signatureMove: persona.signatureMove.trim(),
-          introLine: persona.introLine.trim(),
-          color: persona.color,
-          gear: persona.gear.trim(),
-        }),
-      },
-    );
-    setBusyId("");
-    if (!res.ok) {
-      setError(res.error.message);
-      return;
-    }
-    setNotice(`Persona “${res.data.fighter.displayName}” diperbarui.`);
-    setEditing(null);
-    search(q);
-  };
-
   const changeRole = async (u: AdminUserRow) => {
     const id = getId(u);
     const nextRole = u.role === "admin" ? "user" : "admin";
@@ -163,8 +97,8 @@ export default function AdminFighters({ slug }: { slug: string }) {
           Fighter & Pengguna
         </h1>
         <p className="mt-2 text-paper-dim">
-          Cari fighter untuk moderasi persona, dan pengguna untuk mengubah
-          role user ↔ admin.
+          Cari fighter untuk melihat data, dan pengguna untuk mengubah role
+          user ↔ admin.
         </p>
       </header>
 
@@ -194,7 +128,7 @@ export default function AdminFighters({ slug }: { slug: string }) {
             label="Cari fighter / pengguna"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Nama tampil, julukan, atau username…"
+            placeholder="Nama tampil atau username…"
           />
         </div>
         <div className="flex items-end">
@@ -230,30 +164,19 @@ export default function AdminFighters({ slug }: { slug: string }) {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-display text-xl uppercase leading-tight tracking-wide">
-                        {f.aiPersona?.nickname ?? f.displayName}
+                        {f.displayName}
                       </p>
                       <p className="text-sm text-paper-dim">
-                        {f.displayName} • @{f.igUsername} •{" "}
+                        @{f.igUsername} •{" "}
                         {styleLabel(f.style, f.styleOther)}
                       </p>
                       <p className="mt-1 text-xs text-paper-mute">
                         Rekor: {record.wins}M / {record.losses}K / {record.draws}S / {record.kos} KO
-                        {f.regenCount != null ? ` • Regen: ${f.regenCount}/3` : ""}
                       </p>
                     </div>
                     {f.status === "retired" ? <Badge tone="neutral">Pensiun</Badge> : null}
                   </div>
-                  {f.aiPersona ? (
-                    <p className="text-sm italic leading-relaxed text-paper-dim">
-                      “{f.aiPersona.introLine}”
-                    </p>
-                  ) : (
-                    <p className="text-sm text-paper-mute">Belum ada persona AI.</p>
-                  )}
                   <div className="flex gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(f)}>
-                      Edit Persona
-                    </Button>
                     <Link
                       href={`/fighter/${id}`}
                       target="_blank"
@@ -294,7 +217,7 @@ export default function AdminFighters({ slug }: { slug: string }) {
                     </p>
                     <p className="mt-0.5 text-xs text-paper-mute">
                       {u.fighter
-                        ? `Fighter: ${u.fighter.aiPersona?.nickname ?? u.fighter.displayName}`
+                        ? `Fighter: ${u.fighter.displayName}`
                         : "Belum punya fighter"}
                     </p>
                   </div>
@@ -312,93 +235,6 @@ export default function AdminFighters({ slug }: { slug: string }) {
           </div>
         )}
       </section>
-
-      {/* Modal edit persona */}
-      <Modal
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        title={`Edit Persona — ${editing?.displayName ?? ""}`}
-        confirmLabel="Simpan Persona"
-        onConfirm={() => savePersona()}
-        busy={busyId !== ""}
-      >
-        <div className="space-y-3 text-left">
-          <Input
-            id="adm-nickname"
-            label="Julukan"
-            value={persona.nickname}
-            onChange={(e) => setPersona({ ...persona, nickname: e.target.value })}
-          />
-          <Textarea
-            id="adm-summary"
-            label="Ringkasan Gaya"
-            value={persona.styleSummary}
-            onChange={(e) => setPersona({ ...persona, styleSummary: e.target.value })}
-            rows={2}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              id="adm-s1"
-              label="Kekuatan 1"
-              value={persona.strengths[0] ?? ""}
-              onChange={(e) => {
-                const next = [...persona.strengths];
-                next[0] = e.target.value;
-                setPersona({ ...persona, strengths: next });
-              }}
-            />
-            <Input
-              id="adm-s2"
-              label="Kekuatan 2"
-              value={persona.strengths[1] ?? ""}
-              onChange={(e) => {
-                const next = [...persona.strengths];
-                next[1] = e.target.value;
-                setPersona({ ...persona, strengths: next });
-              }}
-            />
-          </div>
-          <Input
-            id="adm-weakness"
-            label="Kelemahan"
-            value={persona.weakness}
-            onChange={(e) => setPersona({ ...persona, weakness: e.target.value })}
-          />
-          <Input
-            id="adm-move"
-            label="Jurus Andalan"
-            value={persona.signatureMove}
-            onChange={(e) => setPersona({ ...persona, signatureMove: e.target.value })}
-          />
-          <Input
-            id="adm-intro"
-            label="Kalimat Pembuka"
-            value={persona.introLine}
-            onChange={(e) => setPersona({ ...persona, introLine: e.target.value })}
-          />
-          <Input
-            id="adm-gear"
-            label="Perlengkapan"
-            value={persona.gear}
-            onChange={(e) => setPersona({ ...persona, gear: e.target.value })}
-          />
-          <div>
-            <label htmlFor="adm-color" className="mb-1.5 block text-sm font-semibold text-paper">
-              Warna Khas
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                id="adm-color"
-                type="color"
-                value={/^#[0-9a-fA-F]{6}$/.test(persona.color) ? persona.color : "#f5a623"}
-                onChange={(e) => setPersona({ ...persona, color: e.target.value })}
-                className="h-[44px] w-[64px] cursor-pointer rounded-xl border border-white/15 bg-white/5 p-1"
-              />
-              <code className="text-sm text-paper-dim">{persona.color}</code>
-            </div>
-          </div>
-        </div>
-      </Modal>
 
       {/* Modal konfirmasi ubah role */}
       <Modal

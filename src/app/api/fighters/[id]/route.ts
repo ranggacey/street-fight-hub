@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { badRequest, forbidden, handleError, notFound, ok, parseJson, serialize } from '@/lib/http';
-import { mergePersona, parseFighterPatch } from '@/lib/validation';
+import { parseFighterPatch } from '@/lib/validation';
 import { Fighter } from '@/models/Fighter';
 import { Match } from '@/models/Match';
 
@@ -111,8 +111,6 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     }
 
     Object.assign(fighter, patch.top);
-    const mergedPersona = mergePersona(fighter.aiPersona, patch.persona);
-    if (mergedPersona) fighter.aiPersona = mergedPersona;
     await fighter.save();
 
     return ok({ fighter: serialize(fighter.toObject()) });

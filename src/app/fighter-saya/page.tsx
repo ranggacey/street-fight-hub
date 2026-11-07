@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Fighter Saya",
   description:
-    "Buat fighter stickman-mu, generate persona AI, lalu edit julukan, jurus, dan warna khasmu.",
+    "Buat fighter stickman-mu: nama tampil, username IG, gaya bertarung, dan deskripsi diri — lalu gabung turnamen.",
 };
 
 export default function FighterSayaPage() {
@@ -17,8 +17,7 @@ export default function FighterSayaPage() {
           Fighter Saya
         </h1>
         <p className="mt-2 text-paper-dim">
-          Isi identitas fighter-mu, lalu biarkan AI membuatkan persona:
-          julukan, kekuatan, kelemahan, jurus andalan, dan warna khas.
+          Isi identitas fighter-mu — cuma 4 isian — lalu gabung turnamen.
         </p>
       </header>
       <FighterSayaForm />

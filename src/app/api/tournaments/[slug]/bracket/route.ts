@@ -17,8 +17,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (!tournament) throw notFound('Turnamen tidak ditemukan');
 
     const matches = await Match.find({ tournamentId: tournament._id })
-      .populate('fighterAId', 'displayName igUsername style record aiPersona')
-      .populate('fighterBId', 'displayName igUsername style record aiPersona')
+      .populate('fighterAId', 'displayName igUsername style record')
+      .populate('fighterBId', 'displayName igUsername style record')
       .populate('winnerId', 'displayName')
       .sort({ createdAt: 1 })
       .lean();

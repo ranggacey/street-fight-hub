@@ -2,25 +2,13 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { clientApi, getId, MAX_REGEN, STYLE_OPTIONS } from "@/components/api";
-import type { AiPersona, Fighter, SessionUser } from "@/components/types";
+import { clientApi, getId, STYLE_OPTIONS } from "@/components/api";
+import type { Fighter, SessionUser } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
-import Badge from "@/components/Badge";
 import { Input, Select, Textarea } from "@/components/Input";
 import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
 import StatChip from "@/components/StatChip";
-
-const EMPTY_PERSONA: AiPersona = {
-  nickname: "",
-  styleSummary: "",
-  strengths: ["", ""],
-  weakness: "",
-  signatureMove: "",
-  introLine: "",
-  color: "#f5a623",
-  gear: "",
-};
 
 type Phase = "loading" | "need-login" | "create" | "manage";
 
@@ -37,15 +25,10 @@ export default function FighterSayaForm() {
   const [styleOther, setStyleOther] = useState("");
   const [selfDescription, setSelfDescription] = useState("");
 
-  // Persona (review/edit)
-  const [persona, setPersona] = useState<AiPersona>(EMPTY_PERSONA);
-  const [personaDirty, setPersonaDirty] = useState(false);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [genBusy, setGenBusy] = useState(false);
 
   const fillFromFighter = (f: Fighter) => {
     setFighter(f);
@@ -54,10 +37,6 @@ export default function FighterSayaForm() {
     setStyle(f.style);
     setStyleOther(f.styleOther ?? "");
     setSelfDescription(f.selfDescription ?? "");
-    setPersona(
-      f.aiPersona ?? { ...EMPTY_PERSONA, strengths: ["", ""] },
-    );
-    setPersonaDirty(false);
   };
 
   useEffect(() => {
@@ -143,7 +122,7 @@ export default function FighterSayaForm() {
     }
     fillFromFighter(res.data.fighter);
     setPhase("manage");
-    setNotice("Fighter berhasil dibuat! Sekarang generate persona AI-mu.");
+    setNotice("Fighter berhasil dibuat! Langkah berikutnya: gabung turnamen.");
   };
 
   const saveIdentity = async (e: FormEvent) => {
@@ -173,88 +152,6 @@ export default function FighterSayaForm() {
     setNotice("Data fighter tersimpan.");
   };
 
-  const generatePersona = async () => {
-    if (!fighter) return;
-    setGenBusy(true);
-    setError("");
-    // Timeout klien 75 dtk: JANGAN pernah biarkan tombol "AI sedang
-    // berpikir…" berputar selamanya (2026-11-07: user menunggu 10 menit
-    // tanpa respons). Abort → clientApi mengembalikan NETWORK.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 75_000);
-    let res;
-    try {
-      res = await clientApi<{ fighter: Fighter; regenLeft: number }>(
-        `/api/fighters/${getId(fighter)}/ai-generate`,
-        { method: "POST", signal: controller.signal },
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-    setGenBusy(false);
-    if (!res.ok) {
-      if (res.error.status === 429) {
-        setError("Jatah regenerate persona sudah habis (maksimal 3 kali).");
-      } else if (
-        res.error.code === "GEMINI_TIMEOUT" ||
-        res.error.code === "GEMINI_BUSY"
-      ) {
-        setError("AI lagi sibuk/lemot, coba lagi sebentar ya.");
-      } else if (res.error.code === "NETWORK") {
-        setError(
-          "Koneksi ke server terputus (AI-nya kelamaan). Coba lagi sebentar.",
-        );
-      } else if (res.error.status === 503) {
-        setError(
-          "AI belum dikonfigurasi di server. Persona bisa dibuat manual di bawah — isi lalu simpan.",
-        );
-      } else {
-        setError(res.error.message);
-      }
-      return;
-    }
-    fillFromFighter(res.data.fighter);
-    setNotice("Persona AI berhasil dibuat! Tinjau dan edit bila perlu, lalu simpan.");
-  };
-
-  const savePersona = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!fighter) return;
-    if (persona.strengths.some((s) => s.trim().length === 0)) {
-      setError("Persona harus punya tepat 2 kekuatan — isi keduanya.");
-      return;
-    }
-    if (!/^#[0-9a-fA-F]{6}$/.test(persona.color)) {
-      setError("Warna harus format hex, contoh #f5a623.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    const res = await clientApi<{ fighter: Fighter }>(
-      `/api/fighters/${getId(fighter)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          nickname: persona.nickname.trim(),
-          styleSummary: persona.styleSummary.trim(),
-          strengths: persona.strengths.map((s) => s.trim()),
-          weakness: persona.weakness.trim(),
-          signatureMove: persona.signatureMove.trim(),
-          introLine: persona.introLine.trim(),
-          color: persona.color,
-          gear: persona.gear.trim(),
-        }),
-      },
-    );
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error.message);
-      return;
-    }
-    fillFromFighter(res.data.fighter);
-    setNotice("Persona tersimpan.");
-  };
-
   if (phase === "loading") {
     return (
       <div className="space-y-4" role="status" aria-label="Memuat…">
@@ -281,7 +178,6 @@ export default function FighterSayaForm() {
     );
   }
 
-  const regenLeft = MAX_REGEN - (fighter?.regenCount ?? 0);
   const record = fighter?.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
 
   return (
@@ -380,7 +276,7 @@ export default function FighterSayaForm() {
             <Textarea
               id="selfDescription"
               label="Deskripsi Diri (maks 600 karakter)"
-              hint="Ceritakan siapa kamu, dari mana, dan kenapa kamu bertarung. AI memakai ini untuk membuat persona."
+              hint="Ceritakan siapa kamu, dari mana, dan kenapa kamu bertarung."
               error={errors.selfDescription}
               value={selfDescription}
               onChange={(e) => setSelfDescription(e.target.value)}
@@ -397,191 +293,22 @@ export default function FighterSayaForm() {
                     : "Simpan Perubahan"}
               </Button>
               {phase === "manage" && fighter ? (
-                <Link
-                  href={`/fighter/${getId(fighter)}`}
-                  className="text-sm font-semibold text-amber-brand hover:underline"
-                >
-                  Lihat profil publik →
-                </Link>
+                <>
+                  <ButtonLink href="/turnamen" variant="cyan">
+                    Gabung Turnamen →
+                  </ButtonLink>
+                  <Link
+                    href={`/fighter/${getId(fighter)}`}
+                    className="text-sm font-semibold text-amber-brand hover:underline"
+                  >
+                    Lihat profil publik →
+                  </Link>
+                </>
               ) : null}
             </div>
           </form>
         </GlassCard>
       </section>
-
-      {/* Persona AI — hanya setelah fighter dibuat */}
-      {phase === "manage" && fighter ? (
-        <section aria-labelledby="persona-heading">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <h2
-              id="persona-heading"
-              className="font-display text-2xl uppercase tracking-wide sm:text-3xl"
-            >
-              Persona AI
-            </h2>
-            {fighter.aiPersona ? (
-              <Badge tone="amber">Persona Aktif</Badge>
-            ) : (
-              <Badge tone="outline">Belum Ada Persona</Badge>
-            )}
-            <span className="ml-auto text-sm text-paper-mute">
-              Sisa regenerate: <strong className="text-amber-brand">{regenLeft}</strong> dari {MAX_REGEN}
-            </span>
-          </div>
-
-          <GlassCard strong className="space-y-4">
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="cyan"
-                onClick={generatePersona}
-                disabled={genBusy || regenLeft <= 0}
-              >
-                {genBusy
-                  ? "AI sedang berpikir…"
-                  : fighter.aiPersona
-                    ? "Regenerate Persona (AI)"
-                    : "Generate Persona (AI)"}
-              </Button>
-              {regenLeft <= 0 ? (
-                <p className="self-center text-xs text-paper-mute">
-                  Jatah regenerate habis — persona masih bisa diedit manual
-                  lalu disimpan.
-                </p>
-              ) : null}
-            </div>
-
-            <form onSubmit={savePersona} className="space-y-4" noValidate>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  id="nickname"
-                  label="Julukan"
-                  value={persona.nickname}
-                  onChange={(e) => {
-                    setPersona({ ...persona, nickname: e.target.value });
-                    setPersonaDirty(true);
-                  }}
-                  placeholder="contoh: Si Petir Semarang"
-                  maxLength={60}
-                />
-                <div>
-                  <label
-                    htmlFor="color"
-                    className="mb-1.5 block text-sm font-semibold text-paper"
-                  >
-                    Warna Khas
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="color"
-                      type="color"
-                      value={/^#[0-9a-fA-F]{6}$/.test(persona.color) ? persona.color : "#f5a623"}
-                      onChange={(e) => {
-                        setPersona({ ...persona, color: e.target.value });
-                        setPersonaDirty(true);
-                      }}
-                      className="h-[44px] w-[64px] cursor-pointer rounded-xl border border-white/15 bg-white/5 p-1"
-                      aria-label="Pilih warna khas"
-                    />
-                    <code className="text-sm text-paper-dim">{persona.color}</code>
-                  </div>
-                </div>
-              </div>
-              <Textarea
-                id="styleSummary"
-                label="Ringkasan Gaya (1 kalimat)"
-                value={persona.styleSummary}
-                onChange={(e) => {
-                  setPersona({ ...persona, styleSummary: e.target.value });
-                  setPersonaDirty(true);
-                }}
-                placeholder="Petarung cepat yang mengandalkan tendangan berputar."
-                rows={2}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  id="strength1"
-                  label="Kekuatan 1"
-                  value={persona.strengths[0] ?? ""}
-                  onChange={(e) => {
-                    const next = [...persona.strengths];
-                    next[0] = e.target.value;
-                    setPersona({ ...persona, strengths: next });
-                    setPersonaDirty(true);
-                  }}
-                  placeholder="contoh: Tendangan cepat"
-                  maxLength={60}
-                />
-                <Input
-                  id="strength2"
-                  label="Kekuatan 2"
-                  value={persona.strengths[1] ?? ""}
-                  onChange={(e) => {
-                    const next = [...persona.strengths];
-                    next[1] = e.target.value;
-                    setPersona({ ...persona, strengths: next });
-                    setPersonaDirty(true);
-                  }}
-                  placeholder="contoh: Stamina baja"
-                  maxLength={60}
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  id="weakness"
-                  label="Kelemahan"
-                  value={persona.weakness}
-                  onChange={(e) => {
-                    setPersona({ ...persona, weakness: e.target.value });
-                    setPersonaDirty(true);
-                  }}
-                  placeholder="contoh: Mudah terpancing emosi"
-                  maxLength={80}
-                />
-                <Input
-                  id="signatureMove"
-                  label="Jurus Andalan"
-                  value={persona.signatureMove}
-                  onChange={(e) => {
-                    setPersona({ ...persona, signatureMove: e.target.value });
-                    setPersonaDirty(true);
-                  }}
-                  placeholder="contoh: Tendangan Tornado"
-                  maxLength={60}
-                />
-              </div>
-              <Input
-                id="introLine"
-                label="Kalimat Pembuka (intro line)"
-                value={persona.introLine}
-                onChange={(e) => {
-                  setPersona({ ...persona, introLine: e.target.value });
-                  setPersonaDirty(true);
-                }}
-                placeholder="contoh: Aku datang bukan untuk kalah."
-                maxLength={120}
-              />
-              <Input
-                id="gear"
-                label="Perlengkapan Khas"
-                value={persona.gear}
-                onChange={(e) => {
-                  setPersona({ ...persona, gear: e.target.value });
-                  setPersonaDirty(true);
-                }}
-                placeholder="contoh: Sarung tangan merah + bandana hitam"
-                maxLength={80}
-              />
-              <Button type="submit" disabled={busy || !personaDirty}>
-                {busy ? "Menyimpan…" : "Simpan Persona"}
-              </Button>
-              <p className="text-xs text-paper-mute">
-                Persona yang kamu edit di sini akan tampil di profil publik
-                dan kartu fighter-mu. Regenerate AI akan menimpa isi di atas.
-              </p>
-            </form>
-          </GlassCard>
-        </section>
-      ) : null}
 
       <p className="text-center text-sm text-paper-mute">
         Akun login sebagai{" "}

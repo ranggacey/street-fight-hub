@@ -20,10 +20,8 @@ export async function POST(req: NextRequest) {
     const fighter = await Fighter.create({
       userId: session.userId,
       ...input,
-      aiPersona: null,
       record: { wins: 0, losses: 0, draws: 0, kos: 0 },
       status: 'active',
-      regenCount: 0,
     });
     return ok({ fighter: serialize(fighter.toObject()) }, 201);
   } catch (err) {

@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     const tournament = await Tournament.findOne({ slug })
       // championId di-populate supaya kartu Champion di halaman detail +
       // "Juara Terakhir" di home bisa menampilkan nama juara.
-      .populate('championId', 'displayName igUsername style aiPersona')
+      .populate('championId', 'displayName igUsername style')
       .lean();
     if (!tournament) throw notFound('Turnamen tidak ditemukan');
 
@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       tournamentId: tournament._id,
       status: { $in: ['active', 'eliminated', 'champion'] },
     })
-      .populate('fighterId', 'displayName igUsername style record aiPersona status')
+      .populate('fighterId', 'displayName igUsername style record status')
       .sort({ joinedAt: 1 })
       .lean();
 

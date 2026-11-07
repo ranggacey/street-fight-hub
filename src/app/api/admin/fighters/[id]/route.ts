@@ -3,12 +3,12 @@ import { checkOrigin, requireAdminApi } from '@/lib/auth';
 import { audit } from '@/lib/audit';
 import { connectDB } from '@/lib/db';
 import { badRequest, forbidden, handleError, notFound, ok, parseJson, serialize } from '@/lib/http';
-import { mergePersona, parseFighterPatch } from '@/lib/validation';
+import { parseFighterPatch } from '@/lib/validation';
 import { Fighter } from '@/models/Fighter';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** PATCH /api/admin/fighters/[id] — edit persona (moderasi admin). */
+/** PATCH /api/admin/fighters/[id] — edit data fighter (moderasi admin). */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     if (!checkOrigin(req)) throw forbidden('Origin tidak valid');
@@ -28,8 +28,6 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     }
 
     Object.assign(fighter, patch.top);
-    const mergedPersona = mergePersona(fighter.aiPersona, patch.persona);
-    if (mergedPersona) fighter.aiPersona = mergedPersona;
     await fighter.save();
 
     await audit(

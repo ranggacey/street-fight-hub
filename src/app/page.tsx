@@ -128,7 +128,7 @@ export default async function Home() {
           : (detail.championId as Fighter | null),
       );
       if (champ) {
-        championName = champ.aiPersona?.nickname ?? champ.displayName;
+        championName = champ.displayName;
       } else {
         // Fallback: pemenang final dari bracket (entries turnamen selesai
         // sudah tidak berstatus 'active', jadi lookup lewat entries gagal).
@@ -141,8 +141,7 @@ export default async function Home() {
             : (finalMatch?.winnerId as Fighter | null),
         );
         if (fWinner) {
-          championName =
-            fWinner.aiPersona?.nickname ?? fWinner.displayName;
+          championName = fWinner.displayName;
         }
       }
     }
@@ -164,9 +163,9 @@ export default async function Home() {
           <span className="text-stroke block">Stickman Arena</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-paper-dim sm:text-lg">
-          Buat fighter stickman-mu dengan persona AI, daftarkan ke turnamen,
-          dan biarkan undian menentukan nasibmu di ring. Kalah menang, tetap
-          sportif — videonya tayang di Instagram.
+          Buat fighter stickman-mu, daftarkan ke turnamen, dan biarkan undian
+          menentukan nasibmu di ring. Kalah menang, tetap sportif — videonya
+          tayang di Instagram.
         </p>
         <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <ButtonLink href="/fighter-saya" size="lg">
@@ -176,6 +175,27 @@ export default async function Home() {
             Lihat Turnamen
           </ButtonLink>
         </div>
+        {/* 3 langkah mudah */}
+        <ol className="mx-auto mt-8 grid max-w-2xl gap-3 text-left sm:grid-cols-3">
+          {[
+            { n: "1", t: "Daftar Akun", d: "Gratis, cukup username + password." },
+            { n: "2", t: "Buat Fighter", d: "Nama tampil, IG, gaya bertarung." },
+            { n: "3", t: "Gabung Turnamen", d: "Satu klik, undian yang menentukan." },
+          ].map((s) => (
+            <li
+              key={s.n}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+            >
+              <span className="font-display text-xl text-amber-brand">
+                {s.n}
+              </span>
+              <p className="mt-1 font-semibold text-paper">{s.t}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-paper-mute">
+                {s.d}
+              </p>
+            </li>
+          ))}
+        </ol>
         <p className="mt-5 text-sm text-paper-mute">
           Tonton semua pertarungan di{" "}
           <a
@@ -313,8 +333,9 @@ export default async function Home() {
             Siap Naik <span className="text-amber-brand">Ring?</span>
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-paper-dim">
-            Satu akun, satu fighter. Persona AI akan memberimu julukan, jurus
-            andalan, dan warna khas — gratis, bisa di-regenerate sampai 3 kali.
+            Satu akun, satu fighter. Isi nama tampil, username IG, dan gaya
+            bertarungmu — lalu gabung turnamen dan biarkan undian menentukan
+            nasibmu di ring.
           </p>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <ButtonLink href="/daftar" size="lg">

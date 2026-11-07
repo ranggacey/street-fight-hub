@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Fighter & Pengguna — Admin",
-  description: "Admin: moderasi persona fighter dan role pengguna.",
+  description: "Admin: lihat data fighter dan ubah role pengguna.",
   robots: { index: false, follow: false },
 };
 

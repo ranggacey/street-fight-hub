@@ -9,6 +9,7 @@ import {
   instagramEmbedUrl,
   METHOD_LABELS,
   ROUND_LABELS,
+  styleColor,
 } from "@/components/api";
 import type { MatchItem } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
@@ -58,7 +59,7 @@ function FighterSide({
   score: number | null;
   align: "left" | "right";
 }) {
-  const color = fighter.aiPersona?.color ?? "#f5a623";
+  const color = styleColor(fighter.style);
   const record = fighter.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
   return (
     <Link
@@ -73,15 +74,9 @@ function FighterSide({
           </Badge>
         ) : null}
         <p className="font-display text-2xl uppercase leading-tight tracking-wide group-hover:text-amber-brand sm:text-3xl">
-          {fighter.aiPersona?.nickname ?? fighter.displayName}
+          {fighter.displayName}
         </p>
-        <p className="mt-1 text-sm text-paper-dim">{fighter.displayName}</p>
         <p className="text-xs text-paper-mute">@{fighter.igUsername}</p>
-        {fighter.aiPersona?.introLine ? (
-          <p className="mt-3 text-sm italic leading-relaxed text-paper-dim">
-            “{fighter.aiPersona.introLine}”
-          </p>
-        ) : null}
         <div
           className={`mt-4 flex gap-4 text-sm ${align === "right" ? "sm:justify-end" : ""}`}
         >
@@ -215,7 +210,7 @@ export default async function PertandinganDetailPage({
             <p className="mt-2 text-lg text-paper">
               Pemenang:{" "}
               <strong className="text-amber-brand">
-                {aWon ? (a?.aiPersona?.nickname ?? a?.displayName) : (b?.aiPersona?.nickname ?? b?.displayName)}
+                {aWon ? a?.displayName : b?.displayName}
               </strong>{" "}
               {m.method ? `(${METHOD_LABELS[m.method] ?? m.method})` : ""}
               {m.score ? ` — skor ${m.score.a} : ${m.score.b}` : ""}

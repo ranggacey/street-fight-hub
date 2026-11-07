@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Fighter } from "./types";
-import { getId, styleLabel } from "./api";
+import { getId, styleColor, styleLabel } from "./api";
 import Badge from "./Badge";
 
 /** Kartu ringkas fighter — dipakai di home, detail turnamen, klasemen. */
@@ -12,9 +12,8 @@ export default function FighterCard({
   rank?: number;
 }) {
   const id = getId(fighter);
-  const color = fighter.aiPersona?.color ?? "#f5a623";
+  const color = styleColor(fighter.style);
   const record = fighter.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
-  const nickname = fighter.aiPersona?.nickname;
 
   return (
     <Link
@@ -25,14 +24,7 @@ export default function FighterCard({
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            {nickname ? (
-              <p className="font-display text-xl uppercase leading-tight tracking-wide text-paper group-hover:text-amber-brand">
-                {nickname}
-              </p>
-            ) : null}
-            <p
-              className={`truncate font-semibold text-paper-dim ${nickname ? "text-sm" : "font-display text-xl uppercase tracking-wide text-paper group-hover:text-amber-brand"}`}
-            >
+            <p className="truncate font-display text-xl uppercase leading-tight tracking-wide text-paper group-hover:text-amber-brand">
               {fighter.displayName}
             </p>
             <p className="mt-0.5 truncate text-xs text-paper-mute">

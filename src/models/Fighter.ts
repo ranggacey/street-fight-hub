@@ -1,18 +1,9 @@
 import mongoose, { Schema } from 'mongoose';
 
-const aiPersonaSchema = new Schema(
-  {
-    nickname: { type: String, required: true },
-    styleSummary: { type: String, required: true },
-    strengths: { type: [String], required: true },
-    weakness: { type: String, required: true },
-    signatureMove: { type: String, required: true },
-    introLine: { type: String, required: true },
-    color: { type: String, required: true },
-    gear: { type: String, required: true },
-  },
-  { _id: false },
-);
+// Persona AI DIHAPUS 2026-11-07 (perintah rangga — AI generate menggantung
+// 10 menit, user minta hapus). Fighter hanya punya identitas inti:
+// displayName, igUsername, style, selfDescription. Warna kartu diambil
+// dari gaya bertarung (styleColor di components/api.ts), bukan persona.
 
 const fighterSchema = new Schema(
   {
@@ -32,8 +23,7 @@ const fighterSchema = new Schema(
       required: true,
     },
     styleOther: { type: String, default: null },
-    selfDescription: { type: String, required: true, minlength: 50, maxlength: 600 },
-    aiPersona: { type: aiPersonaSchema, default: null },
+    selfDescription: { type: String, required: true, minlength: 1, maxlength: 600 },
     record: {
       wins: { type: Number, default: 0 },
       losses: { type: Number, default: 0 },
@@ -41,7 +31,6 @@ const fighterSchema = new Schema(
       kos: { type: Number, default: 0 },
     },
     status: { type: String, enum: ['active', 'retired'], default: 'active' },
-    regenCount: { type: Number, default: 0, max: 3 },
   },
   { timestamps: true },
 );

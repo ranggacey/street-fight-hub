@@ -102,10 +102,10 @@ export default async function KlasemenPage({
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate font-display text-lg uppercase leading-tight tracking-wide">
-                        {f.aiPersona?.nickname ?? f.displayName}
+                        {f.displayName}
                       </span>
                       <span className="block truncate text-xs text-paper-mute">
-                        {f.displayName} • @{f.igUsername}
+                        @{f.igUsername}
                       </span>
                       <span className="mt-1 inline-block md:hidden">
                         <Badge tone="outline">

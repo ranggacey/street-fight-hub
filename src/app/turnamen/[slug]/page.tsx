@@ -166,10 +166,7 @@ export default async function TurnamenDetailPage({
             <GlassCard className="border-amber-brand/50">
               <Badge tone="amber">Champion</Badge>
               <p className="mt-2 font-display text-3xl uppercase tracking-wide">
-                {champion.aiPersona?.nickname ?? champion.displayName}
-              </p>
-              <p className="mt-1 text-sm text-paper-dim">
-                {champion.aiPersona?.introLine ?? ""}
+                {champion.displayName}
               </p>
             </GlassCard>
           ) : null}

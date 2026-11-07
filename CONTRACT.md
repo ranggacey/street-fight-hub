@@ -21,7 +21,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 
 ## 2. Model data (Mongoose, nama field PERSIS doc §7 + tambahan yang ditulis di sini)
 - `users`: username (unique, lowercase, 3-20, /^[a-z0-9_]+$/), passwordHash, role 'user'|'admin', createdAt, lastLoginAt. Index username unique.
-- `fighters`: userId (ref User, unique — satu fighter aktif per akun), displayName (1-30), igUsername (tanpa @, 1-30, /^[A-Za-z0-9._]+$/), style enum ['boxing','taekwondo','muay-thai','street','karate','silat','wrestling','other'], styleOther (string, wajib jika style='other'), selfDescription (maks 600 karakter, tanpa minimum — 2026-11-07), aiPersona { nickname, styleSummary, strengths [tepat 2 string], weakness, signatureMove, introLine, color (hex #rrggbb), gear }, record { wins, losses, draws, kos } default 0, status 'active'|'retired', regenCount (default 0, maks 3), createdAt, updatedAt. Index userId unique.
+- `fighters`: userId (ref User, unique — satu fighter aktif per akun), displayName (1-30), igUsername (tanpa @, 1-30, /^[A-Za-z0-9._]+$/), style enum ['boxing','taekwondo','muay-thai','street','karate','silat','wrestling','other'], styleOther (string, wajib jika style='other'), selfDescription (maks 600 karakter, tanpa minimum — 2026-11-07), record { wins, losses, draws, kos } default 0, status 'active'|'retired', createdAt, updatedAt. Persona AI DIHAPUS 2026-11-07 (perintah rangga — generate AI menggantung 10 menit); warna kartu fighter diambil dari gaya bertarung (styleColor). Index userId unique.
 - `tournaments`: name, slug (unique, auto dari name + nomor), format 'single-elim', bracketSize 8|16|32, regOpenAt, regCloseAt, status 'upcoming'|'closed'|'in_progress'|'completed'|'cancelled', rules (string), championId (ref Fighter, null), bracketSeed (number|null), createdBy (ref User), createdAt. Index slug unique.
 - `tournamentEntries`: tournamentId, fighterId, joinedAt, seed (number|null), status 'active'|'eliminated'|'champion'|'withdrawn'. Index (tournamentId, fighterId) unique.
 - `matches`: tournamentId, round 'R32'|'R16'|'QF'|'SF'|'F', fighterAId, fighterBId (null = bye), winnerId (null), method 'KO'|'decision'|'draw'|'bye'|null, score {a:number,b:number}|null, koTimeSec (number|null), drawSeed (number), drawAdvancerId (ref Fighter|null, null jika bukan seri), drawReRollSeed (number|null), isBye (boolean default false), status 'scheduled'|'decided'|'video_done', reelUrl (string|null), decidedAt (Date|null). Index (tournamentId, round).
@@ -56,17 +56,16 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 - `POST /api/auth/login` { username, password } → 200 + set cookie. 401 jika salah.
 - `POST /api/auth/logout` → hapus cookie.
 - `GET /api/auth/me` → { user } atau 401.
-- `POST /api/fighters` (auth) body { displayName, igUsername, style, styleOther?, selfDescription } → 201 fighter (tanpa aiPersona dulu; aiPersona null). Satu fighter aktif per user → 409 jika sudah ada.
+- `POST /api/fighters` (auth) body { displayName, igUsername, style, styleOther?, selfDescription } → 201 fighter. Satu fighter aktif per user → 409 jika sudah ada.
 - `GET /api/fighters/[id]` publik → fighter + record + riwayat match (populate ringkas: tournament name, round, lawan, hasil, reelUrl).
-- `PATCH /api/fighters/[id]` (owner) → edit field persona (nickname, styleSummary, strengths, weakness, signatureMove, introLine, color, gear, displayName, igUsername, style, selfDescription). Hanya owner.
-- `POST /api/fighters/[id]/ai-generate` (owner) → panggil Gemini (lib/gemini.ts), simpan aiPersona, regenCount+1. 429 jika regenCount >= 3. 503 jika GEMINI_API_KEY tidak ada (pesan jelas "AI belum dikonfigurasi").
+- `PATCH /api/fighters/[id]` (owner) → edit identitas (displayName, igUsername, style, styleOther, selfDescription). Hanya owner.
 - `GET /api/fighters?sort=wins&style=` → standings list (sort: wins desc, lalu kos desc, lalu losses asc; filter style opsional).
 - `GET /api/tournaments?status=` → list ringkas + participantCount.
 - `GET /api/tournaments/[slug]` → detail + entries (populate fighter ringkas) + bracket (matches populate fighter ringkas) + participantCount + countdown (regCloseAt).
 - `POST /api/tournaments/[slug]/join` (auth) → cek: fighter aktif milik user ada (400 jika tidak), belum join (409), status turnamen 'upcoming', sekarang < regCloseAt, peserta < bracketSize. Buat entry. 200 { entry }.
 - `POST /api/tournaments/[slug]/leave` (auth) → hanya sebelum regCloseAt; entry status 'withdrawn' (hapus dari daftar aktif). 200.
 - `GET /api/tournaments/[slug]/bracket` → matches per ronde + byes.
-- `GET /api/matches/[id]` → match + kedua fighter (persona ringkas + record) + reelUrl + turnamen.
+- `GET /api/matches/[id]` → match + kedua fighter (nama + record) + reelUrl + turnamen.
 - Admin API — SEMUA wajib: (a) role admin, (b) header `x-admin-path` == env ADMIN_SLUG, kalau tidak ada/salah → 404 (bukan 403, supaya path tidak bocor). Prefix `/api/admin/`:
   - `POST /api/admin/tournaments` { name, bracketSize, regOpenAt, regCloseAt, rules } → slug auto `night-fight-championship-N` (N = nomor urut turnamen, mulai 1). 201.
   - `PATCH /api/admin/tournaments/[id]` → edit name/rules/window; aksi khusus body { action: 'close' } → status 'closed'; { action: 'cancel' } → status 'cancelled' (hanya jika belum in_progress).
@@ -74,7 +73,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
   - `POST /api/admin/tournaments/[id]/draw-round` { round } → lib/draw.ts (§6): putuskan semua match 'scheduled' di ronde itu (bye tidak di-draw), buat videoTask per match yang diputuskan, majukan pemenang ke ronde berikut (buat match ronde berikut bila kedua slot terisi; jika ronde = F → set champion, status 'completed', entry champion). 400 jika ronde belum siap / sudah diputuskan.
   - `PATCH /api/admin/video-tasks/[id]` { status, reelUrl?, note? } → status 'uploaded' wajib reelUrl (valid URL instagram.com/reel atau instagram.com/p); set match reelUrl + status 'video_done'. 'blocked' wajib note. 'in_production' tanpa syarat.
   - `GET /api/admin/video-tasks?status=` → list + match + fighter ringkas.
-  - `GET /api/admin/users` (query ?q=) → list user ringkas + fighter-nya. `PATCH /api/admin/users/[id]` { role?, banned? } — MVP: hanya ubah role user↔admin (banned ditunda; JANGAN implementasi banned). `GET /api/admin/fighters` → list + search. `PATCH /api/admin/fighters/[id]` → edit persona (moderasi).
+  - `GET /api/admin/users` (query ?q=) → list user ringkas + fighter-nya. `PATCH /api/admin/users/[id]` { role?, banned? } — MVP: hanya ubah role user↔admin (banned ditunda; JANGAN implementasi banned). `GET /api/admin/fighters` → list + search. `PATCH /api/admin/fighters/[id]` → edit data fighter (moderasi).
   - `POST /api/admin/announce` { text } → nonaktifkan pengumuman lama, buat baru active. `GET /api/announcements/active` (publik) → pengumuman aktif atau null.
   - `GET /api/admin/stats` → { tournaments live, totalFighters, totalUsers, videoQueueDepth, pendingTasks }.
   - Setiap aksi admin tulis AdminAuditLog (helper `audit(adminUserId, action, targetType, targetId, detail)`).
@@ -83,8 +82,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
   - List: `{ tournaments: [...] }`, `{ fighters: [...] }`, `{ videoTasks: [...] }`, `{ users: [...] }`.
   - Detail: `GET /api/tournaments/[slug]` → `{ tournament, entries, bracket, participantCount }`; `GET /api/fighters/[id]` → `{ fighter, history }`; `GET /api/matches/[id]` → `{ match }`; `GET /api/announcements/active` → `{ announcement }` (null bila tidak ada).
   - Single create/update: `{ fighter }`, `{ tournament }`, `{ videoTask }`, `{ announcement }`, `{ user }`, `{ entry }`.
-  - `POST /api/fighters/[id]/ai-generate` → `{ fighter, regenLeft }`; `POST .../draw-round` → `{ round, decided: [...], tournament }`; `POST .../generate-bracket` → `{ tournament, matches, byes, bracketSeed }`; `GET /api/admin/stats` → objek datar `{ tournamentsLive, totalFighters, totalUsers, videoQueueDepth, pendingTasks }`.
-  - Frontend wajib unwrap field bernama ini di call site (server: `dataOr(res, { tournaments: [] }).tournaments`; client: `res.data.tournaments`). Jangan pernah menganggap `data` sebagai array/objek model langsung.
+    - Frontend wajib unwrap field bernama ini di call site (server: `dataOr(res, { tournaments: [] }).tournaments`; client: `res.data.tournaments`). Jangan pernah menganggap `data` sebagai array/objek model langsung.
 
 ## 5. Bracket (lib/bracket.ts) — fungsi murni, WAJIB unit test
 - `largestPowerOfTwo(n)`: terbesar 2^k ≤ n, min 4 (n<4 → throw).
@@ -107,10 +105,10 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 - `decideMatch(match, seed)` (service, pakai DB): set winnerId/method/score/koTimeSec/drawSeed/drawAdvancerId/drawReRollSeed/status 'decided'/decidedAt; update record kedua fighter (wins/losses/draws/kos); buat videoTask (kecuali bye); panggil advanceWinners.
 - Aturan rekor: KO → pemenang wins+1 & kos+1, kalah losses+1. Decision → wins+1 / losses+1. Draw → keduanya draws+1 (advancer tetap maju bracket).
 
-## 7. Gemini (lib/gemini.ts)
-- `@google/generative-ai`, model `gemini-flash-lite-latest` (ganti dari `gemini-3.8-flash` 2026-11-07 — 3.8-flash overload: API 503 "high demand" + request menggantung sampai Vercel timeout 300 dtk; lite merespons instan untuk tugas JSON kecil). Sebelumnya `gemini-2.0-flash` (dipensiunkan Google, API 404). Prompt: bahasa Indonesia, minta JSON SAJA dengan field: nickname, styleSummary (1 kalimat), strengths (array 2 string), weakness (1 string), signatureMove, introLine, color (hex), gear (1 string). Temperature 0.9. Input: displayName, style (+styleOther), selfDescription.
-- Parse JSON dari respons (strip markdown fence). Validasi hasil: semua field ada, strengths tepat 2, color hex valid — kalau tidak valid, 1x retry dengan prompt yang sama, lalu throw.
-- Jika GEMINI_API_KEY kosong → throw error kode `GEMINI_NOT_CONFIGURED` (route ubah jadi 503). Timeout 45 dtk per percobaan → kode `GEMINI_TIMEOUT` (tidak di-retry); overload 503 → kode `GEMINI_BUSY` (retry 1x). Frontend juga timeout 75 dtk — tombol "AI sedang berpikir…" tidak boleh berputar selamanya.
+## 7. Persona AI — DIHAPUS 2026-11-07
+- Perintah rangga ("Jgn kasih persona persona" + "Hapus"): fitur persona AI dihapus total — route `POST /api/fighters/[id]/ai-generate`, `src/lib/gemini.ts`, field `aiPersona` + `regenCount` di model, semua tampilan persona (form, profil, kartu, bracket, klasemen, admin), dan env `GEMINI_API_KEY` di Vercel. Latar belakang: generate persona menggantung ~10 menit (model Gemini overload 503 + tidak ada timeout) — sempat diperbaiki (model lite + timeout 45/75 dtk, deploy-main7), lalu dihapus atas perintahnya sebelum dipakai.
+- Fighter sekarang hanya: displayName, igUsername, style (+styleOther), selfDescription. Warna kartu = `styleColor(style)` (components/api.ts).
+
 
 ## 8. Seed (scripts/seed.ts, jalankan `npm run seed`)
 - Butuh env: MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD (JANGAN hardcode; jika kosong → error jelas dan berhenti).
@@ -119,7 +117,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 
 ## 9. Admin UI (frontend, path rahasia)
 - Route dinamis top-level `src/app/[adminSlug]/` — tiap page cek `params.adminSlug === process.env.ADMIN_SLUG` (server component; jika tidak sama → `notFound()`). JANGAN hardcode slug di kode manapun. JANGAN link ke path admin dari halaman publik manapun. `robots.ts`: disallow `/${ADMIN_SLUG}` (baca dari env; jika env kosong → disallow `/*admin*` generik? TIDAK — jika env kosong, robots tetap sediakan `Disallow: /` untuk path yang mengandung 'arena-control'; sederhananya: robots.ts selalu disallow path admin dari env, dan jika env kosong, jangan expose apapun).
-- Halaman admin: login (form username+password → POST /api/auth/login; cek role admin di client, tolak jika bukan admin), dashboard (stats + ringkasan), turnamen (list + buat + edit + tutup/batal + generate bracket + draw round + lihat bracket), video tasks (queue + filter status + attach Reel URL + tandai blocked/in_production), fighter & user (cari + lihat persona + edit persona), pengumuman (buat banner). Semua fetch admin kirim header `x-admin-path: <slug dari URL>` (client baca dari pathname segment pertama).
+- Halaman admin: login (form username+password → POST /api/auth/login; cek role admin di client, tolak jika bukan admin), dashboard (stats + ringkasan), turnamen (list + buat + edit + tutup/batal + generate bracket + draw round + lihat bracket), video tasks (queue + filter status + attach Reel URL + tandai blocked/in_production), fighter & user (cari + lihat data fighter), pengumuman (buat banner). Semua fetch admin kirim header `x-admin-path: <slug dari URL>` (client baca dari pathname segment pertama).
 - Middleware TIDAK dipakai untuk proteksi admin (cek di tiap page + API). `middleware.ts` TIDAK dibuat (hindari konflik).
 
 ## 10. Halaman publik (frontend)
@@ -127,10 +125,10 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 - `/turnamen`: list + filter status.
 - `/turnamen/[slug]`: detail + countdown deadline (client component, update tiap detik) + jumlah peserta live + daftar peserta + bracket interaktif + tombol Join/Leave (auth; konfirmasi 1x via window.confirm atau modal kecil).
 - `/pertandingan/[id]`: dua fighter berdampingan, hasil, Reel (link + embed sederhana bila URL instagram), skor/KO time.
-- `/fighter/[id]`: profil publik (persona, rekor, badge Champion/KO Artist/Undefeated, riwayat fight + link video).
+- `/fighter/[id]`: profil publik (rekor, badge Champion/KO Artist/Undefeated, riwayat fight + link video, deskripsi diri).
 - `/klasemen`: leaderboard + filter style.
 - `/daftar`, `/masuk`: form auth (validasi client + tampilkan error server).
-- `/fighter-saya`: form buat fighter → tombol "Generate Persona (AI)" → review/edit → simpan; regenerate (sisa hitungan tampil); edit fighter yang sudah ada.
+- `/fighter-saya`: form buat fighter (4 isian: nama tampil, IG, gaya, deskripsi) + CTA "Gabung Turnamen" setelah dibuat; edit fighter yang sudah ada.
 - Semua halaman data: loading, error, empty state. Semua teks Indonesia. Satu H1 per halaman. Metadata unik per halaman (title/description).
 - Navbar: logo "STREET FIGHT HUB", link Turnamen, Klasemen, Fighter Saya (jika login), Masuk/Daftar atau username + Keluar. Mobile: menu hamburger. Footer: link IG, "Bukan situs resmi Instagram", copyright.
 
