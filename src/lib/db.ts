@@ -8,8 +8,15 @@ import mongoose from 'mongoose';
 // semua skema selalu terdaftar sebelum query apa pun jalan.
 import '@/models/AdminAuditLog';
 import '@/models/Announcement';
+import '@/models/Challenge';
+import '@/models/ChatMessage';
 import '@/models/Fighter';
+import '@/models/GameFight';
+import '@/models/LeaderboardSnapshot';
 import '@/models/Match';
+import '@/models/Notification';
+import '@/models/Title';
+import '@/models/TitleHistory';
 import '@/models/Tournament';
 import '@/models/TournamentEntry';
 import '@/models/User';

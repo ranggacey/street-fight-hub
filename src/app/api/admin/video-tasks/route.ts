@@ -25,6 +25,14 @@ export async function GET(req: NextRequest) {
           { path: 'tournamentId', select: 'name slug' },
         ],
       })
+      // Title fight (game) tidak punya matchId — populate lewat gameFightId.
+      .populate({
+        path: 'gameFightId',
+        populate: [
+          { path: 'fighterAId', select: 'displayName igUsername' },
+          { path: 'fighterBId', select: 'displayName igUsername' },
+        ],
+      })
       .sort({ createdAt: -1 })
       .lean();
     return ok({ videoTasks: serialize(tasks) });

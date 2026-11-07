@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { handleError, ok, serialize } from '@/lib/http';
+import { escapeRegExp } from '@/lib/validation';
 import { Fighter } from '@/models/Fighter';
 
 /** GET /api/admin/fighters?q= — list fighter + search. */
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get('q');
     const filter: Record<string, unknown> = {};
     if (q) {
-      const regex = { $regex: q, $options: 'i' };
+      // q di-escape supaya tidak bisa menjadi pola regex liar (ReDoS).
+      const regex = { $regex: escapeRegExp(q), $options: 'i' };
       filter.$or = [{ displayName: regex }, { igUsername: regex }];
     }
 
