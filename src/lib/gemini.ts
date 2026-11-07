@@ -3,7 +3,9 @@ import { validateAiPersona, type AiPersona } from './validation';
 
 /**
  * Gemini — generate persona fighter (CONTRACT §7).
- * Model gemini-2.0-flash, temperature 0.9, prompt Bahasa Indonesia,
+ * Model gemini-3.8-flash (gemini-2.0-flash DIPENSIUNKAN Google 2026-11 —
+ * API mengembalikan 404 "no longer available"; ganti per rekomendasi
+ * error Google), temperature 0.9, prompt Bahasa Indonesia,
  * minta JSON SAJA. Validasi hasil + 1x retry. Jika GEMINI_API_KEY kosong
  * → error kode GEMINI_NOT_CONFIGURED (route ubah jadi 503).
  */
@@ -75,7 +77,7 @@ export async function generatePersona(input: GeneratePersonaInput): Promise<AiPe
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.8-flash',
     generationConfig: { temperature: 0.9 },
   });
   const prompt = buildPrompt(input);

@@ -108,7 +108,7 @@ Palet: warm analogous — deep charcoal + amber + red, 1 aksen cool terkontrol (
 - Aturan rekor: KO → pemenang wins+1 & kos+1, kalah losses+1. Decision → wins+1 / losses+1. Draw → keduanya draws+1 (advancer tetap maju bracket).
 
 ## 7. Gemini (lib/gemini.ts)
-- `@google/generative-ai`, model `gemini-2.0-flash`. Prompt: bahasa Indonesia, minta JSON SAJA dengan field: nickname, styleSummary (1 kalimat), strengths (array 2 string), weakness (1 string), signatureMove, introLine, color (hex), gear (1 string). Temperature 0.9. Input: displayName, style (+styleOther), selfDescription.
+- `@google/generative-ai`, model `gemini-3.8-flash` (ganti dari `gemini-2.0-flash` 2026-11-07 — model lama dipensiunkan Google, API 404 "no longer available"). Prompt: bahasa Indonesia, minta JSON SAJA dengan field: nickname, styleSummary (1 kalimat), strengths (array 2 string), weakness (1 string), signatureMove, introLine, color (hex), gear (1 string). Temperature 0.9. Input: displayName, style (+styleOther), selfDescription.
 - Parse JSON dari respons (strip markdown fence). Validasi hasil: semua field ada, strengths tepat 2, color hex valid — kalau tidak valid, 1x retry dengan prompt yang sama, lalu throw.
 - Jika GEMINI_API_KEY kosong → throw error kode `GEMINI_NOT_CONFIGURED` (route ubah jadi 503).
 
