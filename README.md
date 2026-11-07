@@ -158,14 +158,26 @@ siap.
   MongoDB, lihat atas). Server smoke test tanpa DB: home + 5 halaman publik
   → 200 (empty state), API tanpa DB → 503 `DB_UNAVAILABLE`, admin guard →
   404 tanpa slug / 401 tanpa auth, `robots.txt` memblokir path admin.
-- **Belum terverifikasi dengan DB nyata** (VM ini tidak bisa mencapai Atlas
-  dan binary `mongodb-memory-server` gagal diunduh — download tersangkut di
-  ~128 MB): `npm run seed`, alur penuh register → fighter → join → bracket →
-  draw → juara + videoTask, serta E2E halaman terhadap API live, HARUS
-  dijalankan dari mesin yang bisa mencapai MongoDB sebelum deploy.
+- **Verifikasi live dengan DB nyata (2026-11-07, SELESAI)**: E2E penuh
+  terhadap deployment Vercel + Atlas — register/login 4 user, buat 4
+  fighter, join turnamen TEST (bracket 8 menyusut jadi 4), generate
+  bracket (2 SF), draw SF (2 decided, skor tersimpan), draw final
+  (juara terkoronasi, turnamen completed, 3 videoTask queued), admin
+  guard (tanpa slug → 404, slug salah → 404, user biasa → 403, admin
+  stats → 200), cek visual browser (home, detail turnamen, profil
+  fighter, klasemen). Data TEST sudah dibersihkan — yang tersisa hanya
+  admin + turnamen contoh "Night Fight Championship #1". Satu-satunya
+  fitur yang belum bisa diverifikasi end-to-end: persona AI (butuh
+  `GEMINI_API_KEY` asli — env saat ini berisi bundle terenkripsi
+  Negara Emas, bukan key mentah; lihat `src/lib/gemini.ts`).
+  Perbaikan pasca-verifikasi: semua skema Mongoose didaftarkan di
+  `src/lib/db.ts` (dulu `populate()` gagal `MissingSchemaError` di
+  serverless instance dingin → halaman detail turnamen 404 acak),
+  riwayat fighter berbentuk datar `FightHistoryItem`, `championId`
+  di-populate, halaman 404 kustom.
 - **`npm audit` diblokir** oleh registry policy VM ini (`policy_denied`) —
-  audit dependensi belum dilakukan; Next.js sudah 15.5.6 (naik dari 15.5.4
-  karena CVE-2025-66478).
-- **Draw decision-winner**: pemenang decision = skor lebih tinggi (roll winner
-  hanya menentukan pemenang KO) — didokumentasikan di CONTRACT.md §6; perlu
-  konfirmasi akhir sebelum deploy.
+  audit dependensi belum dilakukan; Next.js sudah 15.5.29 (naik dari
+  15.5.6 karena `VULNERABLE_NEXTJS_VERSION` di Vercel).
+- **Draw decision-winner**: pemenang decision = skor lebih tinggi (roll
+  winner hanya menentukan pemenang KO) — didokumentasikan di CONTRACT.md
+  §6; dikonfirmasi parent (rangga) 2026-11-07.
