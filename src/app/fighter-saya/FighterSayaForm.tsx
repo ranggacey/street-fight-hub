@@ -14,6 +14,11 @@ import {
 import { signatureMoveOptions } from "@/lib/game/engine-config";
 import type { Fighter, SessionUser } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
+import FighterPreview, {
+  COLOR_PRESETS,
+  ItemIcon,
+  type ColorPart,
+} from "@/components/FighterPreview";
 import { Input, Select, Textarea } from "@/components/Input";
 import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
@@ -46,31 +51,82 @@ const COLOR_FIELDS: { key: keyof ColorsState; label: string; noneable: boolean }
   { key: "shoes", label: "Sepatu", noneable: false },
   { key: "belt", label: "Sabuk", noneable: true },
   { key: "headband", label: "Ikat kepala", noneable: true },
-  { key: "weapon", label: "Senjata (tongkat)", noneable: true },
+  { key: "weapon", label: "Senjata", noneable: true },
 ];
 
+/**
+ * Pemilih warna satu item secara VISUAL: ikon item + grid banyak
+ * pilihan warna preset yang bisa di-tap + color picker RGB bebas +
+ * kolom hex + toggle Pakai/Tidak pakai (untuk item yang boleh kosong).
+ * Pemilihan dilakukan dengan men-tap pilihan di dalam picker.
+ */
 function ColorField({
+  part,
   label,
   value,
   noneable,
   onChange,
 }: {
+  part: ColorPart;
   label: string;
   value: string;
   noneable: boolean;
   onChange: (v: string) => void;
 }) {
   const isNone = value === "none";
+  const selected = isNone ? "" : value.toLowerCase();
   return (
-    <div>
-      <span className="mb-1.5 block text-sm font-semibold text-paper">{label}</span>
-      <div className="flex items-center gap-2">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+      {/* Baris item: ikon + nama + nilai saat ini */}
+      <div className="flex items-center gap-2.5">
+        <ItemIcon part={part} color={value} />
+        <span className="min-w-0 flex-1 text-sm font-semibold text-paper">
+          {label}
+        </span>
+        <span
+          className="shrink-0 rounded-md border border-white/15 bg-white/5 px-2 py-1 font-mono text-[11px] text-paper-mute"
+          aria-label={`Warna ${label} saat ini: ${isNone ? "tidak dipakai" : value}`}
+        >
+          {isNone ? "tidak dipakai" : value}
+        </span>
+      </div>
+
+      {/* Grid pilihan warna preset — tap untuk memilih */}
+      <div
+        className="mt-3 flex flex-wrap gap-2"
+        role="group"
+        aria-label={`Pilihan warna ${label}`}
+      >
+        {COLOR_PRESETS.map((p) => {
+          const active = !isNone && selected === p.hex.toLowerCase();
+          return (
+            <button
+              key={p.hex}
+              type="button"
+              onClick={() => onChange(p.hex)}
+              disabled={isNone}
+              aria-label={`Warna ${label}: ${p.name} ${p.hex}`}
+              aria-pressed={active}
+              title={`${p.name} ${p.hex}`}
+              className={`h-8 w-8 rounded-full border transition-transform duration-150 focus-visible:outline-2 focus-visible:outline-amber-brand disabled:cursor-not-allowed disabled:opacity-30 ${
+                active
+                  ? "scale-110 border-white ring-2 ring-amber-brand ring-offset-2 ring-offset-ink-950"
+                  : "border-white/30 hover:scale-110"
+              }`}
+              style={{ backgroundColor: p.hex }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Warna bebas (RGB) + hex + toggle pakai */}
+      <div className="mt-3 flex items-center gap-2">
         <input
           type="color"
           value={isNone ? "#8B5E34" : value}
           disabled={isNone}
           onChange={(e) => onChange(e.target.value)}
-          aria-label={`Warna ${label}`}
+          aria-label={`Warna bebas ${label}`}
           className="h-[44px] w-[52px] shrink-0 cursor-pointer rounded-xl border border-white/15 bg-white/5 p-1 disabled:opacity-40"
         />
         <input
@@ -400,19 +456,25 @@ export default function FighterSayaForm() {
           />
         </div>
 
-        {/* Warna RGB bebas per bagian */}
+        {/* Warna RGB bebas per bagian — dengan preview karakter live */}
         <fieldset>
           <legend className="mb-1.5 block text-sm font-semibold text-paper">
             Warna Fighter (RGB bebas — tampil di arena)
           </legend>
           <p className="mb-3 text-xs text-paper-mute">
-            Pilih lewat color picker atau ketik kode hex (#RRGGBB). Sabuk,
-            ikat kepala, dan senjata boleh tidak dipakai.
+            Tap salah satu warna di tiap item untuk memilihnya, atau atur
+            sendiri lewat color picker dan kode hex (#RRGGBB). Preview di
+            bawah berubah langsung. Sabuk, ikat kepala, dan senjata boleh
+            tidak dipakai.
           </p>
+          <div className="mb-4">
+            <FighterPreview colors={colors} name={displayName} />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {COLOR_FIELDS.map((f) => (
               <ColorField
                 key={f.key}
+                part={f.key}
                 label={f.label}
                 value={colors[f.key]}
                 noneable={f.noneable}
