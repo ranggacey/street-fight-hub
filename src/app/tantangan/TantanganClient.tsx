@@ -8,7 +8,7 @@ import {
   formatWIB,
   getId,
   MAP_LABELS,
-  MAP_OPTIONS,
+  styleColor,
   styleLabel,
 } from "@/components/api";
 import type {
@@ -21,7 +21,7 @@ import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
-import { Select, Textarea } from "@/components/Input";
+import { Textarea } from "@/components/Input";
 
 type ChallengesResponse = {
   challenges: Challenge[];
@@ -36,6 +36,75 @@ function fighterName(
 ): string {
   if (!v || typeof v === "string") return "—";
   return v.displayName;
+}
+
+/** Kartu jatah harian dengan bilah segmen — habisnya kelihatan sekilas. */
+function QuotaCard({
+  label,
+  remaining,
+  total,
+}: {
+  label: string;
+  remaining: number;
+  total: number;
+}) {
+  const empty = remaining <= 0;
+  return (
+    <GlassCard className="px-4 py-3 text-center">
+      <p
+        className={`font-display text-3xl leading-none ${
+          empty ? "text-red-brand" : "text-amber-brand"
+        }`}
+      >
+        {remaining}/{total}
+      </p>
+      <div
+        className="mx-auto mt-2.5 flex max-w-[120px] gap-1"
+        aria-hidden="true"
+      >
+        {Array.from({ length: total }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 flex-1 rounded-full ${
+              i < remaining ? "bg-amber-brand" : "bg-white/15"
+            }`}
+          />
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-paper-dim">
+        {label}
+      </p>
+      {empty ? (
+        <p className="mt-0.5 text-xs font-semibold text-red-400">
+          Habis hari ini
+        </p>
+      ) : null}
+    </GlassCard>
+  );
+}
+
+/** Lingkaran centang untuk baris yang terpilih. */
+function CheckMark({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-150 ${
+        checked
+          ? "border-amber-brand bg-amber-brand text-ink-950"
+          : "border-white/25 text-transparent"
+      }`}
+    >
+      <svg viewBox="0 0 12 10" className="h-3 w-3" fill="none">
+        <path
+          d="M1 5.5 4.5 9 11 1"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
 }
 
 export default function TantanganClient() {
@@ -264,22 +333,16 @@ export default function TantanganClient() {
 
       {/* Sisa jatah */}
       <div className="grid grid-cols-2 gap-3">
-        <GlassCard className="px-4 py-3 text-center">
-          <p className="font-display text-3xl text-amber-brand">
-            {fightsRemaining}/3
-          </p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-paper-dim">
-            Sisa tarung hari ini
-          </p>
-        </GlassCard>
-        <GlassCard className="px-4 py-3 text-center">
-          <p className="font-display text-3xl text-amber-brand">
-            {sentRemaining}/5
-          </p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-paper-dim">
-            Sisa tantangan hari ini
-          </p>
-        </GlassCard>
+        <QuotaCard
+          label="Sisa tarung hari ini"
+          remaining={fightsRemaining}
+          total={3}
+        />
+        <QuotaCard
+          label="Sisa tantangan hari ini"
+          remaining={sentRemaining}
+          total={5}
+        />
       </div>
 
       {/* Form tantang */}
@@ -292,37 +355,171 @@ export default function TantanganClient() {
             Tantang <span className="text-amber-brand">Fighter Lain</span>
           </h2>
           <GlassCard strong>
-            <form onSubmit={createChallenge} className="space-y-4" noValidate>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Select
-                  id="target"
-                  label="Pilih Lawan"
-                  options={[
-                    { value: "", label: "— Pilih fighter —" },
-                    ...others.map((f) => ({
-                      value: getId(f),
-                      label: `${f.displayName} (${styleLabel(f.style, f.styleOther)})`,
-                    })),
-                  ]}
-                  value={targetId}
-                  onChange={(e) => setTargetId(e.target.value)}
-                />
-                <Select
-                  id="map"
-                  label="Arena (Map)"
-                  options={MAP_OPTIONS}
-                  value={map}
-                  onChange={(e) => setMap(e.target.value)}
-                />
+            <form onSubmit={createChallenge} className="space-y-6" noValidate>
+              {/* Langkah 1 — pilih lawan */}
+              <div>
+                <div className="mb-3 flex items-baseline gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="font-display text-lg leading-none text-amber-brand"
+                  >
+                    01
+                  </span>
+                  <h3
+                    id="lawan-heading"
+                    className="text-sm font-bold uppercase tracking-wider text-paper"
+                  >
+                    Pilih lawan
+                  </h3>
+                </div>
+                {others.length === 0 ? (
+                  <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-paper-dim">
+                    Belum ada fighter lain yang bisa ditantang.
+                  </p>
+                ) : (
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="lawan-heading"
+                    className="space-y-2"
+                  >
+                    {others.map((f) => {
+                      const id = getId(f);
+                      const selected = targetId === id;
+                      const body =
+                        f.colors?.body && f.colors.body !== "none"
+                          ? f.colors.body
+                          : styleColor(f.style);
+                      const rec = f.casualRecord ?? f.record;
+                      return (
+                        <label
+                          key={id}
+                          className={`flex min-h-[64px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-colors duration-150 focus-within:ring-2 focus-within:ring-amber-brand/60 ${
+                            selected
+                              ? "border-amber-brand bg-amber-brand/10"
+                              : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="target"
+                            value={id}
+                            checked={selected}
+                            onChange={() => setTargetId(id)}
+                            className="sr-only"
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="h-10 w-1 shrink-0 rounded-full"
+                            style={{ backgroundColor: styleColor(f.style) }}
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="h-9 w-9 shrink-0 rounded-full border border-white/20"
+                            style={{ backgroundColor: body }}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-display text-lg uppercase leading-tight tracking-wide text-paper">
+                              {f.displayName}
+                            </span>
+                            <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper-dim">
+                              <Badge tone="outline">
+                                {styleLabel(f.style, f.styleOther)}
+                              </Badge>
+                              <span className="truncate">
+                                @{f.igUsername} • Menang {rec.wins} • Kalah{" "}
+                                {rec.losses}
+                              </span>
+                            </span>
+                          </span>
+                          <CheckMark checked={selected} />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <Textarea
-                id="message"
-                label="Pesan tantangan (opsional, maks 140 karakter)"
-                value={message}
-                onChange={(e) => setMessage(e.target.value.slice(0, 140))}
-                placeholder="contoh: Berani lawan aku di gudang?"
-                maxLength={140}
-              />
+
+              {/* Langkah 2 — pilih arena */}
+              <div>
+                <div className="mb-3 flex items-baseline gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="font-display text-lg leading-none text-amber-brand"
+                  >
+                    02
+                  </span>
+                  <h3
+                    id="arena-heading"
+                    className="text-sm font-bold uppercase tracking-wider text-paper"
+                  >
+                    Pilih arena
+                  </h3>
+                </div>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="arena-heading"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {Object.entries(MAP_LABELS).map(([value, label]) => {
+                    const selected = map === value;
+                    return (
+                      <label
+                        key={value}
+                        className={`flex min-h-[48px] cursor-pointer items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-sm font-semibold transition-colors duration-150 focus-within:ring-2 focus-within:ring-amber-brand/60 ${
+                          selected
+                            ? "border-amber-brand bg-amber-brand/10 text-paper"
+                            : "border-white/10 bg-white/[0.03] text-paper-dim hover:border-white/25"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="map"
+                          value={value}
+                          checked={selected}
+                          onChange={() => setMap(value)}
+                          className="sr-only"
+                        />
+                        {label}
+                        <CheckMark checked={selected} />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Langkah 3 — pesan */}
+              <div>
+                <div className="mb-3 flex items-baseline gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="font-display text-lg leading-none text-amber-brand"
+                  >
+                    03
+                  </span>
+                  <h3
+                    id="pesan-heading"
+                    className="text-sm font-bold uppercase tracking-wider text-paper"
+                  >
+                    Pesan tantangan
+                  </h3>
+                </div>
+                <Textarea
+                  id="message"
+                  label="Pesan tantangan (opsional)"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value.slice(0, 140))}
+                  placeholder="contoh: Berani lawan aku di gudang?"
+                  maxLength={140}
+                  aria-describedby="message-count"
+                />
+                <p
+                  id="message-count"
+                  className="mt-1.5 text-right text-xs text-paper-mute"
+                >
+                  {message.length}/140
+                </p>
+              </div>
+
               {formError ? (
                 <p role="alert" className="text-sm font-semibold text-red-400">
                   {formError}
@@ -330,6 +527,8 @@ export default function TantanganClient() {
               ) : null}
               <Button
                 type="submit"
+                size="lg"
+                className="w-full"
                 disabled={formBusy || sentRemaining <= 0 || fightsRemaining <= 0}
               >
                 {formBusy ? "Mengirim…" : "Kirim Tantangan"}
