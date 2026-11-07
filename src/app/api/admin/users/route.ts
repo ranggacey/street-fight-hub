@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { handleError, ok, serialize, serializeRecord } from '@/lib/http';
+import { escapeRegExp } from '@/lib/validation';
 import { Fighter } from '@/models/Fighter';
 import { User } from '@/models/User';
 
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q');
     const filter: Record<string, unknown> = {};
-    if (q) filter.username = { $regex: q, $options: 'i' };
+    // q di-escape supaya tidak bisa menjadi pola regex liar (ReDoS).
+    if (q) filter.username = { $regex: escapeRegExp(q), $options: 'i' };
 
     const users = await User.find(filter)
       .select('-passwordHash')

@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { conflict, forbidden, handleError, ok, parseJson, serialize } from '@/lib/http';
+import { resolveFighterColors } from '@/lib/game/engine-config';
 import { FIGHTER_STYLES, validateFighterBody } from '@/lib/validation';
 import { Fighter } from '@/models/Fighter';
 
@@ -15,13 +16,26 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const existing = await Fighter.findOne({ userId: session.userId }).lean();
-    if (existing) throw conflict('Kamu sudah punya fighter');
+    if (existing) throw conflict('Kamu sudah punya fighter', 'FIGHTER_EXISTS');
 
     const fighter = await Fighter.create({
       userId: session.userId,
-      ...input,
+      displayName: input.displayName,
+      igUsername: input.igUsername,
+      style: input.style,
+      styleOther: input.styleOther,
+      selfDescription: input.selfDescription,
       record: { wins: 0, losses: 0, draws: 0, kos: 0 },
       status: 'active',
+      rating: 1000,
+      casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 },
+      signatureMove: input.game.signatureMove,
+      tempo: input.game.tempo,
+      colors: resolveFighterColors({
+        displayName: input.displayName,
+        style: input.style,
+        colors: input.game.colors,
+      }),
     });
     return ok({ fighter: serialize(fighter.toObject()) }, 201);
   } catch (err) {
