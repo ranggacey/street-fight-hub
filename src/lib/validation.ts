@@ -109,9 +109,12 @@ export function validateFighterBody(body: Record<string, unknown>): FighterInput
   } else {
     styleOther = optString(body, 'styleOther');
   }
+  // Deskripsi diri: TIDAK ada minimum (2026-11-07, perintah rangga —
+  // deskripsi pendek seperti "Aku geng yang suka bawa senjata" harus lolos).
+  // Hanya batas atas 600 karakter yang dipertahankan.
   const selfDescription = checkLength(
     reqString(body, 'selfDescription', 'Deskripsi diri'),
-    50,
+    1,
     600,
     'Deskripsi diri',
   );
@@ -160,7 +163,7 @@ export function parseFighterPatch(body: Record<string, unknown>): FighterPatch {
   if (body.selfDescription !== undefined) {
     top.selfDescription = checkLength(
       reqString(body, 'selfDescription', 'Deskripsi diri'),
-      50,
+      1,
       600,
       'Deskripsi diri',
     );

@@ -107,11 +107,11 @@ export default function FighterSayaForm() {
       e.styleOther = "Isi gaya bertarungmu jika memilih Lainnya.";
     }
     if (
-      selfDescription.trim().length < 50 ||
+      selfDescription.trim().length < 1 ||
       selfDescription.trim().length > 600
     ) {
       e.selfDescription =
-        "Deskripsi diri 50–600 karakter. Ceritakan siapa kamu dan kenapa kamu bertarung.";
+        "Deskripsi diri maks 600 karakter. Ceritakan siapa kamu dan kenapa kamu bertarung.";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -360,7 +360,7 @@ export default function FighterSayaForm() {
             </div>
             <Textarea
               id="selfDescription"
-              label="Deskripsi Diri (50–600 karakter)"
+              label="Deskripsi Diri (maks 600 karakter)"
               hint="Ceritakan siapa kamu, dari mana, dan kenapa kamu bertarung. AI memakai ini untuk membuat persona."
               error={errors.selfDescription}
               value={selfDescription}
