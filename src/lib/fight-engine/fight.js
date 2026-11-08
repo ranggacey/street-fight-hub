@@ -109,7 +109,7 @@ export function fightStats(fight) {
     knockdowns: fight.knockdowns?.length ?? 0,
   };
   for (const a of fight.attacks) {
-    if (a.kind === 'feint') continue;
+    if (a.kind === 'feint' || a.kind === 'ginga') continue; // ginga = stance, bukan pukulan
     const byA = a.by === 'R';
     if (byA) s.strikesThrownA++; else s.strikesThrownB++;
     if (a.outcome === 'hit') {
@@ -135,7 +135,7 @@ export function keyMoments(fight) {
   const round2 = (x) => Math.round(x * 100) / 100;
   let biggestHit = null;
   for (const a of fight.attacks) {
-    if (a.outcome !== 'hit' || a.kind === 'feint') continue;
+    if (a.outcome !== 'hit' || a.kind === 'feint' || a.kind === 'ginga') continue;
     const dmg = dmgOf(a);
     if (!biggestHit || dmg > biggestHit.damage) {
       biggestHit = { by: toLR(a.by), move: a.kind, damage: Math.round(dmg * 10) / 10, timeSec: round2(a.t) };
@@ -158,7 +158,7 @@ export function keyMoments(fight) {
   // Null kalau tidak pernah ada pergantian pemimpin.
   let hpR = 100, hpB = 100, leader = null, leadChange = null;
   for (const a of fight.attacks) {
-    if (a.kind === 'feint') continue;
+    if (a.kind === 'feint' || a.kind === 'ginga') continue; // ginga = stance, bukan pukulan
     const d = dmgOf(a);
     if (a.by === 'R') hpB = Math.max(0, hpB - d); else hpR = Math.max(0, hpR - d);
     const cur = hpR === hpB ? null : hpR > hpB ? 'L' : 'R';
@@ -228,13 +228,21 @@ export const STRIKE_GAP_PX = {
   headbutt: 45, elbow: 50, headkick: 52,
   takedown: 55, clinch: 55, seoinage: 55,
   axekick: 60, uchimata: 60, knee: 62, flyknee: 62,
-  lowkick: 70, uppercut: 70, sweep: 70, abaniko: 70, osotogari: 70, meialua: 70,
-  shuto: 80, butterflykick: 85, hook: 88, bodyshot: 88, haymaker: 88,
-  cross: 90, finisher: 90, stickchop: 90, gyakuzuki: 90, queixada: 90,
-  tornadokick: 90, lotuskick: 90, overhand: 92,
+  lowkick: 70, uppercut: 70, sweep: 70, abaniko: 70, osotogari: 70, meialua: 60,
+  shuto: 80, butterflykick: 60, hook: 88, bodyshot: 88, haymaker: 88,
+  cross: 90, finisher: 90, stickchop: 90, gyakuzuki: 90, queixada: 60,
+  tornadokick: 60, lotuskick: 60, overhand: 92,
   jabR: 95, shove: 95, frontkick: 95, teep: 95, spinkick: 95, sinawali: 95,
-  redonda: 95, yokogeri: 95, sidekick: 95, maegeri: 95, armada: 95, feint: 95,
+  redonda: 95, yokogeri: 95, sidekick: 95, maegeri: 95, armada: 60, feint: 95,
   bodykick: 98, roundhouse: 98, stickswing: 100, straightlead: 100,
+  // Kind baru 2026-11-08 — CERMIN strikeRange() film.js.
+  // Tendangan ke KEPALA harus rapat (60px — sama seperti cabang walk film.js
+  // yang memakai rg=60 untuk head kick): kaki 93px tidak sampai ke kepala
+  // (~120px dari pinggul) bila gap 85-98; yang lama lolos hanya karena
+  // tidak pernah tersampel tes kontak (§5 hanya 1 fight).
+  doubleleg: 55, singleleg: 55, suplex: 55, bodyslam: 55, anklepick: 55,
+  outsidetrip: 55, armbar: 55, kneediag: 62, elbowup: 50, elbowspin: 55,
+  spinhookkick: 60, meialuafrente: 60, ginga: 95, pilantik: 70,
 };
 export function strikeGapOf(kind) {
   return STRIKE_GAP_PX[kind] ?? 110; // default film.js strikeRange
@@ -599,9 +607,16 @@ export function buildFight(left, right, duration, seed, opts = {}) {
       else if (normalizeStyle(wf.style) === 'muaythai') finKind = 'flyknee';
       const finBase = DMG_BASE[finKind] ?? 20;
       const power = Math.min(2.2, Math.max(1.4, hp[loser] / (finBase * 1.5)));
-      attacks.push({ t: koT, by: winner, kind: finKind, target: 'head', outcome: 'hit', power, knockdown: true });
-      knockdowns.push({ who: loser, t: koT + 0.4, getupStart: null });
-      cheers.push({ t: koT, dur: 1.6, power: 1 });
+      // Finisher tidak boleh terlalu rapat setelah serangan sebelumnya
+      // (kadens normal >= 0,55 dtk): kalau terlalu rapat, defender masih
+      // dalam reaksi slip serangan sebelumnya (kepala menjauh ~55px) saat
+      // finisher mendarat dan tangan tidak sampai (terukur: finisher KO
+      // 0,31 dtk setelah slip meleset 103px).
+      const prevT = attacks.length ? attacks[attacks.length - 1].t : 0;
+      const finT = Math.max(koT, prevT + 0.55);
+      attacks.push({ t: finT, by: winner, kind: finKind, target: 'head', outcome: 'hit', power, knockdown: true });
+      knockdowns.push({ who: loser, t: finT + 0.4, getupStart: null });
+      cheers.push({ t: finT, dur: 1.6, power: 1 });
       hp[loser] = Math.max(0, hp[loser] - dmgOf({ kind: finKind, outcome: 'hit', power }));
       break;
     }
@@ -631,6 +646,19 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     const wBy = opts?.weights?.[by] ?? (att.signatureMove ? { [att.signatureMove]: 2.5 } : undefined);
     const tempoBy = tempoOf(by, opts, fighters);
     let move = pickWeighted(pool, wBy, tempoBy, rng);
+    // --- Windup tidak boleh tumpang tindih dengan jendela ambil kayu ---
+    // Penjaga di atas hanya menggeser WAKTU serangan ke weapon.t+3.0, tapi
+    // windup (0.16-0.4 dtk sebelum t) tetap jatuh di dalam jendela pickup:
+    // penyerang masih mode 'pickup' (jalan kembali) saat windup, timeline
+    // tidak mendekat ke jarak serang, dan tangan/kaki belum sempat mencapai
+    // target saat impact (terukur: suplex/stickchop di t=weapon.t+3.0
+    // meleset 23-30px). Geser sampai windup mulai SETELAH jendela pickup.
+    if (weapon && t >= weapon.t + 3.0 && t - windupDurOf(move.kind) < weapon.t + 3.0) {
+      const pushed = weapon.t + 3.0 + windupDurOf(move.kind);
+      // Jangan dorong melewati finisher KO (kalau mepet, biarkan overlap
+      // lama — tidak lebih buruk dari sebelumnya).
+      if (result !== 'ko' || pushed < koT - 0.3) t = pushed;
+    }
     // Feint TIDAK dipakai director: di jarak dekat (gap ~50px) tangan
     // guard sudah 11px dari kepala hantu, jadi flick feint menembus
     // kepala lawan. Feint tetap ada di techniques.js untuk pemakaian
@@ -647,7 +675,9 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     }
     // --- Outcome + HP steering ---
     let outcome = pickOutcome(rng);
-    if (move.kind === 'feint') outcome = 'feint';
+    // Ginga = stance, bukan serangan (seperti feint): outcome 'feint'
+    // supaya tidak ada damage/knockback/reaksi hit pada lawan.
+    if (move.kind === 'feint' || move.kind === 'ginga') outcome = 'feint';
     let power = 0.9 + rng() * 0.4;
     if (move.power >= 0.9) power = 1.1 + rng() * 0.25;
     // Softening di akhir jalur KO: pemenang dipaksa kena terus.
@@ -735,6 +765,14 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     // --- Jeda kontak: rentang tergantung tempo penyerang saat itu ---
     const gap = gapFor(tempoBy, rng);
     t = t + gap;
+    // Setelah knockdown: jangan jadwal serangan selama korban terbaring
+    // (1,8 dtk, getupStart) + 1,4 dtk — animasi bangun sendiri ~0,91 dtk
+    // (bodyRot -1,45 -> 0 di 3,5/dtk) dan selama mode 'getup' cabang attack
+    // tidak jalan, jadi windup serangan berikut (s.d. 0,4 dtk) harus mulai
+    // SETELAH bangun selesai; kalau tidak, tangan/kaki tidak pernah
+    // di-IK ke target (terukur: gulat vs muaythai seed 99, singleleg 0,6
+    // dtk setelah bangun meleset 50px karena masih mode getup).
+    if (atk.knockdown) t = Math.max(t, atk.t + 0.4 + 1.8 + 1.4);
   }
 
   // Pastikan decision punya pemenang HP (kalau seri karena steering, beri

@@ -44,7 +44,7 @@ export const TECHNIQUE_KEYS = {
   uppercut: [
     // ROTASI rear-hand: dip = bahu belakang tarik (positif), impact = bahu belakang maju+naik (negatif). (Bug awal: tanda terbalik.)
     { t: -0.28, pose: { lean: -0.05, crouch: 0.58, head: -0.05, hipRot: 0.15, shRot: 0.1, sway: -8, stretch: 0.92, armB: { a: 0.5, b: 2.0 }, legF: { a: 0.35, k: -0.5 }, legB: { a: -0.3, k: -0.7 } }, ease: 'in' },
-    { t: -0.14, pose: { lean: 0.05, crouch: 0.3, hipRot: -0.05, shRot: 0.0, sway: -2, stretch: 0.97, armB: { a: 0.6, b: 1.8 }, footB: { ang: -0.5, pivot: 1.0, lift: 0 } }, ease: 'lin' },
+    { t: -0.14, pose: { lean: 0.05, crouch: 0.3, hipRot: -0.05, shRot: 0.0, sway: -2, stretch: 0.97, armB: { a: 0.6, b: 1.8 }, armF: { a: 1.4, b: 1.5 }, footB: { ang: -0.5, pivot: 1.0, lift: 0 } }, ease: 'lin' },
     { t: 0.00, pose: { lean: 0.18, crouch: 0.05, head: -0.05, hipRot: -0.35, shRot: -0.3, sway: 6, stretch: 1.02, armB: { a: 0.7, b: 1.5 }, armF: { a: 0.8, b: 2.4 }, legF: { a: 0.15, k: -0.1 }, legB: { a: -0.35, k: -0.5 }, footB: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'lin' },
     { t: 0.09, pose: { lean: 0.18, crouch: 0.05, hipRot: -0.35, shRot: -0.3, sway: 6, armB: { a: 0.7, b: 1.5 }, footB: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'lin' },
     { t: 0.22, pose: { lean: 0.1, crouch: 0.15, hipRot: -0.1, shRot: -0.05, sway: 0, armB: { a: 0.6, b: 1.9 }, footB: { ang: -0.2, pivot: 0.7, lift: 0 } }, ease: 'out' },
@@ -118,9 +118,9 @@ export const TECHNIQUE_KEYS = {
   // dan pivot lebih besar, tubuh lebih tegak (taekwondo memakai snap pinggul).
   roundhouse: [
     { t: -0.36, pose: { lean: -0.05, crouch: 0.2, hipRot: -0.15, shRot: -0.1, sway: 4, legB: { a: -0.2, k: -0.4 }, armB: { a: 0.6, b: 1.8 } }, ease: 'in' },
-    { t: -0.22, pose: { lean: -0.1, crouch: 0.08, hipRot: 0.15, shRot: 0.1, sway: 2, legB: { a: 1.35, k: -1.7 }, armB: { a: 1.4, b: 1.0 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.5, lift: 0 } }, ease: 'in' },
-    { t: 0.00, pose: { lean: -0.18, crouch: 0.05, hipRot: 0.85, shRot: 0.65, sway: 8, stretch: 1.05, legB: { a: 1.5, k: -0.1 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
-    { t: 0.07, pose: { lean: -0.18, crouch: 0.05, hipRot: 0.9, shRot: 0.65, sway: 8, legB: { a: 1.6, k: -0.08 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
+    { t: -0.22, pose: { lean: -0.1, crouch: 0.08, hipRot: 0.28, shRot: 0.2, sway: 2, legB: { a: 1.35, k: -1.7 }, armB: { a: 1.4, b: 1.0 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.5, lift: 0 } }, ease: 'in' },
+    { t: 0.00, pose: { lean: -0.1, crouch: 0.05, hipRot: 0.85, shRot: 0.65, sway: 8, stretch: 1.05, legB: { a: 1.5, k: -0.1 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
+    { t: 0.07, pose: { lean: -0.1, crouch: 0.05, hipRot: 0.9, shRot: 0.65, sway: 8, legB: { a: 1.6, k: -0.08 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
     { t: 0.24, pose: { lean: -0.1, crouch: 0.12, hipRot: 0.4, shRot: 0.3, sway: 4, legB: { a: 0.5, k: -0.8 }, footF: { ang: -0.4, pivot: 1.4, lift: 0 } }, ease: 'out' },
     { t: 0.52, pose: {}, ease: 'sstep' },
   ],
@@ -182,7 +182,7 @@ export const TECHNIQUE_KEYS = {
   // knockback besar, damage kecil. Load singkat, dorong lurus ke depan,
   // kedua lengan hampir lurus (a~1.5, b~0.2), badan condong ke depan.
   shove: [
-    { t: -0.20, pose: { lean: -0.1, crouch: 0.25, hipRot: 0.1, shRot: 0.05, sway: -4, armF: { a: 0.9, b: 2.0 }, armB: { a: 0.9, b: 2.0 }, legF: { a: 0.2, k: -0.2 }, legB: { a: -0.24, k: -0.35 } }, ease: 'in' },
+    { t: -0.20, pose: { lean: -0.1, crouch: 0.25, hipRot: 0.0, shRot: 0.0, sway: -4, armF: { a: 0.9, b: 2.0 }, armB: { a: 0.9, b: 2.0 }, legF: { a: 0.2, k: -0.2 }, legB: { a: -0.24, k: -0.35 } }, ease: 'in' },
     { t: 0.00, pose: { lean: 0.35, crouch: 0.1, hipRot: 0.0, shRot: 0.0, sway: 12, armF: { a: 1.5, b: 0.2 }, armB: { a: 1.5, b: 0.2 }, legF: { a: 0.3, k: -0.12 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
     { t: 0.10, pose: { lean: 0.35, crouch: 0.1, hipRot: 0.0, shRot: 0.0, sway: 12, armF: { a: 1.5, b: 0.2 }, armB: { a: 1.5, b: 0.2 } }, ease: 'lin' },
     { t: 0.25, pose: { lean: 0.1, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 2, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
@@ -285,12 +285,13 @@ export const TECHNIQUE_KEYS = {
     { t: 0.24, pose: { lean: 0.1, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 0, armB: { a: 1.1, b: 1.7 }, footB: { ang: -0.2, pivot: 0.8, lift: 0 } }, ease: 'out' },
     { t: 0.46, pose: {}, ease: 'sstep' },
   ],
-  // ---- TAKEDOWN (gulat): total ~0.95 dtk pre-kompresi. Level change dalam,
+  // ---- TAKEDOWN (gulat, DOUBLE LEG — kind generik = double leg per brief §4.1):
+  // total ~0.95 dtk pre-kompresi. Level change dalam,
   // shoot ke kaki lawan, angkat, banting. Impact = momen slam (lawan jatuh
   // ditangani director via event fall, bukan pose ini).
   takedown: [
     { t: -0.42, pose: { lean: 0.15, crouch: 0.5, hipRot: 0.05, shRot: 0.05, sway: -4, stretch: 0.94, armF: { a: 1.0, b: 1.8 }, armB: { a: 0.9, b: 1.9 }, legF: { a: 0.35, k: -0.55 }, legB: { a: -0.3, k: -0.6 } }, ease: 'in' },
-    { t: -0.20, pose: { lean: 0.25, crouch: 0.35, hipRot: 0.1, shRot: 0.1, sway: 12, armF: { a: 1.5, b: 0.6 }, armB: { a: 1.4, b: 0.7 }, legF: { a: 0.45, k: -0.3 }, legB: { a: -0.35, k: -0.5 } }, ease: 'lin' },
+    { t: -0.20, pose: { lean: 0.25, crouch: 0.42, hipRot: 0.1, shRot: 0.1, sway: 12, armF: { a: 1.5, b: 0.6 }, armB: { a: 1.4, b: 0.7 }, legF: { a: 0.5, k: -0.3 }, legB: { a: -0.35, k: -0.5 } }, ease: 'lin' },
     { t: 0.00, pose: { lean: 0.3, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 14, stretch: 1.03, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.1, b: 1.1 }, legF: { a: 0.3, k: -0.15 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
     { t: 0.10, pose: { lean: 0.3, crouch: 0.15, sway: 14, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.1, b: 1.1 } }, ease: 'lin' },
     { t: 0.28, pose: { lean: 0.1, crouch: 0.2, sway: 4, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
@@ -310,8 +311,8 @@ export const TECHNIQUE_KEYS = {
   sweep: [
     { t: -0.30, pose: { lean: -0.05, crouch: 0.35, hipRot: -0.1, shRot: -0.1, sway: 2, legB: { a: -0.2, k: -0.5 }, armB: { a: 0.6, b: 1.8 } }, ease: 'in' },
     { t: -0.14, pose: { lean: -0.08, crouch: 0.4, hipRot: 0.3, shRot: 0.2, sway: 2, legB: { a: 0.3, k: -1.2 }, armB: { a: 1.2, b: 1.4 }, footF: { ang: -0.5, pivot: 0.9, lift: 0 } }, ease: 'in' },
-    { t: 0.00, pose: { lean: -0.1, crouch: 0.3, hipRot: 0.7, shRot: 0.5, sway: 6, legB: { a: 1.15, k: -0.1 }, legF: { a: -0.1, k: -0.35 }, armB: { a: 2.0, b: 0.8 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.55, pivot: 1.2, lift: 0 } }, ease: 'lin' },
-    { t: 0.08, pose: { lean: -0.1, crouch: 0.3, hipRot: 0.7, shRot: 0.5, sway: 6, legB: { a: 1.2, k: -0.08 }, footF: { ang: -0.55, pivot: 1.2, lift: 0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: -0.1, crouch: 0.38, hipRot: 0.7, shRot: 0.5, sway: 6, legB: { a: 0.85, k: -0.08 }, legF: { a: -0.1, k: -0.35 }, armB: { a: 2.0, b: 0.8 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.55, pivot: 1.2, lift: 0 } }, ease: 'lin' },
+    { t: 0.08, pose: { lean: -0.1, crouch: 0.38, hipRot: 0.7, shRot: 0.5, sway: 6, legB: { a: 0.9, k: -0.08 }, footF: { ang: -0.55, pivot: 1.2, lift: 0 } }, ease: 'lin' },
     { t: 0.24, pose: { lean: -0.05, crouch: 0.25, hipRot: 0.3, shRot: 0.2, sway: 2, legB: { a: 0.4, k: -0.8 }, footF: { ang: -0.3, pivot: 0.9, lift: 0 } }, ease: 'out' },
     { t: 0.45, pose: {}, ease: 'sstep' },
   ],
@@ -368,13 +369,15 @@ export const TECHNIQUE_KEYS = {
     { t: 0.26, pose: { lean: 0.1, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 2, armB: { a: 1.0, b: 1.4 } }, ease: 'out' },
     { t: 0.48, pose: {}, ease: 'sstep' },
   ],
-  // ---- SEOI NAGE (judo): putar masuk, punggung jadi tumpu, lawan terangkat melewati bahu.
+  // ---- SEOI NAGE (judo): kuzushi (tarik) → tsukuri (putar 180° masuk, hipRot 0.55)
+  // → kake (luruskan kaki + bungkuk ke depan dalam, lengan TETAP menarik ke bawah-depan —
+  // bukan lengan slam seperti takedown). Punggung jadi tumpu, lawan terangkat melewati bahu.
   seoinage: [
     { t: -0.42, pose: { lean: 0.15, crouch: 0.5, hipRot: 0.3, shRot: 0.25, sway: -4, stretch: 0.94, armF: { a: 1.0, b: 1.8 }, armB: { a: 0.9, b: 1.9 }, legF: { a: 0.35, k: -0.55 }, legB: { a: -0.3, k: -0.6 } }, ease: 'in' },
     { t: -0.20, pose: { lean: 0.25, crouch: 0.4, hipRot: 0.55, shRot: 0.5, sway: 10, armF: { a: 1.5, b: 0.6 }, armB: { a: 1.4, b: 0.7 }, legF: { a: 0.45, k: -0.35 }, legB: { a: -0.35, k: -0.5 } }, ease: 'lin' },
-    { t: 0.00, pose: { lean: 0.3, crouch: 0.15, hipRot: 0.1, shRot: 0.0, sway: 14, stretch: 1.03, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.1, b: 1.1 }, legF: { a: 0.3, k: -0.15 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
-    { t: 0.10, pose: { lean: 0.3, crouch: 0.15, sway: 14, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.1, b: 1.1 } }, ease: 'lin' },
-    { t: 0.28, pose: { lean: 0.1, crouch: 0.2, sway: 4, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
+    { t: 0.00, pose: { lean: 0.3, crouch: 0.15, hipRot: 0.1, shRot: 0.0, sway: 14, stretch: 1.03, armF: { a: 1.0, b: 1.5 }, armB: { a: 0.9, b: 1.6 }, legF: { a: 0.3, k: -0.15 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
+    { t: 0.10, pose: { lean: 0.3, crouch: 0.15, sway: 14, armF: { a: 1.0, b: 1.5 }, armB: { a: 0.9, b: 1.6 } }, ease: 'lin' },
+    { t: 0.28, pose: { lean: 0.25, crouch: 0.25, sway: 4, armF: { a: 1.1, b: 1.4 }, armB: { a: 1.0, b: 1.5 } }, ease: 'out' },
     { t: 0.50, pose: {}, ease: 'sstep' },
   ],
   // ---- OSOTO GARI (judo): sabit kaki luar — langkah rapat, kaki belakang menyabit rendah.
@@ -408,8 +411,8 @@ export const TECHNIQUE_KEYS = {
   yokogeri: [
     { t: -0.36, pose: { lean: -0.05, crouch: 0.2, hipRot: -0.2, shRot: -0.15, sway: 4, legB: { a: -0.2, k: -0.5 }, armB: { a: 0.6, b: 1.8 } }, ease: 'in' },
     { t: -0.20, pose: { lean: -0.1, crouch: 0.12, hipRot: 0.3, shRot: 0.2, sway: 2, legB: { a: 1.0, k: -1.8 }, armB: { a: 1.4, b: 1.0 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.4, lift: 0 } }, ease: 'in' },
-    { t: 0.00, pose: { lean: -0.15, crouch: 0.05, hipRot: 0.9, shRot: 0.7, sway: 8, stretch: 1.04, legB: { a: 1.5, k: -0.08 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
-    { t: 0.07, pose: { lean: -0.15, crouch: 0.05, hipRot: 0.95, shRot: 0.7, sway: 8, legB: { a: 1.55, k: -0.08 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: -0.15, crouch: 0.05, hipRot: 0.9, shRot: 0.7, sway: 10, stretch: 1.04, legB: { a: 1.5, k: -0.08 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
+    { t: 0.07, pose: { lean: -0.15, crouch: 0.05, hipRot: 0.95, shRot: 0.7, sway: 10, legB: { a: 1.55, k: -0.08 }, footF: { ang: -0.6, pivot: 1.9, lift: 0 } }, ease: 'lin' },
     { t: 0.26, pose: { lean: -0.08, crouch: 0.12, hipRot: 0.4, shRot: 0.3, sway: 4, legB: { a: 0.5, k: -0.9 }, footF: { ang: -0.4, pivot: 1.3, lift: 0 } }, ease: 'out' },
     { t: 0.55, pose: {}, ease: 'sstep' },
   ],
@@ -442,9 +445,9 @@ export const TECHNIQUE_KEYS = {
   ],
   // ---- GYAKU ZUKI (karate): pukulan balik tangan belakang — putaran pinggul penuh, snap di ujung.
   gyakuzuki: [
-    { t: -0.26, pose: { lean: -0.1, crouch: 0.25, hipRot: 0.45, shRot: 0.35, sway: -6, armB: { a: 0.35, b: 2.45 }, footB: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'in' },
-    { t: -0.12, pose: { lean: 0.05, crouch: 0.15, hipRot: 0.15, shRot: 0.1, sway: -2, armB: { a: 0.6, b: 2.2 }, footB: { ang: -0.55, pivot: 1.4, lift: 0 } }, ease: 'lin' },
-    { t: 0.00, pose: { lean: 0.32, crouch: 0.08, hipRot: -0.38, shRot: -0.42, sway: 10, armB: { a: 1.62, b: 0.05 }, armF: { a: 0.8, b: 2.4 }, legF: { a: 0.3, k: -0.12 }, legB: { a: -0.32, k: -0.42 }, footB: { ang: -0.55, pivot: 1.57, lift: 0 } }, ease: 'lin' },
+    { t: -0.26, pose: { lean: -0.1, crouch: 0.32, hipRot: 0.45, shRot: 0.35, sway: -6, armB: { a: 0.35, b: 2.45 }, legF: { a: 0.34, k: -0.18 }, footB: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'in' },
+    { t: -0.12, pose: { lean: 0.05, crouch: 0.18, hipRot: 0.15, shRot: 0.1, sway: -2, armB: { a: 0.6, b: 2.2 }, legF: { a: 0.34, k: -0.15 }, footB: { ang: -0.55, pivot: 1.4, lift: 0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.32, crouch: 0.12, hipRot: -0.38, shRot: -0.42, sway: 10, armB: { a: 1.62, b: 0.05 }, armF: { a: 0.8, b: 2.4 }, legF: { a: 0.34, k: -0.12 }, legB: { a: -0.32, k: -0.42 }, footB: { ang: -0.55, pivot: 1.57, lift: 0 } }, ease: 'lin' },
     { t: 0.08, pose: { lean: 0.32, crouch: 0.08, hipRot: -0.38, shRot: -0.42, sway: 10, armB: { a: 1.62, b: 0.05 }, footB: { ang: -0.55, pivot: 1.57, lift: 0 } }, ease: 'lin' },
     { t: 0.24, pose: { lean: 0.1, crouch: 0.15, hipRot: 0.1, shRot: 0.05, sway: 2, armB: { a: 1.0, b: 1.4 }, footB: { ang: -0.3, pivot: 1.0, lift: 0 } }, ease: 'out' },
     { t: 0.46, pose: {}, ease: 'sstep' },
@@ -452,10 +455,10 @@ export const TECHNIQUE_KEYS = {
   // ---- MAE GERI (karate): tendangan depan snap — chamber lutut ke dada, snap bola kaki.
   maegeri: [
     { t: -0.28, pose: { lean: -0.05, crouch: 0.2, hipRot: -0.1, shRot: -0.1, sway: 2, legB: { a: -0.1, k: -0.4 }, armB: { a: 0.6, b: 1.8 } }, ease: 'in' },
-    { t: -0.16, pose: { lean: -0.08, crouch: 0.12, hipRot: 0.05, shRot: 0.05, sway: 2, legB: { a: 0.95, k: -1.9 }, armB: { a: 1.2, b: 1.4 }, armF: { a: 1.2, b: 1.3 }, footF: { ang: -0.3, pivot: 0.9, lift: 0 } }, ease: 'in' },
+    { t: -0.20, pose: { lean: -0.08, crouch: 0.12, hipRot: 0.05, shRot: 0.05, sway: 2, legB: { a: 0.95, k: -1.9 }, armB: { a: 1.2, b: 1.4 }, armF: { a: 1.2, b: 1.3 }, footF: { ang: -0.3, pivot: 0.9, lift: 0 } }, ease: 'in' },
     { t: 0.00, pose: { lean: -0.1, crouch: 0.06, hipRot: 0.45, shRot: 0.35, sway: 6, stretch: 1.02, legB: { a: 1.5, k: -0.08 }, legF: { a: -0.1, k: -0.3 }, armB: { a: 2.0, b: 0.8 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.5, pivot: 1.2, lift: 0 } }, ease: 'lin' },
     { t: 0.06, pose: { lean: -0.1, crouch: 0.06, hipRot: 0.5, shRot: 0.35, sway: 6, legB: { a: 1.55, k: -0.08 }, footF: { ang: -0.5, pivot: 1.2, lift: 0 } }, ease: 'lin' },
-    { t: 0.20, pose: { lean: -0.05, crouch: 0.12, hipRot: 0.2, shRot: 0.15, sway: 2, legB: { a: 0.9, k: -1.4 }, footF: { ang: -0.3, pivot: 0.9, lift: 0 } }, ease: 'out' },
+    { t: 0.20, pose: { lean: -0.05, crouch: 0.12, hipRot: 0.2, shRot: 0.15, sway: 2, legB: { a: 0.95, k: -1.9 }, footF: { ang: -0.3, pivot: 0.9, lift: 0 } }, ease: 'out' },
     { t: 0.44, pose: {}, ease: 'sstep' },
   ],
   // ---- ARMADA (capoeira): tendangan bulan sabit berputar 360° — coil lalu putaran penuh, kaki lurus.
@@ -476,9 +479,9 @@ export const TECHNIQUE_KEYS = {
     { t: 0.28, pose: { lean: 0.15, crouch: 0.3, hipRot: 0.35, shRot: 0.25, sway: 4, legB: { a: 0.5, k: -0.9 }, footF: { ang: -0.4, pivot: 1.2, lift: 0 } }, ease: 'out' },
     { t: 0.58, pose: {}, ease: 'sstep' },
   ],
-  // ---- QUEIXADA (capoeira): tendangan sabit luar-dalam — langkah silang, kaki menyapu dari luar ke dalam.
+  // ---- QUEIXADA (capoeira): tendangan sabit dalam→luar — langkah silang, kaki menyapu dari dalam ke luar.
   queixada: [
-    { t: -0.34, pose: { lean: -0.05, crouch: 0.2, hipRot: -0.25, shRot: -0.2, sway: 4, legB: { a: -0.2, k: -0.45 }, armB: { a: 0.6, b: 1.8 }, armF: { a: 1.0, b: 1.5 } }, ease: 'in' },
+    { t: -0.34, pose: { lean: -0.05, crouch: 0.2, hipRot: -0.25, shRot: -0.2, sway: 4, legB: { a: -0.2, k: -0.45 }, armB: { a: 0.6, b: 1.8 }, armF: { a: 1.0, b: 1.5 }, footF: { ang: -0.4, pivot: 0.5, lift: 0 } }, ease: 'in' },
     { t: -0.18, pose: { lean: -0.1, crouch: 0.1, hipRot: 0.2, shRot: 0.15, sway: 2, legB: { a: 1.1, k: -1.6 }, armB: { a: 1.4, b: 1.0 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.55, pivot: 1.3, lift: 0 } }, ease: 'in' },
     { t: 0.00, pose: { lean: -0.18, crouch: 0.06, hipRot: 0.8, shRot: 0.65, sway: 8, stretch: 1.04, legB: { a: 1.55, k: -0.1 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.8, lift: 0 } }, ease: 'lin' },
     { t: 0.07, pose: { lean: -0.18, crouch: 0.06, hipRot: 0.85, shRot: 0.65, sway: 8, legB: { a: 1.6, k: -0.08 }, footF: { ang: -0.6, pivot: 1.8, lift: 0 } }, ease: 'lin' },
@@ -512,6 +515,182 @@ export const TECHNIQUE_KEYS = {
     { t: 0.26, pose: { lean: -0.1, crouch: 0.12, hipRot: 0.4, shRot: 0.3, sway: 4, legB: { a: 0.5, k: -0.85 }, footF: { ang: -0.4, pivot: 1.3, lift: 0 } }, ease: 'out' },
     { t: 0.54, pose: {}, ease: 'sstep' },
   ],
+  // ---- KIND BARU 2026-11-08 (14 kind, riset §7) ----
+  // Aturan yang sama: t relatif terhadap impact, kaki tendang = legB,
+  // lutut satu arah (k <= 0), impact di-hold 1-2 frame, kembali guard.
+  // ---- DOUBLE LEG TAKEDOWN (gulat): level change -> shoot (kepala di dada
+  // lawan, kedua lengan memeluk PAHA) -> drive ke depan -> slam. Kepala
+  // NAIK menatap lurus (head 0.1), bukan menunduk.
+  doubleleg: [
+    { t: -0.42, pose: { lean: 0.15, crouch: 0.5, head: 0.1, hipRot: 0.05, shRot: 0.05, sway: -4, stretch: 0.94, armF: { a: 1.0, b: 1.8 }, armB: { a: 0.9, b: 1.9 }, legF: { a: 0.35, k: -0.55 }, legB: { a: -0.3, k: -0.6 } }, ease: 'in' },
+    { t: -0.20, pose: { lean: 0.25, crouch: 0.42, head: 0.1, hipRot: 0.1, shRot: 0.1, sway: 12, armF: { a: 1.5, b: 0.6 }, armB: { a: 1.4, b: 0.7 }, legF: { a: 0.5, k: -0.3 }, legB: { a: -0.35, k: -0.5 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.3, crouch: 0.15, head: 0.1, hipRot: 0.0, shRot: 0.0, sway: 14, stretch: 1.03, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.1, b: 1.1 }, legF: { a: 0.3, k: -0.15 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
+    { t: 0.10, pose: { lean: 0.3, crouch: 0.15, sway: 14, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.1, b: 1.1 } }, ease: 'lin' },
+    { t: 0.28, pose: { lean: 0.1, crouch: 0.2, sway: 4, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
+    { t: 0.50, pose: {}, ease: 'sstep' },
+  ],
+  // ---- SINGLE LEG TAKEDOWN (gulat): tangkap SATU kaki (armF memeluk,
+  // armB mengontrol badan) -> finish BACK TRIP: kaki belakang menyapu
+  // rendah ke kaki tumpu lawan + sway menyamping (bukan lurus).
+  singleleg: [
+    { t: -0.40, pose: { lean: 0.12, crouch: 0.45, hipRot: 0.1, shRot: 0.05, sway: -2, stretch: 0.95, armF: { a: 1.0, b: 1.8 }, armB: { a: 0.9, b: 1.9 }, legF: { a: 0.35, k: -0.5 }, legB: { a: -0.3, k: -0.55 } }, ease: 'in' },
+    { t: -0.18, pose: { lean: 0.2, crouch: 0.35, hipRot: 0.25, shRot: 0.2, sway: 8, armF: { a: 1.5, b: 0.5 }, armB: { a: 1.1, b: 1.0 }, legF: { a: 0.45, k: -0.3 }, legB: { a: -0.3, k: -0.5 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.25, crouch: 0.2, hipRot: 0.6, shRot: 0.45, sway: 10, stretch: 1.02, armF: { a: 1.4, b: 0.6 }, armB: { a: 1.2, b: 0.9 }, legF: { a: 0.3, k: -0.2 }, legB: { a: 0.85, k: -0.08 }, footF: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'lin' },
+    { t: 0.09, pose: { lean: 0.25, crouch: 0.2, hipRot: 0.6, shRot: 0.45, sway: 10, armF: { a: 1.4, b: 0.6 }, legB: { a: 0.85, k: -0.08 } }, ease: 'lin' },
+    { t: 0.26, pose: { lean: 0.1, crouch: 0.2, hipRot: 0.2, shRot: 0.15, sway: 2, armF: { a: 1.0, b: 1.6 }, legB: { a: 0.4, k: -0.8 } }, ease: 'out' },
+    { t: 0.48, pose: {}, ease: 'sstep' },
+  ],
+  // ---- SUPLEX / GERMAN SUPLEX (gulat): body lock dari belakang (kedua
+  // lengan memeluk pinggang, NOL celah) -> angkat lewat kaki+pinggul ->
+  // ARCH ke belakang (lean negatif BESAR + head ke belakang + stretch > 1)
+  // -> lawan lewat atas kepala (overlay film.js 'over').
+  suplex: [
+    { t: -0.40, pose: { lean: 0.2, crouch: 0.45, hipRot: 0.05, shRot: 0.05, sway: -2, stretch: 0.95, armF: { a: 1.2, b: 1.0 }, armB: { a: 1.2, b: 1.0 }, legF: { a: 0.35, k: -0.5 }, legB: { a: -0.3, k: -0.55 } }, ease: 'in' },
+    { t: -0.18, pose: { lean: 0.1, crouch: 0.1, hipRot: 0.0, shRot: 0.0, sway: 6, stretch: 1.03, armF: { a: 1.3, b: 0.9 }, armB: { a: 1.3, b: 0.9 }, legF: { a: 0.3, k: -0.2 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: -0.35, crouch: 0.05, head: -0.2, hipRot: -0.2, shRot: -0.15, sway: 4, stretch: 1.06, armF: { a: 1.4, b: 0.8 }, armB: { a: 1.4, b: 0.8 }, legF: { a: 0.25, k: -0.15 }, legB: { a: -0.35, k: -0.4 } }, ease: 'lin' },
+    { t: 0.10, pose: { lean: -0.3, crouch: 0.05, head: -0.2, sway: 4, stretch: 1.05, armF: { a: 1.4, b: 0.8 }, armB: { a: 1.4, b: 0.8 } }, ease: 'lin' },
+    { t: 0.30, pose: { lean: 0.1, crouch: 0.25, head: 0.0, sway: 0, stretch: 1.0, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
+    { t: 0.55, pose: {}, ease: 'sstep' },
+  ],
+  // ---- BODY SLAM / SCOOP SLAM (gulat, pro wrestling): scoop (satu lengan
+  // di antara kaki, satu melingkari punggung) -> angkat HORIZONTAL ->
+  // banting vertikal ke bawah (penyerang ikut jatuh ke belakang, lean
+  // negatif RINGAN — bukan arch besar seperti suplex).
+  bodyslam: [
+    { t: -0.38, pose: { lean: 0.15, crouch: 0.5, hipRot: 0.05, shRot: 0.05, sway: -2, stretch: 0.94, armF: { a: 1.2, b: 0.8 }, armB: { a: 1.3, b: 0.7 }, legF: { a: 0.35, k: -0.55 }, legB: { a: -0.3, k: -0.6 } }, ease: 'in' },
+    { t: -0.18, pose: { lean: 0.1, crouch: 0.1, hipRot: 0.0, shRot: 0.0, sway: 8, stretch: 1.04, armF: { a: 1.4, b: 0.6 }, armB: { a: 1.4, b: 0.6 }, legF: { a: 0.3, k: -0.2 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: -0.15, crouch: 0.3, hipRot: 0.0, shRot: 0.0, sway: 6, stretch: 0.98, armF: { a: 1.0, b: 1.2 }, armB: { a: 1.0, b: 1.2 }, legF: { a: 0.3, k: -0.25 }, legB: { a: -0.3, k: -0.45 } }, ease: 'lin' },
+    { t: 0.10, pose: { lean: -0.15, crouch: 0.3, sway: 6, armF: { a: 1.0, b: 1.2 }, armB: { a: 1.0, b: 1.2 } }, ease: 'lin' },
+    { t: 0.28, pose: { lean: 0.05, crouch: 0.25, sway: 2, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
+    { t: 0.52, pose: {}, ease: 'sstep' },
+  ],
+  // ---- KNEE DIAGONAL / KHAO CHIANG (muay thai): seperti knee lurus tapi
+  // pinggul MEMUTAR seperti roundhouse (hipRot 0.75 vs 0.4) + lean
+  // menyamping, target rusuk. Lutut TETAP terlipat (k ~ -1.8); tangan
+  // TIDAK turun (tetap menarik/mengontrol).
+  kneediag: [
+    { t: -0.30, pose: { lean: -0.05, crouch: 0.25, hipRot: -0.1, shRot: -0.1, sway: 2, legB: { a: -0.1, k: -0.4 }, armF: { a: 1.3, b: 0.5 }, armB: { a: 1.1, b: 0.9 } }, ease: 'in' },
+    { t: -0.16, pose: { lean: 0.0, crouch: 0.3, hipRot: 0.3, shRot: 0.25, sway: 4, legB: { a: 1.0, k: -1.9 }, armF: { a: 1.3, b: 0.5 }, armB: { a: 1.1, b: 0.9 }, footF: { ang: -0.4, pivot: 1.2, lift: 0 } }, ease: 'in' },
+    { t: 0.00, pose: { lean: 0.18, crouch: 0.1, hipRot: 0.75, shRot: 0.6, sway: 8, stretch: 1.03, legB: { a: 1.6, k: -1.8 }, legF: { a: -0.1, k: -0.3 }, armF: { a: 1.3, b: 0.5 }, armB: { a: 1.1, b: 0.9 }, footF: { ang: -0.5, pivot: 1.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.08, pose: { lean: 0.18, crouch: 0.1, hipRot: 0.75, shRot: 0.6, sway: 8, legB: { a: 1.6, k: -1.8 }, footF: { ang: -0.5, pivot: 1.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.24, pose: { lean: -0.05, crouch: 0.2, hipRot: 0.2, shRot: 0.15, sway: 2, legB: { a: 0.5, k: -1.2 }, footF: { ang: -0.3, pivot: 1.0, lift: 0 } }, ease: 'out' },
+    { t: 0.48, pose: {}, ease: 'sstep' },
+  ],
+  // ---- ELBOW UPPERCUT / SOK NGAD (muay thai): seperti uppercut tapi SIKU
+  // yang naik — lengan bawah TERLIPAT (b ~ 2.0), tangan dekat kepala
+  // ("menyisir rambut", jangan lewati garis rambut). Putaran pinggul KECIL.
+  // Berhenti di puncak (hold), jangan lanjut melewati kepala.
+  elbowup: [
+    { t: -0.26, pose: { lean: -0.05, crouch: 0.5, head: -0.05, hipRot: 0.15, shRot: 0.1, sway: -6, stretch: 0.93, armB: { a: 0.5, b: 2.0 }, armF: { a: 1.0, b: 2.0 }, legF: { a: 0.35, k: -0.5 }, legB: { a: -0.3, k: -0.7 } }, ease: 'in' },
+    { t: -0.12, pose: { lean: 0.05, crouch: 0.25, hipRot: -0.05, shRot: 0.0, sway: -2, stretch: 0.97, armB: { a: 0.6, b: 1.9 }, armF: { a: 1.2, b: 1.8 }, footB: { ang: -0.5, pivot: 1.0, lift: 0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.18, crouch: 0.05, head: -0.05, hipRot: -0.25, shRot: -0.2, sway: 6, stretch: 1.02, armB: { a: 0.7, b: 2.0 }, armF: { a: 0.8, b: 2.4 }, legF: { a: 0.15, k: -0.1 }, legB: { a: -0.35, k: -0.5 }, footB: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'lin' },
+    { t: 0.09, pose: { lean: 0.18, crouch: 0.05, hipRot: -0.25, shRot: -0.2, sway: 6, armB: { a: 0.7, b: 2.0 }, footB: { ang: -0.5, pivot: 1.1, lift: 0 } }, ease: 'lin' },
+    { t: 0.22, pose: { lean: 0.1, crouch: 0.15, hipRot: -0.05, shRot: 0.0, sway: 0, armB: { a: 0.6, b: 1.9 }, footB: { ang: -0.2, pivot: 0.7, lift: 0 } }, ease: 'out' },
+    { t: 0.44, pose: {}, ease: 'sstep' },
+  ],
+  // ---- SPINNING ELBOW / SOK KLAP (muay thai): coil (badan memutar
+  // menjauh, siku belakang ditarik) -> putar 180° penuh -> siku belakang
+  // menghantam (bagian BELAKANG siku). Spin TETAP DI TENGAH, guard naik,
+  // lalu rewind ke stance. Seperti spinkick tapi LENGAN yang memutar.
+  elbowspin: [
+    { t: -0.38, pose: { lean: -0.05, crouch: 0.3, hipRot: 0.7, shRot: 0.6, sway: -4, legB: { a: -0.2, k: -0.5 }, armB: { a: 0.7, b: 1.8 }, armF: { a: 0.9, b: 1.6 }, footF: { ang: -0.3, pivot: 1.2, lift: 0 } }, ease: 'in' },
+    { t: -0.20, pose: { lean: 0.1, crouch: 0.15, hipRot: -0.5, shRot: -0.45, sway: 2, armB: { a: 1.2, b: 2.0 }, armF: { a: 1.2, b: 1.2 }, footF: { ang: -0.5, pivot: 2.4, lift: 0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.2, crouch: 0.08, hipRot: -0.7, shRot: -0.6, sway: 6, stretch: 1.03, armB: { a: 1.9, b: 2.0 }, armF: { a: 0.8, b: 2.4 }, legF: { a: -0.12, k: -0.3 }, legB: { a: -0.3, k: -0.4 }, footF: { ang: -0.55, pivot: 2.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.08, pose: { lean: 0.2, crouch: 0.08, hipRot: -0.7, shRot: -0.6, sway: 6, armB: { a: 1.9, b: 2.0 }, footF: { ang: -0.55, pivot: 2.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.26, pose: { lean: 0.05, crouch: 0.15, hipRot: -0.2, shRot: -0.15, sway: 2, armB: { a: 1.0, b: 1.8 }, footF: { ang: -0.3, pivot: 1.0, lift: 0 } }, ease: 'out' },
+    { t: 0.55, pose: {}, ease: 'sstep' },
+  ],
+  // ---- SPINNING HOOK KICK / DWI HURYEO CHAGI (taekwondo): putar 360°
+  // penuh (kepala menoleh DULU, head 0.1 di coil) -> chamber -> kaki
+  // terentang HORIZONTAL lalu tumit MENGKAIT (busur, bukan menusuk lurus
+  // seperti spinkick: hipRot -0.9 vs -0.7, legB a 1.6).
+  spinhookkick: [
+    { t: -0.40, pose: { lean: -0.05, crouch: 0.3, head: 0.1, hipRot: 0.7, shRot: 0.6, sway: -4, legB: { a: -0.2, k: -0.5 }, armB: { a: 0.7, b: 1.8 }, armF: { a: 0.9, b: 1.6 }, footF: { ang: -0.3, pivot: 1.2, lift: 0 } }, ease: 'in' },
+    { t: -0.22, pose: { lean: 0.05, crouch: 0.15, head: 0.1, hipRot: -0.5, shRot: -0.45, sway: 2, legB: { a: 0.4, k: -1.5 }, armB: { a: 1.2, b: 1.2 }, armF: { a: 1.2, b: 1.2 }, footF: { ang: -0.5, pivot: 2.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: -0.15, crouch: 0.06, hipRot: -0.9, shRot: -0.7, sway: 8, stretch: 1.04, legB: { a: 1.6, k: -0.1 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.4, b: 1.1 }, footF: { ang: -0.55, pivot: 2.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.08, pose: { lean: -0.15, crouch: 0.06, hipRot: -0.9, shRot: -0.7, sway: 8, legB: { a: 1.65, k: -0.08 }, footF: { ang: -0.55, pivot: 2.6, lift: 0 } }, ease: 'lin' },
+    { t: 0.26, pose: { lean: -0.08, crouch: 0.15, hipRot: -0.3, shRot: -0.2, sway: 2, legB: { a: 0.4, k: -1.0 }, footF: { ang: -0.3, pivot: 1.0, lift: 0 } }, ease: 'out' },
+    { t: 0.55, pose: {}, ease: 'sstep' },
+  ],
+  // ---- MEIA-LUA DE FRENTE (capoeira): busur LUAR->DALAM (kebalikan
+  // queixada: hipRot negatif di impact, bukan +0.8) — kaki TETAP LURUS,
+  // kaki tumpu diputar ke luar, lengan ayun searah lalu berlawanan
+  // (counter-balance), kembali ke paralelo/ginga.
+  meialuafrente: [
+    { t: -0.34, pose: { lean: -0.05, crouch: 0.2, hipRot: 0.25, shRot: 0.2, sway: 4, legB: { a: -0.2, k: -0.45 }, armB: { a: 0.6, b: 1.8 }, armF: { a: 1.0, b: 1.5 }, footF: { ang: -0.4, pivot: 0.5, lift: 0 } }, ease: 'in' },
+    { t: -0.18, pose: { lean: -0.1, crouch: 0.1, hipRot: -0.2, shRot: -0.15, sway: 2, legB: { a: 1.1, k: -1.6 }, armB: { a: 1.4, b: 1.0 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.55, pivot: 1.3, lift: 0 } }, ease: 'in' },
+    { t: 0.00, pose: { lean: -0.18, crouch: 0.06, hipRot: -0.8, shRot: -0.65, sway: 8, stretch: 1.04, legB: { a: 1.55, k: -0.1 }, legF: { a: -0.12, k: -0.3 }, armB: { a: 2.0, b: 0.5 }, armF: { a: 1.3, b: 1.2 }, footF: { ang: -0.6, pivot: 1.8, lift: 0 } }, ease: 'lin' },
+    { t: 0.07, pose: { lean: -0.18, crouch: 0.06, hipRot: -0.85, shRot: -0.65, sway: 8, legB: { a: 1.6, k: -0.08 }, footF: { ang: -0.6, pivot: 1.8, lift: 0 } }, ease: 'lin' },
+    { t: 0.26, pose: { lean: -0.1, crouch: 0.12, hipRot: -0.4, shRot: -0.3, sway: 4, legB: { a: 0.5, k: -0.85 }, footF: { ang: -0.4, pivot: 1.3, lift: 0 } }, ease: 'out' },
+    { t: 0.54, pose: {}, ease: 'sstep' },
+  ],
+  // ---- GINGA (capoeira — STANCE, bukan serangan): siklus base sisi A ->
+  // paralelo -> base sisi B -> paralelo. Sway bolak-balik (-6 -> +6),
+  // crouch RINGAN (0.15-0.25), lengan berganti melindungi wajah, kaki
+  // TIDAK menyilang & tidak pernah menendang (legB.a < 0.6 di semua key).
+  // Impact (t=0) hanyalah base sisi B — tidak ada kontak, dmg 0.
+  ginga: [
+    { t: -0.30, pose: { lean: 0.1, crouch: 0.2, hipRot: -0.1, shRot: -0.05, sway: -6, legF: { a: 0.3, k: -0.3 }, legB: { a: -0.2, k: -0.35 }, armF: { a: 1.2, b: 1.0 }, armB: { a: 0.9, b: 1.4 } }, ease: 'in' },
+    { t: -0.15, pose: { lean: 0.05, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 0, legF: { a: 0.25, k: -0.25 }, legB: { a: -0.15, k: -0.3 }, armF: { a: 1.1, b: 1.2 }, armB: { a: 1.1, b: 1.2 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.1, crouch: 0.2, hipRot: 0.1, shRot: 0.05, sway: 6, legF: { a: 0.25, k: -0.25 }, legB: { a: -0.2, k: -0.35 }, armF: { a: 0.9, b: 1.4 }, armB: { a: 1.2, b: 1.0 } }, ease: 'lin' },
+    { t: 0.15, pose: { lean: 0.05, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 0, legF: { a: 0.25, k: -0.25 }, legB: { a: -0.15, k: -0.3 }, armF: { a: 1.1, b: 1.2 }, armB: { a: 1.1, b: 1.2 } }, ease: 'lin' },
+    { t: 0.30, pose: {}, ease: 'sstep' },
+  ],
+  // ---- PILANTIK / PILANTÍK (kali arnis): tongkat dicambuk 360°
+  // BERGANTIAN di ATAS KEPALA, dari pergelangan (bukan bahu) — untuk
+  // jarak grappling. Lengan terangkat (a >= 2.0) + snap cepat; badan
+  // stabil (tidak ada ayunan badan besar seperti redonda). BUTUH REVIEW
+  // VISUAL — ref. hanya definisi teks + 1 Reel tanpa narasi (§7.11/§8).
+  pilantik: [
+    { t: -0.24, pose: { lean: -0.05, crouch: 0.25, hipRot: 0.3, shRot: 0.25, sway: -4, armB: { a: 2.4, b: 0.7 }, armF: { a: 1.5, b: 1.0 }, legF: { a: 0.22, k: -0.25 }, legB: { a: -0.26, k: -0.4 } }, ease: 'in' },
+    { t: -0.10, pose: { lean: 0.0, crouch: 0.15, hipRot: 0.1, shRot: 0.05, sway: -2, armB: { a: 2.6, b: 0.4 }, armF: { a: 1.8, b: 0.8 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.2, crouch: 0.1, hipRot: -0.3, shRot: -0.25, sway: 6, armB: { a: 2.2, b: 0.3 }, armF: { a: 2.0, b: 0.5 }, legF: { a: 0.28, k: -0.15 }, legB: { a: -0.3, k: -0.4 } }, ease: 'lin' },
+    { t: 0.06, pose: { lean: 0.2, crouch: 0.1, hipRot: -0.3, shRot: -0.25, sway: 6, armB: { a: 2.6, b: 0.4 }, armF: { a: 1.6, b: 0.9 } }, ease: 'lin' },
+    { t: 0.20, pose: { lean: 0.1, crouch: 0.15, hipRot: 0.0, shRot: 0.0, sway: 0, armB: { a: 1.6, b: 1.2 }, armF: { a: 1.0, b: 1.6 } }, ease: 'out' },
+    { t: 0.40, pose: {}, ease: 'sstep' },
+  ],
+  // ---- ARMBAR / JUJI-GATAME (judo, ground): isolasi lengan -> pinggul
+  // TEGAK LURUS lengan lawan (kaki menyilang dada) -> tarik pergelangan
+  // ke dada + bridge pinggul ke atas (lean negatif = badan melengkung ke
+  // belakang). CAVEAT: rig berdiri tidak bisa menunjukkan posisi ground
+  // T yang sebenarnya (dua karakter terbaring) — pose ini deep-crouch
+  // lock; pose ground dua karakter butuh sistem baru di film.js.
+  armbar: [
+    { t: -0.36, pose: { lean: 0.15, crouch: 0.4, hipRot: 0.1, shRot: 0.05, sway: 4, armF: { a: 1.2, b: 1.2 }, armB: { a: 1.1, b: 1.3 }, legF: { a: 0.35, k: -0.5 }, legB: { a: -0.3, k: -0.55 } }, ease: 'in' },
+    { t: -0.18, pose: { lean: -0.05, crouch: 0.55, hipRot: 0.25, shRot: 0.2, sway: 6, armF: { a: 1.0, b: 1.5 }, armB: { a: 0.9, b: 1.6 }, legF: { a: 0.6, k: -1.2 }, legB: { a: 0.5, k: -1.0 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: -0.25, crouch: 0.45, hipRot: 0.3, shRot: 0.25, sway: 6, stretch: 1.02, armF: { a: 0.9, b: 1.6 }, armB: { a: 0.8, b: 1.7 }, legF: { a: 0.7, k: -1.3 }, legB: { a: 0.6, k: -1.1 } }, ease: 'lin' },
+    { t: 0.10, pose: { lean: -0.25, crouch: 0.45, sway: 6, armF: { a: 0.9, b: 1.6 }, armB: { a: 0.8, b: 1.7 } }, ease: 'lin' },
+    { t: 0.28, pose: { lean: 0.0, crouch: 0.3, sway: 2, armF: { a: 1.0, b: 1.5 }, armB: { a: 0.9, b: 1.6 } }, ease: 'out' },
+    { t: 0.52, pose: {}, ease: 'sstep' },
+  ],
+  // ---- ANKLE PICK (gulat): sentak CEPAT satu tangan ke pergelangan kaki
+  // (armF a 1.8, b 0.3 — lengan terentang ke bawah) sementara tangan lain
+  // TETAP mengontrol badan lawan -> dorong badan KE DEPAN melewati
+  // pergelangan (bukan hanya mengangkat). Crouch dalam, sway diagonal.
+  anklepick: [
+    // Kaki yang mengait (legB), BUKAN tangan: tangan tidak bisa mencapai
+    // pergelangan lawan (bahu->lutut ~105px vs lengan 66px) — yang mengait
+    // pergelangan adalah kaki (kait rendah ke depan), tangan meraih ke
+    // BAWAH (armF a~0.6, bukan a~1.8 ke depan) sebagai sentakan.
+    { t: -0.32, pose: { lean: 0.1, crouch: 0.35, hipRot: 0.05, shRot: 0.05, sway: 2, armF: { a: 1.0, b: 1.8 }, armB: { a: 0.9, b: 1.9 }, legF: { a: 0.3, k: -0.45 }, legB: { a: -0.28, k: -0.5 } }, ease: 'in' },
+    { t: -0.16, pose: { lean: 0.25, crouch: 0.5, hipRot: 0.15, shRot: 0.1, sway: 6, armF: { a: 0.6, b: 0.3 }, armB: { a: 1.2, b: 0.9 }, legF: { a: 0.4, k: -0.5 }, legB: { a: -0.3, k: -0.6 } }, ease: 'lin' },
+    { t: 0.00, pose: { lean: 0.3, crouch: 0.3, hipRot: 0.2, shRot: 0.15, sway: 10, armF: { a: 0.6, b: 0.3 }, armB: { a: 1.4, b: 0.8 }, legF: { a: 0.35, k: -0.3 }, legB: { a: 0.9, k: -0.1 } }, ease: 'lin' },
+    { t: 0.08, pose: { lean: 0.3, crouch: 0.3, sway: 10, armF: { a: 0.6, b: 0.3 }, armB: { a: 1.4, b: 0.8 }, legB: { a: 0.9, k: -0.1 } }, ease: 'lin' },
+    { t: 0.24, pose: { lean: 0.1, crouch: 0.2, sway: 2, armF: { a: 1.0, b: 1.6 }, armB: { a: 0.9, b: 1.8 } }, ease: 'out' },
+    { t: 0.46, pose: {}, ease: 'sstep' },
+  ],
+  // ---- OUTSIDE TRIP (gulat): dari BODY LOCK (bukan grip judo) -> potong
+  // sudut -> kaki mengait RENDAH di belakang kaki lawan (legB a 0.6, bukan
+  // 1.15 menyabit tinggi seperti osoto gari) -> tarik badan ke sisi lemah
+  // + runtuh ke lutut. Bedakan dari osotogari lewat kaki trip RENDAH.
+  outsidetrip: [
+    { t: -0.34, pose: { lean: 0.15, crouch: 0.3, hipRot: 0.05, shRot: 0.05, sway: 4, armF: { a: 1.3, b: 0.5 }, armB: { a: 1.2, b: 0.6 }, legF: { a: 0.25, k: -0.3 }, legB: { a: -0.25, k: -0.45 } }, ease: 'in' },
+    { t: -0.16, pose: { lean: 0.15, crouch: 0.3, hipRot: 0.4, shRot: 0.3, sway: 6, armF: { a: 1.25, b: 0.6 }, armB: { a: 1.15, b: 0.7 }, legF: { a: 0.3, k: -0.3 }, legB: { a: 0.3, k: -0.9 }, footF: { ang: -0.5, pivot: 0.9, lift: 0 } }, ease: 'in' },
+    { t: 0.00, pose: { lean: 0.2, crouch: 0.3, hipRot: 0.65, shRot: 0.5, sway: 8, armF: { a: 1.2, b: 0.8 }, armB: { a: 1.1, b: 0.9 }, legF: { a: 0.28, k: -0.25 }, legB: { a: 0.6, k: -0.1 }, footF: { ang: -0.55, pivot: 1.2, lift: 0 } }, ease: 'lin' },
+    { t: 0.08, pose: { lean: 0.2, crouch: 0.3, hipRot: 0.65, shRot: 0.5, sway: 8, legB: { a: 0.65, k: -0.08 }, footF: { ang: -0.55, pivot: 1.2, lift: 0 } }, ease: 'lin' },
+    { t: 0.26, pose: { lean: 0.1, crouch: 0.25, hipRot: 0.3, shRot: 0.2, sway: 2, legB: { a: 0.4, k: -0.8 }, footF: { ang: -0.3, pivot: 0.9, lift: 0 } }, ease: 'out' },
+    { t: 0.50, pose: {}, ease: 'sstep' },
+  ],
 };
 
 // ---- KOMPRESI CF2 ("SATSET") ----
@@ -541,6 +720,15 @@ export const CF2_TIME_SCALE = {
   shuto: 0.55, gyakuzuki: 0.55, maegeri: 0.6,
   armada: 0.6, meialua: 0.6, queixada: 0.6,
   tornadokick: 0.6, butterflykick: 0.6, lotuskick: 0.6,
+  // Kind baru 2026-11-08 (CF2 §17: tangan cepat x0.55, tendangan/bantingan x0.6).
+  // Pukulan/siku/tongkat x0.55: elbowup, elbowspin, pilantik, ginga (stance,
+  // gerak badan/lengan — bukan tendangan/bantingan).
+  // Tendangan/lutut/bantingan x0.6: doubleleg, singleleg, suplex, bodyslam,
+  // anklepick, outsidetrip, armbar, kneediag, spinhookkick, meialuafrente.
+  doubleleg: 0.6, singleleg: 0.6, suplex: 0.6, bodyslam: 0.6,
+  anklepick: 0.6, outsidetrip: 0.6, armbar: 0.6,
+  kneediag: 0.6, elbowup: 0.55, elbowspin: 0.55,
+  spinhookkick: 0.6, meialuafrente: 0.6, ginga: 0.55, pilantik: 0.55,
 };
 for (const [kind, f] of Object.entries(CF2_TIME_SCALE)) {
   const keys = TECHNIQUE_KEYS[kind];
