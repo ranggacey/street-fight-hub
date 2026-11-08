@@ -49,7 +49,16 @@ export async function connectDB(): Promise<typeof mongoose> {
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(uri, { dbName: 'street-fight-hub' });
+    // Pool dibatasi: default driver 100 koneksi per instance serverless
+    // — dengan banyak instance Vercel bersamaan, Atlas M0 (gratis) cepat
+    // kehabisan koneksi. 10/instance cukup untuk route Hub yang query-nya
+    // pendek; serverSelectionTimeoutMS 5 dtk supaya gagal-cepat, bukan
+    // menggantung 30 dtk saat DB tidak terjangkau.
+    cached.promise = mongoose.connect(uri, {
+      dbName: 'street-fight-hub',
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+    });
   }
   cached.conn = await cached.promise;
   return cached.conn;

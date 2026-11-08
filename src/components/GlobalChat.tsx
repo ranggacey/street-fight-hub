@@ -7,10 +7,15 @@ import type { ChatMessageItem, SessionUser } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
 import FightLoader from "@/components/FightLoader";
 import Button from "@/components/Button";
+import { CHAT_POLL_INTERVAL_MS, nextPollDelayMs } from "@/lib/polling";
 import ChatMessageRow from "@/components/ChatMessageRow";
 
 /**
- * Chat global Hub (Fase 1): satu kolom chat, polling tiap 5 detik.
+ * Chat global Hub (Fase 1): satu kolom chat, polling tiap 10 detik.
+ * - Polling BERHENTI saat tab tidak aktif (visibilitychange) dan langsung
+ *   refresh sekali saat tab kembali aktif — tab yang ditinggal terbuka
+ *   tidak memborbardir server. Kalau fetch gagal, jeda membesar
+ *   (backoff 10 → 20 → 40 → 60 detik) sampai sukses lagi.
  * - Kirim butuh login (tombol kirim disembunyikan kalau belum login).
  * - Batas 500 karakter (counter terlihat), error rate-limit terlihat.
  * - Teks dirender sebagai teks biasa (React escape default) — tidak ada
@@ -45,7 +50,7 @@ export default function GlobalChat({
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
   // Loading awal (hanya fetch pertama): tampilkan GIF stickman gelud
-  // sampai daftar pesan pertama selesai dimuat — polling 5 detik
+  // sampai daftar pesan pertama selesai dimuat — polling 10 detik
   // berikutnya TIDAK memunculkan loader lagi.
   const [loading, setLoading] = useState(true);
   const [newCount, setNewCount] = useState(0);
@@ -59,7 +64,7 @@ export default function GlobalChat({
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<boolean> => {
     const res = await clientApi<{ messages: ChatMessageItem[] }>(
       "/api/chat/messages?limit=50",
     );
@@ -68,24 +73,59 @@ export default function GlobalChat({
     setLoading(false);
     if (!res.ok) {
       setLoadError(res.error.message);
-      return;
+      return false;
     }
     setLoadError("");
     setMessages(res.data.messages);
+    return true;
   }, []);
+
+  // Jumlah kegagalan fetch beruntun (untuk backoff polling).
+  const failuresRef = useRef(0);
 
   useEffect(() => {
     let alive = true;
     clientApi<{ user: SessionUser }>("/api/auth/me").then((res) => {
       if (alive && res.ok) setUser(res.data.user);
     });
-    // Fetch saat mount + polling 5 dtk — pola standar.
+    // Fetch saat mount + polling terjadwal (bukan setInterval kaku):
+    // - berhenti total saat tab hidden (tidak ada request sama sekali);
+    // - langsung refresh saat tab kembali aktif;
+    // - jeda membesar kalau fetch gagal (backoff), reset saat sukses.
+    let timer: number | null = null;
+    const clearTimer = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const schedule = (delay: number) => {
+      clearTimer();
+      timer = window.setTimeout(tick, delay);
+    };
+    const tick = async () => {
+      if (!alive || document.hidden) return;
+      const okRes = await load();
+      if (!alive) return;
+      failuresRef.current = okRes ? 0 : failuresRef.current + 1;
+      schedule(nextPollDelayMs(failuresRef.current));
+    };
+    const onVisible = () => {
+      if (!alive || document.hidden) return;
+      void load().then((okRes) => {
+        if (!alive) return;
+        failuresRef.current = okRes ? 0 : failuresRef.current + 1;
+        schedule(nextPollDelayMs(failuresRef.current));
+      });
+    };
+    document.addEventListener("visibilitychange", onVisible);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    const timer = setInterval(load, 5000);
+    schedule(CHAT_POLL_INTERVAL_MS);
     return () => {
       alive = false;
-      clearInterval(timer);
+      clearTimer();
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [load]);
 

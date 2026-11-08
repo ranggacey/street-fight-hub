@@ -50,6 +50,10 @@ challengeSchema.index({ challengedFighterId: 1, status: 1 });
 // Tantangan terbuka: daftar yang masih bisa diterima + cek 1 open aktif per penantang.
 challengeSchema.index({ kind: 1, status: 1, createdAt: -1 });
 challengeSchema.index({ challengerFighterId: 1, kind: 1, status: 1 });
+// Kedaluwarsa lazy (expireStaleChallenges) + hitungan tantangan/hari:
+// tanpa index keduanya COLLSCAN / pindai semua tantangan penantang.
+challengeSchema.index({ status: 1, expiresAt: 1 });
+challengeSchema.index({ challengerFighterId: 1, createdAt: -1 });
 
 export const Challenge =
   mongoose.models.Challenge || mongoose.model('Challenge', challengeSchema);

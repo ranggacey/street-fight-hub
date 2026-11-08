@@ -1,7 +1,8 @@
 import type { NextRequest } from 'next/server';
-import { checkOrigin, requireAuth } from '@/lib/auth';
+import { checkOrigin, getClientIp, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { checkChatRateLimit } from '@/lib/game/chat-rate';
+import { checkRateLimit } from '@/lib/rate-limit';
 import {
   forbidden,
   handleError,
@@ -55,10 +56,19 @@ async function fighterByUserId(
 /** GET /api/chat/messages?limit= — 50 pesan terakhir (urut kronologis). */
 export async function GET(req: NextRequest) {
   try {
+    // Perlindungan dasar: polling normal 10 detik = 6 req/menit per
+    // pengguna, jadi 300/menit per IP masih 50x lipatnya — hanya bot
+    // yang menghantam berkali-kali per detik yang kena 429.
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`chat-get:${ip}`, 300, 60_000);
+    if (!rl.allowed) {
+      throw tooMany('Terlalu banyak permintaan, coba lagi sebentar lagi');
+    }
     await connectDB();
     const { searchParams } = new URL(req.url);
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? '50') || 50));
     const messages = await ChatMessage.find()
+      .select('userId text createdAt')
       .populate('userId', 'username')
       .sort({ createdAt: -1 })
       .limit(limit)

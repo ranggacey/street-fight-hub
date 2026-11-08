@@ -21,5 +21,7 @@ const tournamentSchema = new Schema(
   { timestamps: true },
 );
 
+tournamentSchema.index({ status: 1, createdAt: -1 });
+
 export const Tournament =
   mongoose.models.Tournament || mongoose.model('Tournament', tournamentSchema);

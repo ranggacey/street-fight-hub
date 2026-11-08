@@ -9,5 +9,7 @@ const announcementSchema = new Schema(
   { timestamps: true },
 );
 
+announcementSchema.index({ active: 1, createdAt: -1 });
+
 export const Announcement =
   mongoose.models.Announcement || mongoose.model('Announcement', announcementSchema);

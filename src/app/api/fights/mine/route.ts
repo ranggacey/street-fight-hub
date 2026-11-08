@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
     })
       .populate('fighterAId', 'displayName igUsername style')
       .populate('fighterBId', 'displayName igUsername style')
+      // Riwayat profil hanya memakai hasil + lawan + status (lihat
+      // lib/profile.ts summarizeMyFight) — config engine, poster base64,
+      // dan keyMoments TIDAK dikirim: satu fight penuh ~9 KB, tanpa
+      // ketiganya ~0,3 KB (diukur lokal, 29x lebih kecil).
+      .select('-config -posterDataUrl -keyMoments')
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();

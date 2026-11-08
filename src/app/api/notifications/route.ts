@@ -44,7 +44,11 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, unknown> = { userId: session.userId };
     if (unreadOnly) filter.read = false;
     const [notifications, unreadCount] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).limit(50).lean(),
+      Notification.find(filter)
+        .select('userId type relatedId read createdAt')
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean(),
       Notification.countDocuments({ userId: session.userId, read: false }),
     ]);
     const serialized = serialize(notifications) as Array<Record<string, unknown>>;

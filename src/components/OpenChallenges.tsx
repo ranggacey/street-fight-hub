@@ -97,10 +97,22 @@ export default function OpenChallenges() {
   useEffect(() => {
     // Fetch saat mount + polling daftar terbuka 10 dtk — supaya
     // tantangan yang baru diterima orang lain cepat hilang dari daftar.
+    // Polling dilewati saat tab tidak aktif; langsung refresh saat tab
+    // kembali aktif (pola yang sama dengan GlobalChat).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    const timer = setInterval(loadOpen, 10000);
-    return () => clearInterval(timer);
+    const tick = () => {
+      if (!document.hidden) void loadOpen();
+    };
+    const timer = setInterval(tick, 10000);
+    const onVisible = () => {
+      if (!document.hidden) void loadOpen();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load, loadOpen]);
 
   const createOpen = async (e: FormEvent) => {

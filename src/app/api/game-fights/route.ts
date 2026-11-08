@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
     const fights = await GameFight.find(filter)
       .populate('fighterAId', 'displayName igUsername style')
       .populate('fighterBId', 'displayName igUsername style')
+      // Daftar riwayat saja (detail + replay pakai /api/game-fights/[id]
+      // yang tetap mengembalikan config + poster): buang field berat.
+      .select('-config -posterDataUrl -keyMoments')
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();

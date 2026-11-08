@@ -96,4 +96,12 @@ const fighterSchema = new Schema(
   { timestamps: true },
 );
 
+// Klasemen kasual (rating) + klasemen turnamen (wins): keduanya mengurut
+// seluruh fighter aktif — tanpa index, Mongo mengurut di memori (SORT)
+// sambil memindai semua dokumen. Diukur lokal 2000 fighter: SORT, 27 ms;
+// dengan index di bawah: IXSCAN tanpa sort di memori (waktu mirip di
+// skala ini, tapi tidak ada risiko sort memori saat fighter membanyak).
+fighterSchema.index({ status: 1, rating: -1, 'casualRecord.wins': -1, createdAt: 1 });
+fighterSchema.index({ status: 1, 'record.wins': -1, 'record.kos': -1, 'record.losses': 1, createdAt: 1 });
+
 export const Fighter = mongoose.models.Fighter || mongoose.model('Fighter', fighterSchema);

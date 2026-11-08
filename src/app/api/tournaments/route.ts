@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, unknown> = {};
     if (status && TOURNAMENT_STATUSES.includes(status)) filter.status = status;
 
-    const tournaments = await Tournament.find(filter).sort({ createdAt: -1 }).lean();
+    const tournaments = await Tournament.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
     const list = await Promise.all(
       tournaments.map(async (t) => {
         const participantCount = await TournamentEntry.countDocuments({

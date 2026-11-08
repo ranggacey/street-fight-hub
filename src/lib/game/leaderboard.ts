@@ -4,10 +4,19 @@
  * snapshot 7 hari terakhir (reason 'periodic'). UI riwayat klasemen
  * (baca snapshot ini) = Fase 2.
  */
+import { TtlCache } from '../cache';
 import { Fighter } from '../../models/Fighter';
 import { LeaderboardSnapshot } from '../../models/LeaderboardSnapshot';
 
 export const SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
+
+// Cache singkat klasemen: dibaca di tiap render Beranda + /klasemen +
+// tiap hit /api/leaderboard, tapi rating hanya berubah saat ada fight
+// selesai. TTL 15 detik — pengguna paling lambat 15 detik melihat
+// perubahan rating, dengan imbalan nyaris tanpa query ulang saat
+// 100–200 orang membuka halaman yang sama bersamaan.
+export const LEADERBOARD_TTL_MS = 15_000;
+const leaderboardCache = new TtlCache<LeaderboardEntry[]>(LEADERBOARD_TTL_MS);
 
 export interface LeaderboardEntry {
   rank: number;
@@ -33,6 +42,22 @@ export async function getCasualLeaderboard(): Promise<LeaderboardEntry[]> {
     rating: f.rating ?? 1000,
     casualRecord: f.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 },
   }));
+}
+
+/** Klasemen kasual dengan cache TTL 15 detik (per instance serverless). */
+export async function getCachedCasualLeaderboard(
+  now: number = Date.now(),
+): Promise<LeaderboardEntry[]> {
+  const hit = leaderboardCache.get(now);
+  if (hit) return hit;
+  const entries = await getCasualLeaderboard();
+  leaderboardCache.set(entries, now);
+  return entries;
+}
+
+/** Hanya untuk tes. */
+export function __resetLeaderboardCache(): void {
+  leaderboardCache.clear();
 }
 
 export async function takeLeaderboardSnapshot(
@@ -63,7 +88,9 @@ export async function ensureRecentSnapshot(): Promise<{
   const latest = await LeaderboardSnapshot.findOne().sort({ at: -1 }).lean();
   const now = new Date();
   if (latest && now.getTime() - new Date(latest.at).getTime() < SNAPSHOT_MAX_AGE_MS) {
-    const entries = await getCasualLeaderboard();
+    // Dulu: snapshot segar pun tetap query ulang seluruh fighter — snapshot
+    // jadi tidak menghemat apa-apa. Sekarang pakai klasemen ber-cache.
+    const entries = await getCachedCasualLeaderboard(now.getTime());
     return { at: new Date(latest.at), reason: latest.reason, entries, fresh: false };
   }
   const snap = await takeLeaderboardSnapshot('periodic');

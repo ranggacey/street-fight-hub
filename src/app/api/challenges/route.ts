@@ -149,6 +149,7 @@ export async function GET(req: NextRequest) {
       .populate('challengedFighterId', 'displayName igUsername style rating')
       .populate('gameFightId', 'status')
       .sort({ createdAt: -1 })
+      .limit(50)
       .lean();
 
     const sentToday = await countChallengesSentToday(mine._id.toString());

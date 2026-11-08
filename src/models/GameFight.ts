@@ -64,6 +64,11 @@ const gameFightSchema = new Schema(
 gameFightSchema.index({ fighterAId: 1, createdAt: -1 });
 gameFightSchema.index({ fighterBId: 1, createdAt: -1 });
 gameFightSchema.index({ status: 1, createdAt: -1 });
+// Hitungan jatah harian (daily-limit): filter createdAt (rentang hari WIB)
+// + satu fighter — index createdAt-dulu supaya rentang hari dipangkas
+// sebelum mencocokkan fighter.
+gameFightSchema.index({ createdAt: 1, fighterAId: 1 });
+gameFightSchema.index({ createdAt: 1, fighterBId: 1 });
 
 export const GameFight =
   mongoose.models.GameFight || mongoose.model('GameFight', gameFightSchema);

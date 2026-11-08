@@ -58,6 +58,11 @@ export async function GET(req: NextRequest) {
     }
     const fighters = await Fighter.find(filter)
       .sort({ 'record.wins': -1, 'record.kos': -1, 'record.losses': 1, createdAt: 1 })
+      // Dibatasi 100 baris: daftar ini dipakai klasemen + pencarian fighter
+      // sendiri di beberapa halaman. Projection TIDAK dipakai — form
+      // fighter-saya mengisi semua field (deskripsi, jurus, tempo, warna,
+      // aksesoris) dari satu baris daftar ini, jadi field harus lengkap.
+      .limit(100)
       .lean();
     return ok({ fighters: serialize(fighters) });
   } catch (err) {
