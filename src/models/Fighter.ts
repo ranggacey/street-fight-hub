@@ -104,4 +104,11 @@ const fighterSchema = new Schema(
 fighterSchema.index({ status: 1, rating: -1, 'casualRecord.wins': -1, createdAt: 1 });
 fighterSchema.index({ status: 1, 'record.wins': -1, 'record.kos': -1, 'record.losses': 1, createdAt: 1 });
 
+// Username IG unik (case-insensitive): satu handle IG hanya boleh
+// dipakai satu fighter — cegah duplikat seperti kasus strivox_id
+// (Glaciero Aurelio vs STRIVOX, 2026-11-08). Collation strength 2 =
+// case-insensitive; query yang memakai collation yang sama memakai
+// index ini, dan insert yang melanggar ditolak E11000 (bukan 500).
+fighterSchema.index({ igUsername: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } });
+
 export const Fighter = mongoose.models.Fighter || mongoose.model('Fighter', fighterSchema);

@@ -6,7 +6,8 @@ import { resolveFighterColors } from '@/lib/game/engine-config';
 import { FIGHTER_STYLES, validateFighterBody } from '@/lib/validation';
 import { Fighter } from '@/models/Fighter';
 
-/** POST /api/fighters — buat fighter (auth, satu fighter aktif per user). */
+/** POST /api/fighters — buat fighter (auth, satu fighter aktif per user,
+ * username IG unik case-insensitive). */
 export async function POST(req: NextRequest) {
   try {
     if (!checkOrigin(req)) throw forbidden('Origin tidak valid');
@@ -18,28 +19,52 @@ export async function POST(req: NextRequest) {
     const existing = await Fighter.findOne({ userId: session.userId }).lean();
     if (existing) throw conflict('Kamu sudah punya fighter', 'FIGHTER_EXISTS');
 
-    const fighter = await Fighter.create({
-      userId: session.userId,
-      displayName: input.displayName,
-      igUsername: input.igUsername,
-      style: input.style,
-      styleOther: input.styleOther,
-      selfDescription: input.selfDescription,
-      record: { wins: 0, losses: 0, draws: 0, kos: 0 },
-      status: 'active',
-      rating: 1000,
-      casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 },
-      signatureMove: input.game.signatureMove,
-      tempo: input.game.tempo,
-      colors: resolveFighterColors({
+    // Username IG tidak boleh diduplikat (case-insensitive): satu handle
+    // IG hanya boleh dipakai satu fighter. Dicek di sini untuk pesan
+    // error yang jelas; unique index di skema adalah penegak terakhir
+    // (race dua request bersamaan tetap ditolak 409, bukan 500).
+    const igTaken = await Fighter.findOne({ igUsername: input.igUsername })
+      .collation({ locale: 'en', strength: 2 })
+      .lean();
+    if (igTaken) {
+      throw conflict('Username Instagram sudah dipakai fighter lain', 'IG_USERNAME_TAKEN');
+    }
+
+    let fighter;
+    try {
+      fighter = await Fighter.create({
+        userId: session.userId,
         displayName: input.displayName,
+        igUsername: input.igUsername,
         style: input.style,
-        colors: input.game.colors,
-      }),
-      ...(Object.keys(input.game.accessories).length > 0
-        ? { accessories: input.game.accessories }
-        : {}),
-    });
+        styleOther: input.styleOther,
+        selfDescription: input.selfDescription,
+        record: { wins: 0, losses: 0, draws: 0, kos: 0 },
+        status: 'active',
+        rating: 1000,
+        casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 },
+        signatureMove: input.game.signatureMove,
+        tempo: input.game.tempo,
+        colors: resolveFighterColors({
+          displayName: input.displayName,
+          style: input.style,
+          colors: input.game.colors,
+        }),
+        ...(Object.keys(input.game.accessories).length > 0
+          ? { accessories: input.game.accessories }
+          : {}),
+      });
+    } catch (err) {
+      if ((err as { code?: unknown })?.code === 11000) {
+        // Race: seseorang membuat fighter dengan userId/igUsername yang
+        // sama di antara cek di atas dan insert. Bedakan penyebabnya
+        // supaya pesannya tepat (bukan 500 dari handleError).
+        const byUser = await Fighter.findOne({ userId: session.userId }).lean();
+        if (byUser) throw conflict('Kamu sudah punya fighter', 'FIGHTER_EXISTS');
+        throw conflict('Username Instagram sudah dipakai fighter lain', 'IG_USERNAME_TAKEN');
+      }
+      throw err;
+    }
     return ok({ fighter: serialize(fighter.toObject()) }, 201);
   } catch (err) {
     return handleError(err);
