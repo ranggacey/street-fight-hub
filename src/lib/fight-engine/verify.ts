@@ -111,8 +111,11 @@ export function expectedResult(
   seed: number,
 ): ExpectedResult {
   const fight = buildFight(left, right, durationSec, seed);
+  // Draw bisa datang dari lotere baru (result === 'draw') ATAU dari
+  // decision dengan HP akhir sama persis (kasus lama).
   const isDraw =
-    fight.result === 'decision' && fight.hpFinal.R === fight.hpFinal.B;
+    fight.result === 'draw' ||
+    (fight.result === 'decision' && fight.hpFinal.R === fight.hpFinal.B);
   return {
     winner: isDraw ? null : (fight.winner as EngineSide),
     method:

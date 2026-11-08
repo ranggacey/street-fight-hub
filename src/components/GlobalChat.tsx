@@ -13,8 +13,9 @@ import Button from "@/components/Button";
  * - Batas 500 karakter (counter terlihat), error rate-limit terlihat.
  * - Teks dirender sebagai teks biasa (React escape default) — tidak ada
  *   dangerouslySetInnerHTML untuk chat.
+ * - Prop `tall`: di halaman /obrolan chat diberi ruang lebih tinggi.
  */
-export default function GlobalChat() {
+export default function GlobalChat({ tall = false }: { tall?: boolean }) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [text, setText] = useState("");
@@ -87,7 +88,9 @@ export default function GlobalChat() {
       </div>
       <div
         ref={listRef}
-        className="max-h-80 space-y-3 overflow-y-auto px-5 py-4"
+        className={`space-y-3 overflow-y-auto px-5 py-4 ${
+          tall ? "max-h-[32rem]" : "max-h-80"
+        }`}
         aria-live="polite"
       >
         {loadError ? (

@@ -3,13 +3,17 @@ import type { Fighter } from "./types";
 import { getId, styleColor, styleLabel } from "./api";
 import Badge from "./Badge";
 
-/** Kartu ringkas fighter — dipakai di home, detail turnamen, klasemen. */
+/** Kartu ringkas fighter — dipakai di home, detail turnamen, klasemen.
+ *  showRating: tampilkan rating point kasual (Elo) besar di atas baris
+ *  rekor — dipakai section "Top 5 Rating Point Kasual" di home. */
 export default function FighterCard({
   fighter,
   rank,
+  showRating,
 }: {
   fighter: Fighter;
   rank?: number;
+  showRating?: boolean;
 }) {
   const id = getId(fighter);
   const color = styleColor(fighter.style);
@@ -46,6 +50,17 @@ export default function FighterCard({
             <Badge tone="neutral">Pensiun</Badge>
           ) : null}
         </div>
+
+        {showRating ? (
+          <div className="mt-3 flex items-baseline justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-paper-mute">
+              Rating Point
+            </span>
+            <span className="font-display text-3xl leading-none tabular-nums text-amber-brand">
+              {fighter.rating ?? 1000}
+            </span>
+          </div>
+        ) : null}
 
         <div className="mt-3 flex items-center gap-3 border-t border-white/10 pt-3 text-sm">
           <span>

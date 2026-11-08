@@ -5,7 +5,7 @@
 // Pacing mengikuti CF2 §17: jeda kontak 0.55-0.75 dtk, tanpa slow-mo.
 import { DMG_BASE, BLOCK_CHIP } from './damage.js';
 import { movesFor, WEAPON_MOVES, normalizeStyle } from './moves.js';
-import { windupDurOf } from './techniques.js';
+import { windupDurOf, totalDurOf } from './techniques.js';
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -28,6 +28,8 @@ export function randomSeed() {
 }
 
 const FINISHER_DMG = { finisher: 20, flyknee: 20, stickchop: 18 };
+// Selisih HP maksimum yang dibiarkan steering draw (lihat blok steering).
+const DRAW_MARGIN = 12;
 
 function dmgOf(atk) {
   const base = DMG_BASE[atk.kind] ?? 10;
@@ -58,6 +60,8 @@ function pickOutcome(rng) {
 //   fighter.tempo kalau opts.tempo sisi itu tidak diisi.
 // opts.forcedResult: { result: 'ko'|'decision', winner: 'R'|'B' } — ganti
 //   undian KO/decision + pemenang (koreografi + HP steering tetap jalan).
+//   Draw TIDAK bisa dipaksa lewat forcedResult (hanya dari lotere normal);
+//   nilai 'draw' di forcedResult diabaikan seperti nilai tidak valid lain.
 //   Undian asli tetap ditarik dari rng lalu DITIMPA, supaya aliran rng
 //   (dan koreografi) tetap sebanding dengan run tanpa forcedResult.
 function tempoOf(who, opts, fighters) {
@@ -164,6 +168,364 @@ export function keyMoments(fight) {
   return { biggestHit, finisher, knockdowns, leadChange };
 }
 
+// --- JARAK GELUD (2026-11-08, feedback video seed 982809) ---
+// Dulu film.js menahan kedua petarung di gap ~50–60px (minimum clamp sim +
+// guard yang hanya menjaga "jangan lebih dekat dari 45px") — dada-ke-dada
+// di semua frame. Sekarang jarak berasal dari ENGINE (buildFight), bukan
+// dari gambar: buildFight mengeluarkan timeline posisi `fight.positions`
+// (sampel 30fps: xR/xB/gap/fase) yang dipakai film.js + replay/verifikasi
+// server, supaya jarak yang terlihat = jarak yang dihitung engine.
+// Model (murni, tanpa rng — posisi turunan dari timeline serangan):
+// - Panjang badan stickman BODY_LEN_PX = 166px (kepala di GROUND−166,
+//   film.js ghostPoint) → jarak jaga GUARD_GAP_PX = 250px ≈ 1,5 badan.
+// - Walk-in [0, 1 dtk]: dari startX (440/840, scenes.js) ke posisi jaga
+//   di sekitar titik tengah ring 640.
+// - Saat tidak menyerang (fase 'guard'): kedua petarung kembali simetris
+//   ke jarak jaga (200px/dtk tiap sisi).
+// - Lunge: penyerang menutup jarak ke jarak serang HANYA saat menyerang —
+//   mulai 0,45 dtk sebelum windup (pra-pendekatan) + selama windup, dengan
+//   kecepatan LUNGE_SPEED 450px/dtk (step-in eksplosif ala fencing lunge,
+//   ~1,5 m dalam 0,25–0,3 dtk); lalu kembali ke jarak jaga setelah impact.
+// - Clinch: rapat (58px). Ambil kayu: pengambil jalan ke tepi ring.
+//   Knockdown: korban jatuh diam di tempat, lawan mundur ke jarak jaga.
+// - Kecepatan di atas dipilih supaya gap saat impact ≈ jarak serang
+//   (median ~90px, p90 ~113px — terukur scripts/measure-distance.mjs),
+//   sementara gap saat guard median 250px.
+// - SATU pengecualian yang diketahui: serangan pertama tepat setelah
+//   ambil kayu bisa berdampak dari jauh (penyerang masih di tepi ring,
+//   gap sampai ~430px) — waktunya tidak cukup untuk jalan kembali karena
+//   director menjadwalkan serangan itu tepat saat kayu selesai diambil;
+//   memperbaiki itu butuh mengubah timing serangan (dilarang di sini).
+export const BODY_LEN_PX = 166;
+export const GUARD_GAP_PX = 250;
+export const RING_CENTER_X = 640;
+export const START_X = { R: 440, B: 840 };
+const LUNGE_SPEED = 450; // px/dtk — step-in/lunge eksplosif
+const RETURN_SPEED = 250; // px/dtk per sisi — kembali ke jarak jaga.
+// 250 (bukan 200): sesudah approach diprioritaskan + PRE_APPROACH 0,30,
+// jeda antar serangan jarang memberi waktu kembali yang panjang — dengan
+// 200, median jarak guard jatuh ke ~162-190px (target >= 200). 250 +
+// PRE_APPROACH 0,30 memulihkan median ke ~217px, tanpa mengubah approach
+// (450) atau jarak serang. Visual: petarung memantul kembali ke jarak
+// jaga, bukan berjalan pelan — wajar sesudah adu serangan. 300 TIDAK
+// dipakai: membuat picker tiba di kayu sebelum gerbang sim (wp.t+0,9)
+// terbuka (lihat latch kayu di bawah).
+const WALK_SPEED = 150; // px/dtk — walk-in awal (sama dengan film.js)
+const CLINCH_GAP_PX = 58; // rapat saat clinch (film.js: gap > 58 baru mendekat)
+const PRE_APPROACH = 0.30; // dtk sebelum windup penyerang mulai mendekat.
+// 0,30 (dulu 0,45): approach 0,45 memberi jeda guard terlalu pendek —
+// median jarak guard 162px. 0,30 memberi jeda 0,15 dtk lebih panjang per
+// serangan (median guard 190px) dan approach masih cukup: 0,30 + windup
+// ~0,2 dtk = 0,5 dtk × 450px/dtk = 225px daya tutup, cukup dari jarak
+// jaga 250 ke jarak serang mana pun. 0,20 TERLALU pendek (§5 gagal 3×).
+// Dipakai bersama RETURN_SPEED 250 untuk median guard >= 200px.
+const POS_DT = 1 / 30; // sampel posisi 30fps (sama dengan FPS sim)
+
+// Jarak serang (gap pusat-ke-pusat saat impact) per kind — CERMIN
+// strikeRange() film.js (45–110px). Kalau film.js mengubah strikeRange,
+// samakan tabel ini supaya timeline engine tetap cocok dengan gambar.
+export const STRIKE_GAP_PX = {
+  headbutt: 45, elbow: 50, headkick: 52,
+  takedown: 55, clinch: 55, seoinage: 55,
+  axekick: 60, uchimata: 60, knee: 62, flyknee: 62,
+  lowkick: 70, uppercut: 70, sweep: 70, abaniko: 70, osotogari: 70, meialua: 70,
+  shuto: 80, butterflykick: 85, hook: 88, bodyshot: 88, haymaker: 88,
+  cross: 90, finisher: 90, stickchop: 90, gyakuzuki: 90, queixada: 90,
+  tornadokick: 90, lotuskick: 90, overhand: 92,
+  jabR: 95, shove: 95, frontkick: 95, teep: 95, spinkick: 95, sinawali: 95,
+  redonda: 95, yokogeri: 95, sidekick: 95, maegeri: 95, armada: 95, feint: 95,
+  bodykick: 98, roundhouse: 98, stickswing: 100, straightlead: 100,
+};
+export function strikeGapOf(kind) {
+  return STRIKE_GAP_PX[kind] ?? 110; // default film.js strikeRange
+}
+
+const _clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const _moveToward = (x, target, maxStep) => x + _clamp(target - x, -maxStep, maxStep);
+
+// Kecepatan perpindahan defender saat menghindar (reaksi dodge).
+// Sim lama: sidestep vx −320 (tapi posisi badan di-override timeline,
+// jadi defender tidak pernah benar-benar menjauh — fist yang mengarah ke
+// hantu malah "kena" target hidup). Slip/duck/roll/flinch di sim lama
+// hanya pose; di timeline diberi perpindahan supaya miss-nya jelas
+// (contactReport: jarak fist ke target hidup >= 20px). Parry TIDAK
+// dipindah: cek parry mengukur tangan defender bertemu lengan penyerang
+// (dParry <= 15px) — menjauh justru merusak jangkauan tangan itu.
+const DODGE_SPEED_PX_S = { sidestep: 320, slip: 200, duck: 200, roll: 200, flinch: 150 };
+const DODGE_OUTCOMES = new Set(['slip', 'duck', 'roll', 'sidestep', 'flinch']);
+// Dodge untuk serangan ke KAKI (lowkick): yang diukur contactReport adalah
+// lutut depan hidup (kneeF), bukan badan. Lutut terikat kaki depan yang
+// menapak — ia hanya bergerak ~1/2-2/3 kecepatan badan, dan lutut yang
+// menekuk ke depan (roll/slip crouch) terdorong ke arah penyerang. Akibatnya
+// dodge 200px/dtk justru menempatkan lutut TEPAT di jalur kaki penyerang
+// (dLive 12-14px; zona mati ±18px di sekitar kaki; dodge 320 malah makin
+// parah, 8,9-11,4px). Dodge SANGAT pelan (20px/dtk — geser bobot, bukan
+// lompat; slip lowkick memang begitu di bela diri) membuat lutut tetap di
+// sisi dekat: kaki penyerang meleset 26-42px dari lutut hidup. Terukur:
+// LEG 110/80/70/60/40/20 -> gagal seed 123456: 2/1/0/0/0/0, dan sweep 20
+// seed acak: lowkick/slip gagal 7 (LEG 60) -> 1 (40) -> 0 (20).
+// Target kepala/badan tidak kena aturan ini: kepala/badan ikut badan 1:1
+// dan butuh ~33px agar dLive >= 20, jadi tetap pakai DODGE_SPEED_PX_S.
+const LEG_DODGE_SPEED_PX_S = 20;
+const dodgeSpeedFor = (atk) => (atk.target === 'leg' ? LEG_DODGE_SPEED_PX_S : DODGE_SPEED_PX_S[atk.outcome]);
+// Tahan posisi serangan setelah impact (detik). Cek kontak di t+0,02 harus
+// mengukur penyerang yang masih di jarak serang — bukan yang sudah mundur
+// 15px/langkah untuk serangan berikut (lunge 450px/dtk). 0,05 dtk sudah
+// menutupi cek itu (satu sampel sesudah impact); menahan 0,12 dtk (seperti
+// fist di sim) hanya membuang waktu kembali-ke-jaga dan menekan median
+// jarak guard. Badan boleh bergerak lagi sesudah 0,05 dtk — fist sim tetap
+// menahan targetnya sendiri sampai ph=0,12.
+const STRIKE_HOLD_S = 0.05;
+
+// Bangun timeline posisi dari fight yang sudah jadi (serangan + event).
+// Mengembalikan array sampel { t, xR, xB, gap, phase } tiap 1/30 dtk,
+// phase: 'walk' | 'guard' | 'approach' | 'attack' | 'clinch' | 'pickup' | 'down'.
+// 'guard' = tidak menyerang (di sinilah jarak jaga 250px diukur).
+// Aturan gerak (per petarung, prioritas tertinggi dulu):
+//   1. penyerang serangan aktif (windup): approach ke jarak serang — ke
+//      HANTU (posisi defender saat serangan menjadi aktif di sim) kalau
+//      outcome-nya dodge, karena fist sim mengarah ke hantu, bukan ke
+//      defender yang sedang menjauh;
+//   2. defender serangan aktif (windup): dodge menjauh (lihat atas) atau
+//      diam (+retreat kalau terjadwal);
+//   3. pasca-impact: TAHAN posisi 0,12 dtk (strike hold), lalu approach
+//      serangan berikut diprioritaskan atas kembali-ke-jaga (dulu approach
+//      terblokir sampai jendela serangan sebelumnya habis);
+//   4. tanpa serangan berikut: kembali ke jarak jaga.
+// Selama approach serangan berikut, defender-nya DIAM (bukan kembali ke
+// jaga menjauhi penyerang) — sama seperti cabang pre-approach lama.
+// Ambil kayu: picker jalan ke tepi ring, ambil (latch di wp.t+1,0 —
+// sim gerbangnya wp.t+0,9 tapi butuh margin, lihat latch di loop),
+// lalu jalan kembali ke arah lawan 200px/dtk sampai gap <= 60 (sim lama);
+// non-picker guard/approach NORMAL (dulu dibekukan — serangan pertama
+// setelah kayu meleset dari ~430px).
+export function buildPositions(fight) {
+  const { attacks, knockdowns, clinches, retreats, weapon, duration } = fight;
+  const atkWin = attacks.map((a) => ({
+    ...a,
+    ws: a.t - windupDurOf(a.kind),
+    end: a.t + totalDurOf(a.kind) - windupDurOf(a.kind),
+    gap: strikeGapOf(a.kind),
+  })).sort((x, y) => x.ws - y.ws);
+  const clWin = (clinches || []).map((c) => ({ t: c.t, end: c.t + c.dur }));
+  const kdWin = (knockdowns || []).map((k) => ({ who: k.who, t: k.t, getup: k.getupStart }));
+  const rtWin = (retreats || []).map((r) => ({ who: r.who, t: r.t, end: r.t + r.dur }));
+  // Posisi hantu per serangan: x defender saat serangan pertama kali
+  // menjadi "aktif" di sim (atkFor film.js — pertama dalam urutan t yang
+  // jendelanya berisi s). BUKAN saat windup mulai: jendela serangan
+  // sebelumnya yang tumpang tindih menunda gilirannya (contoh: headkick
+  // [7,13–7,86) menunda hantu takedown; headkick juga menunda hantu
+  // flyknee sampai 46,53). Diisi saat loop mencapai sampel tangkap.
+  // Waktu tangkap = posisi defender pada sampel s* (penyerang R) atau
+  // s*+1 sampel (penyerang B — sim melangkah R dulu, jadi hantu B dibaca
+  // setelah R melangkah satu frame). Sebelum tertangkap, penyerang
+  // mendekati defender hidup (fallback yang sama dengan contactReport
+  // saat entry hantu belum ada).
+  const ghostX = new Array(atkWin.length).fill(null);
+  let ghostPending = null; // { idx, atSample } — tangkap setelah sampel atSample
+  let pickedUp = false; // picker sudah sampai di kayu (latch — anti osilasi)
+  let xR = START_X.R, xB = START_X.B;
+  const samples = [];
+  const n = Math.round(duration / POS_DT);
+
+  const xOf = (who) => (who === 'R' ? xR : xB);
+  const setX = (who, v) => { if (who === 'R') xR = v; else xB = v; };
+  const otherOf = (who) => (who === 'R' ? 'B' : 'R');
+  const guardTarget = (who) => {
+    const mid = _clamp((xR + xB) / 2, 580, 700);
+    return who === 'R' ? mid - GUARD_GAP_PX / 2 : mid + GUARD_GAP_PX / 2;
+  };
+  const moveTo = (who, target, speed) => setX(who, _moveToward(xOf(who), target, speed * POS_DT));
+  // Penyerang menutup jarak ke jarak serang (target = posisi acuan
+  // defender dikurangi gap, ke arah penyerang).
+  const approach = (att, defX, gap) => {
+    const dir = att === 'R' ? 1 : -1;
+    moveTo(att, defX - dir * gap, LUNGE_SPEED);
+  };
+  // Mundur menjauhi lawan (retreat 120px/dtk / dodge): R ke kiri, B ke
+  // kanan — R selalu di kiri B (gap serangan menjaga sisi).
+  const stepAway = (who, speed) => {
+    const d = who === 'R' ? -1 : 1;
+    setX(who, xOf(who) + d * speed * POS_DT);
+  };
+  const retreating = (who, s) => rtWin.some((r) => r.who === who && s >= r.t && s < r.end);
+  const doRetreat = (who, s) => { if (retreating(who, s)) stepAway(who, 120); };
+
+  // Gerakan satu petarung di luar fase global (walk/clinch/down) dan di
+  // luar peran picker kayu (lihat stepPicker). `atk` = serangan yang
+  // jendelanya berisi s (atau null); `nextAtk` = serangan berikut.
+  const stepCombat = (who, s, atk, atkIdx, nextAtk, nextNear) => {
+    const foe = otherOf(who);
+    if (atk) {
+      if (s < atk.t) {
+        // Windup serangan aktif.
+        if (who === atk.by) {
+          if (DODGE_OUTCOMES.has(atk.outcome) && ghostX[atkIdx] !== null) approach(who, ghostX[atkIdx], atk.gap);
+          else approach(who, xOf(foe), atk.gap);
+        } else if (DODGE_OUTCOMES.has(atk.outcome)) {
+          stepAway(who, dodgeSpeedFor(atk));
+        } else {
+          doRetreat(who, s);
+        }
+        return;
+      }
+      // Pasca-impact: strike hold dulu (lihat STRIKE_HOLD_S), lalu
+      // approach serangan berikut menang atas kembali-ke-jaga.
+      if (s < atk.t + STRIKE_HOLD_S) return; // diam
+      if (nextNear && nextAtk.by === who) { approach(who, xOf(foe), nextAtk.gap); return; }
+      if (nextNear) { doRetreat(who, s); return; } // defender berikut: diam
+      moveTo(who, guardTarget(who), RETURN_SPEED);
+      if (who !== atk.by) doRetreat(who, s);
+      return;
+    }
+    if (nextNear) {
+      if (who === nextAtk.by) { approach(who, xOf(foe), nextAtk.gap); return; }
+      doRetreat(who, s);
+      return;
+    }
+    moveTo(who, guardTarget(who), RETURN_SPEED);
+  };
+
+  // Picker kayu: jalan ke tepi ring, ambil, lalu jalan kembali ke arah
+  // lawan 200px/dtk sampai gap <= 60. Kalau windup serangan sudah berjalan
+  // (serangan pertama setelah kayu dijadwalkan tepat di wp.t+3.0), picker
+  // tetap approach/menghindar seperti petarung biasa.
+  const stepPicker = (who, foe, s, atk, atkIdx, nextAtk, nextNear) => {
+    if (atk && atk.by === who && s < atk.t) {
+      if (DODGE_OUTCOMES.has(atk.outcome) && ghostX[atkIdx] !== null) approach(who, ghostX[atkIdx], atk.gap);
+      else approach(who, xOf(foe), atk.gap);
+      return;
+    }
+    if (atk && atk.by === foe && s < atk.t) {
+      if (DODGE_OUTCOMES.has(atk.outcome)) stepAway(who, dodgeSpeedFor(atk));
+      else doRetreat(who, s);
+      return;
+    }
+    if (atk && s >= atk.t && s < atk.t + STRIKE_HOLD_S) return; // strike hold
+    if (nextNear && nextAtk.by === who) { approach(who, xOf(foe), nextAtk.gap); return; }
+    // Ambil: jalan ke kayu sampai tiba (latch di wp.t+1,0 — sim lama baru
+    // menganggap kayu di tangan saat wp.t+0,9, tapi latch butuh margin,
+    // lihat loop); status "sampai" di-latch, kalau tidak picker berosilasi
+    // di sekitar kayu (maju 200px/dtk lalu mundur 220px/dtk tiap sampel).
+    // Lalu jalan kembali.
+    if (!pickedUp) {
+      moveTo(who, weapon.x, 220);
+    } else if (Math.abs(xOf(foe) - xOf(who)) > 60) {
+      moveTo(who, xOf(foe), 200);
+    }
+  };
+
+  for (let i = 0; i <= n; i++) {
+    const s = Math.min(i * POS_DT, duration);
+    let phase = 'guard';
+    let atk = null, nextAtk = null, atkIdx = -1, atkFirstIdx = -1;
+    for (let j = 0; j < atkWin.length; j++) {
+      const w = atkWin[j];
+      if (w.ws <= s && s < w.end) {
+        atk = w; atkIdx = j;
+        if (atkFirstIdx === -1) atkFirstIdx = j;
+      } else if (w.ws > s && !nextAtk) nextAtk = w;
+    }
+    // Jadwalkan tangkap hantu saat serangan pertama kali menjadi aktif
+    // (atkFirst). atkWin terurut ws = terurut t, jadi "pertama" = yang
+    // pertama ditemukan di atas.
+    if (atkFirstIdx !== -1 && ghostX[atkFirstIdx] === null && !ghostPending) {
+      const w = atkWin[atkFirstIdx];
+      ghostPending = { idx: atkFirstIdx, atSample: i + (w.by === 'B' ? 1 : 0) };
+    }
+    const cl = clWin.find((c) => s >= c.t && s < c.end);
+    const kd = kdWin.find((k) => s >= k.t && (k.getup === null || k.getup === undefined || s < k.getup));
+    const wpActive = weapon && s >= weapon.t && s < weapon.t + 3.0;
+    const nextNear = nextAtk && nextAtk.ws - s <= PRE_APPROACH;
+    if (s < 1.0) {
+      phase = 'walk';
+      moveTo('R', RING_CENTER_X - GUARD_GAP_PX / 2, WALK_SPEED);
+      moveTo('B', RING_CENTER_X + GUARD_GAP_PX / 2, WALK_SPEED);
+    } else if (cl) {
+      phase = 'clinch';
+      const mid = (xR + xB) / 2;
+      moveTo('R', mid - CLINCH_GAP_PX / 2, 120);
+      moveTo('B', mid + CLINCH_GAP_PX / 2, 120);
+    } else if (kd) {
+      phase = 'down';
+      const vic = kd.who, other = vic === 'R' ? 'B' : 'R';
+      const vicX = xOf(vic);
+      const dir = other === 'R' ? -1 : 1;
+      const tx = vicX + dir * GUARD_GAP_PX;
+      moveTo(other, _clamp(tx, 80, 1200), RETURN_SPEED);
+    } else if (wpActive) {
+      phase = 'pickup';
+      const picker = weapon.who, other = otherOf(picker);
+      // Latch "sampai di kayu": sekali dalam 26px setelah wp.t+1,0,
+      // picker dianggap memegang kayu (sama seperti hasWeapon sim, yang
+      // gerbangnya wp.t+0,9 — tapi 0,1 dtk ini MARGIN, bukan penundaan
+      // sembarang: sim mengakumulasi s (s += 1/30) sehingga langkah di
+      // wp.t+0,9 tepat bernilai 15,899999999999954 < 15,9 dan gerbangnya
+      // gagal; dan sim membaca posisi timeline selangkah ke depan, jadi
+      // picker yang langsung berbalik di 0,9 sudah 28,7px dari kayu saat
+      // sim mengecek. Dengan latch 1,0, picker tetap di kayu melewati
+      // gerbang dan sim punya 3-4 langkah untuk mengambilnya — kalau tidak,
+      // hasWeapon sim tetap false dan block pertama sesudah kayu gagal
+      // (dHand ~49px; terukur saat RETURN_SPEED 250/300 membuat picker
+      // tiba di kayu sebelum gerbang 0,9 terbuka).
+      if (s >= weapon.t + 1.0 && Math.abs(xOf(picker) - weapon.x) <= 26) pickedUp = true;
+      stepPicker(picker, other, s, atk, atkIdx, nextAtk, nextNear);
+      stepCombat(other, s, atk, atkIdx, nextAtk, nextNear);
+    } else {
+      phase = atk ? (s < atk.t || nextNear ? 'approach' : 'attack') : (nextNear ? 'approach' : 'guard');
+      stepCombat('R', s, atk, atkIdx, nextAtk, nextNear);
+      stepCombat('B', s, atk, atkIdx, nextAtk, nextNear);
+    }
+    // Tangkap hantu setelah sampel diproses: posisi defender pada waktu s
+    // (penyerang R) atau s+1 sampel (penyerang B) — sama dengan yang dibaca
+    // sim saat entry serangan dibuat.
+    if (ghostPending && i >= ghostPending.atSample) {
+      const w = atkWin[ghostPending.idx];
+      ghostX[ghostPending.idx] = xOf(otherOf(w.by));
+      ghostPending = null;
+    }
+    xR = _clamp(xR, 80, 1200); xB = _clamp(xB, 80, 1200);
+    samples.push({
+      t: Math.round(s * 1000) / 1000,
+      xR: Math.round(xR * 10) / 10, xB: Math.round(xB * 10) / 10,
+      gap: Math.round(Math.abs(xB - xR) * 10) / 10, phase,
+    });
+  }
+  return samples;
+}
+
+// Posisi pada detik t (interpolasi linear antar sampel; null kalau fight
+// lama tanpa positions). Dipakai film.js + replay Hub.
+export function positionAt(fight, t) {
+  const pos = fight.positions;
+  if (!pos || pos.length === 0) return null;
+  const tt = _clamp(t, 0, fight.duration);
+  const fi = tt / POS_DT;
+  const i = Math.min(Math.floor(fi), pos.length - 2);
+  if (i < 0) return pos[0];
+  const a = pos[i], b = pos[i + 1];
+  const k = _clamp((tt - a.t) / Math.max(1e-9, b.t - a.t), 0, 1);
+  return {
+    t: Math.round(tt * 1000) / 1000,
+    xR: Math.round((a.xR + (b.xR - a.xR) * k) * 10) / 10,
+    xB: Math.round((a.xB + (b.xB - a.xB) * k) * 10) / 10,
+    gap: Math.round((a.gap + (b.gap - a.gap) * k) * 10) / 10,
+    phase: k < 0.5 ? a.phase : b.phase,
+  };
+}
+
+// Statistik jarak saat TIDAK menyerang (fase 'guard'): { n, mean, median,
+// min, max } dalam px. Dipakai scripts/measure-distance.mjs + tes §18.
+export function idleGapStats(fight) {
+  const pos = fight.positions;
+  if (!pos) return null;
+  const gaps = pos.filter((p) => p.phase === 'guard').map((p) => p.gap).sort((x, y) => x - y);
+  if (gaps.length === 0) return null;
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const r1 = (v) => Math.round(v * 10) / 10;
+  return { n: gaps.length, mean: r1(mean), median: r1(gaps[Math.floor(gaps.length / 2)]), min: r1(gaps[0]), max: r1(gaps[gaps.length - 1]) };
+}
+
 // Bangun satu fight lengkap dari dua fighter + durasi + seed.
 // Mengembalikan objek fight (dipakai buildScene + commentary + SFX).
 export function buildFight(left, right, duration, seed, opts = {}) {
@@ -171,18 +533,28 @@ export function buildFight(left, right, duration, seed, opts = {}) {
   const fighters = { R: left, B: right };
 
   // --- UNDIAN DULU (sebelum koreografi) ---
-  // Dua tarikan rng ini SELALU dilakukan — forcedResult hanya menimpa
-  // hasilnya, jadi aliran rng setelahnya identik dengan run tanpa opts.
-  const lotResult = rng() < 0.35 ? 'ko' : 'decision';
-  const lotWinner = rng() < 0.5 ? 'R' : 'B';
-  let result = lotResult;
-  let winner = lotWinner;
+  // Lotere gabungan (metode, pemenang) — SATU tarikan rng (2026-11-08):
+  //   Decision R 30% | Decision B 30% | KO R 15% | KO B 15% | Draw 10%.
+  //   Peluang menang R vs B tetap 50/50 (30+15 = 45% tiap sisi + 10% draw).
+  // Dua tarikan rng ini SELALU dilakukan — tarikan ke-2 dipertahankan
+  // (dulu lotWinner) supaya aliran rng setelah undian tetap sebanding
+  // dengan run lama; forcedResult hanya menimpa hasilnya (lihat bawah).
+  // Draw = hasil seri: winner null, HP akhir disamakan persis oleh
+  // steering + penyesuaian power di akhir (lihat § "Penyeimbang draw").
+  const lotRoll = rng();
+  rng();
+  let result, winner;
+  if (lotRoll < 0.30) { result = 'decision'; winner = 'R'; }
+  else if (lotRoll < 0.60) { result = 'decision'; winner = 'B'; }
+  else if (lotRoll < 0.75) { result = 'ko'; winner = 'R'; }
+  else if (lotRoll < 0.90) { result = 'ko'; winner = 'B'; }
+  else { result = 'draw'; winner = null; }
   const fr = opts?.forcedResult;
   if (fr && (fr.result === 'ko' || fr.result === 'decision') && (fr.winner === 'R' || fr.winner === 'B')) {
     result = fr.result;
     winner = fr.winner;
   }
-  const loser = winner === 'R' ? 'B' : 'R';
+  const loser = winner === 'R' ? 'B' : winner === 'B' ? 'R' : null;
 
   // --- Event senjata kayu ---
   // Petarung dengan weapon.kind 'kayu' + pickupAt mengambil kayu di tepi ring.
@@ -303,7 +675,25 @@ export function buildFight(left, right, duration, seed, opts = {}) {
       // Damage block (chip) — dipakai saat hit penuh harus dilunakkan.
       const blockDmg = power >= 1.3 ? BLOCK_CHIP * power : BLOCK_CHIP;
       const hard = t >= duration * 0.5;
-      if (result === 'decision') {
+      if (result === 'draw') {
+        // Jalur DRAW: kedua HP harus berakhir SAMA. Dua penjaga simetris:
+        // (1) lantai HP 12 — tidak ada yang boleh KO (tanpa lantai,
+        //   margin kecil tapi kedua HP bisa sama-sama terkikis ke 0);
+        // (2) selisih |hpR − hpB| ≤ DRAW_MARGIN. Hit yang melanggar
+        //   salah satunya dilunakkan jadi block (kalau chip-nya masih
+        //   lolos kedua penjaga) atau slip. Batas 12 ≈ satu pukulan
+        //   keras: cukup longgar supaya pukulan BISA mendarat (batas 6
+        //   lebih kecil dari damage jab terkecil 7,2 — semua hit akan
+        //   selalu dilunakkan), cukup ketat supaya selisih akhir kecil.
+        //   Selisih sisa dibereskan di akhir dengan menyesuaikan power
+        //   beberapa serangan terakhir — lihat "Penyeimbang draw".
+        const margin = hp.R - hp.B; // > 0 = R unggul
+        const newMargin = def === 'R' ? margin - d : margin + d;
+        const marginAfter = (dmg) => (def === 'R' ? margin - dmg : margin + dmg);
+        const okHit = newHp >= 12 && Math.abs(newMargin) <= DRAW_MARGIN;
+        const okBlock = (hp[def] - blockDmg) >= 12 && Math.abs(marginAfter(blockDmg)) <= DRAW_MARGIN;
+        if (!okHit) outcome = okBlock ? 'block' : 'slip';
+      } else if (result === 'decision') {
         // Pecundang tidak boleh KO; pemenang harus tetap unggul (margin >= 6).
         // Lantai pecundang di fase 2 ADAPTIF: kalau pemenang sudah sekarat
         // (mis. 8 HP), lantai 10 akan mengunci margin negatif — turunkan
@@ -354,16 +744,77 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     hp[loser] = Math.max(0, hp[winner] - 4);
   }
 
+  // --- Penyeimbang draw: samakan HP akhir PERSIS ---
+  // Steering draw menjaga |hpR − hpB| ≤ DRAW_MARGIN; selisih sisa
+  // dibereskan dengan menyesuaikan power serangan-serangan terakhir yang
+  // memberi damage (bukan mengarang hpFinal — damageDealt di fightStats,
+  // hpAt film.js, dan keyMoments semua dihitung ulang dari attacks, jadi
+  // penyesuaian ini konsisten di semua pembaca). Kebutuhan dibagi ke
+  // beberapa serangan (berjalan mundur dari yang terakhir, tiap power
+  // tetap dalam [0.5, 2.2]) — satu serangan saja sering tidak cukup
+  // karena damage per power kecil (jab 8) dan headroom power terbatas.
+  // Utamakan hit; block (chip = 2*power, hanya kalau power ≥ 1.3)
+  // hanya dipakai kalau hit tidak cukup menutup selisih.
+  if (result === 'draw' && Math.abs(hp.R - hp.B) > 1e-9) {
+    const diff = hp.R - hp.B; // > 0 = R unggul → R harus menerima damage lebih
+    const leader = diff > 0 ? 'R' : 'B';
+    let remaining = Math.abs(diff);
+    const adjustPass = (outcome, perPowerOf, minPower) => {
+      for (let i = attacks.length - 1; i >= 0 && remaining > 1e-9; i--) {
+        const a = attacks[i];
+        if (a.outcome !== outcome) continue;
+        const perPower = perPowerOf(a);
+        if (!perPower) continue;
+        // Serangan oleh trailer ke leader: BESARKAN damage-nya.
+        // Serangan oleh leader ke trailer: KECILKAN damage-nya.
+        const grow = a.by !== leader;
+        const maxTake = grow ? (2.2 - a.power) * perPower : (a.power - minPower) * perPower;
+        if (maxTake <= 0) continue;
+        const take = Math.min(remaining, maxTake);
+        a.power = grow ? a.power + take / perPower : a.power - take / perPower;
+        remaining -= take;
+      }
+    };
+    adjustPass('hit', (a) => (DMG_BASE[a.kind] ?? 10) * (FINISHER_DMG[a.kind] ? 1.5 : 1), 0.5);
+    if (remaining > 1e-9) adjustPass('block', (a) => (a.power >= 1.3 ? BLOCK_CHIP : 0), 1.3);
+    if (remaining <= 1e-9) {
+      // Hitung ulang HP dari attacks (urut, clamp per serangan — sama
+      // seperti loop di atas) supaya hpFinal = damage serangan yang baru.
+      let r = 100, b = 100;
+      for (const a of attacks) {
+        if (a.kind === 'feint') continue;
+        const dd = dmgOf(a);
+        if (dd <= 0) continue;
+        if (a.by === 'R') b = Math.max(0, b - dd); else r = Math.max(0, r - dd);
+      }
+      hp.R = r; hp.B = b;
+    }
+    if (Math.abs(hp.R - hp.B) > 0.5) {
+      // Jalan buntu (tidak ada serangan yang bisa disesuaikan — praktis
+      // tidak terjadi di fight 60 dtk): samakan ke nilai terendah.
+      const m = Math.min(hp.R, hp.B);
+      hp.R = m; hp.B = m;
+    }
+  }
+
   const sceneCfg = {
     duration, left, right, attacks, knockdowns, cheers, retreats, clinches,
     winner, result, koT, weapon, seed,
+    // Jarak gelud (otoritatif dari engine — film.js membaca ini, bukan
+    // menghitung posisi sendiri): timeline posisi + konstanta jarak.
+    positions: null, // diisi di bawah (butuh fight jadi dulu)
+    spacing: { bodyLenPx: BODY_LEN_PX, guardGapPx: GUARD_GAP_PX, ringCenterX: RING_CENTER_X },
   };
   const fight = {
     seed, duration, winner, result, koT, weapon,
     attacks, knockdowns, cheers, retreats, clinches,
     left, right, hpFinal: { R: Math.round(hp.R), B: Math.round(hp.B) },
     sceneCfg,
+    spacing: sceneCfg.spacing,
+    positions: null, // diisi di bawah
   };
+  fight.positions = buildPositions(fight);
+  sceneCfg.positions = fight.positions;
   fight.stats = fightStats(fight);
   fight.keyMoments = keyMoments(fight);
   return fight;
@@ -371,6 +822,9 @@ export function buildFight(left, right, duration, seed, opts = {}) {
 
 // Ringkasan hasil untuk tampilan (seed, undian, skor akhir).
 export function fightSummary(fight) {
+  if (fight.result === 'draw') {
+    return `Seri ${fight.hpFinal.R}–${fight.hpFinal.B} antara ${fight.left.name} dan ${fight.right.name} (seed ${fight.seed})`;
+  }
   const wName = fight.winner === 'R' ? fight.left.name : fight.right.name;
   const lName = fight.winner === 'R' ? fight.right.name : fight.left.name;
   if (fight.result === 'ko') {

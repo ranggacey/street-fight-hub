@@ -19,12 +19,14 @@ const PUBLIC_SEGMENTS = new Set([
   "game",
   "tantangan",
   "gelar",
+  "obrolan",
 ]);
 
 const NAV_LINKS = [
   { href: "/turnamen", label: "Turnamen" },
   { href: "/klasemen", label: "Klasemen" },
   { href: "/tantangan", label: "Tantangan" },
+  { href: "/obrolan", label: "Obrolan" },
   { href: "/gelar", label: "Gelar" },
 ];
 

@@ -39,6 +39,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (challenge.status !== 'pending') {
       throw conflict('Tantangan ini sudah tidak aktif', 'CHALLENGE_NOT_PENDING');
     }
+    // Tantangan terbuka tidak bisa diterima lewat endpoint langsung —
+    // pakai /api/challenges/[id]/accept-open (siapa pun boleh menerima).
+    if (challenge.kind === 'open') {
+      throw conflict(
+        'Tantangan terbuka diterima lewat halaman Obrolan',
+        'CHALLENGE_NOT_DIRECT',
+      );
+    }
 
     const challenged = await Fighter.findById(challenge.challengedFighterId);
     if (!challenged) throw notFound('Fighter yang ditantang tidak ditemukan');

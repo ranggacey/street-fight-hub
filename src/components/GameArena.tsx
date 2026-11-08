@@ -47,49 +47,391 @@ type FightDetail = {
   fightsRemaining: number | null;
 };
 
+/**
+ * Bobot lotere hasil — TAMPILAN SAJA, bukan logika lotere.
+ * Sumber: bobot lotere engine hasil fight (agen engine, Nov 2026):
+ * Decision A 30%, Decision B 30%, KO A 15%, KO B 15%, Draw 10%
+ * (total 100% untuk jenis kemenangan). Kalau engine mengubah bobot, angka
+ * di sini WAJIB ikut diubah supaya tampilan tetap konsisten dengan hasil
+ * undian sebenarnya.
+ * Peluang menang: A = 30 + 15 = 45, B = 30 + 15 = 45, seri 10 — bila ada
+ * pemenang, peluangnya 45:45 = 50:50.
+ */
+const OUTCOME_WEIGHTS = {
+  decisionA: 30,
+  decisionB: 30,
+  koA: 15,
+  koB: 15,
+  draw: 10,
+} as const;
+
 type Phase = "loading" | "ready" | "error";
 
 function nameOf(f: Fighter | undefined, fallback: string): string {
   return f?.displayName ?? fallback;
 }
 
-function Breakdown({ fight, fighterA, fighterB }: {
+/** Pemenang versi Hub: winnerSide "R" = fighterA (kiri/merah), "B" = fighterB (kanan/biru). */
+type Verdict = {
+  method: "KO" | "decision" | "draw";
+  winner: Fighter | null;
+  loser: Fighter | null;
+};
+
+function resolveVerdict(
+  fight: GameFight,
+  fighterA: Fighter,
+  fighterB: Fighter,
+): Verdict | null {
+  const r = fight.result;
+  if (!r || !r.method) return null;
+  if (r.method === "draw" || !r.winnerSide) {
+    return { method: "draw", winner: null, loser: null };
+  }
+  const winner = r.winnerSide === "R" ? fighterA : fighterB;
+  const loser = r.winnerSide === "R" ? fighterB : fighterA;
+  return { method: r.method, winner, loser };
+}
+
+/**
+ * Kartu duel ringkas: kedua petarung berdampingan (2 kolom di SEMUA lebar,
+ * termasuk 390px) dengan nama DI ATAS info lainnya — nama tidak pernah
+ * menumpuk di atas bar atau elemen lain. Kartu ini muat di atas lipatan
+ * bersama bagian atas arena, jadi tidak terpotong saat halaman di-scroll.
+ */
+function FighterDuelCard({
+  fighterA,
+  fighterB,
+}: {
+  fighterA: Fighter;
+  fighterB: Fighter;
+}) {
+  const side = (f: Fighter, fallbackColor: string) => {
+    const color = f.colors?.body ?? fallbackColor;
+    const record = f.casualRecord;
+    return (
+      <div className="min-w-0 px-1 py-1 text-center">
+        <span
+          aria-hidden="true"
+          className="mx-auto mb-2 block h-3.5 w-3.5 rounded-full ring-2 ring-white/30"
+          style={{ backgroundColor: color }}
+        />
+        <p className="break-words font-display text-xl uppercase leading-tight tracking-wide sm:text-2xl">
+          {f.displayName}
+        </p>
+        <p className="mt-1 text-xs font-semibold text-paper-dim">
+          {styleLabel(f.style, f.styleOther)}
+        </p>
+        <p className="mt-1 text-xs text-paper-mute">
+          Rating {f.rating ?? 1000} • Rekor {record?.wins ?? 0}M–
+          {record?.losses ?? 0}K
+          {record?.draws ? `–${record.draws}S` : ""}
+        </p>
+        {f.signatureMove ? (
+          <p
+            className="mt-1 truncate text-xs text-paper-mute"
+            title={moveLabel(f.signatureMove)}
+          >
+            Jurus: {moveLabel(f.signatureMove)}
+          </p>
+        ) : null}
+        {f.tempo ? (
+          <p className="text-xs capitalize text-paper-mute">
+            Tempo: {f.tempo}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+  return (
+    <section aria-label="Petarung yang bertarung">
+      <div className="glass grid grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 py-4 sm:gap-3 sm:px-4">
+        {side(fighterA, "#f5a623")}
+        <span className="shrink-0 px-1 font-display text-2xl text-amber-brand sm:text-4xl">
+          VS<span className="sr-only"> melawan </span>
+        </span>
+        {side(fighterB, "#e5382e")}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Panel peluang hasil pra-fight: breakdown metode sesuai bobot lotere
+ * (OUTCOME_WEIGHTS) + peluang menang 50:50. Win% Elo dari API sengaja
+ * TIDAK ditampilkan di sini — hasil fight diundi 50:50 dan menampilkan
+ * persentase Elo di sampingnya akan bertentangan dengan itu. Rating Elo
+ * tetap tampil sebagai angka di kartu petarung di atas.
+ */
+function OutcomeBreakdown({
+  fighterA,
+  fighterB,
+}: {
+  fighterA: Fighter;
+  fighterB: Fighter;
+}) {
+  const nameA = nameOf(fighterA, "Petarung A");
+  const nameB = nameOf(fighterB, "Petarung B");
+  const rows = [
+    {
+      label: `Decision — ${nameA}`,
+      pct: OUTCOME_WEIGHTS.decisionA,
+      bar: "bg-amber-brand",
+    },
+    {
+      label: `Decision — ${nameB}`,
+      pct: OUTCOME_WEIGHTS.decisionB,
+      bar: "bg-red-brand",
+    },
+    {
+      label: `KO — ${nameA}`,
+      pct: OUTCOME_WEIGHTS.koA,
+      bar: "bg-amber-brand/70",
+    },
+    {
+      label: `KO — ${nameB}`,
+      pct: OUTCOME_WEIGHTS.koB,
+      bar: "bg-red-brand/70",
+    },
+    {
+      label: "Draw — Seri",
+      pct: OUTCOME_WEIGHTS.draw,
+      bar: "bg-cyan-accent",
+    },
+  ];
+  const total = rows.reduce((n, r) => n + r.pct, 0);
+  return (
+    <section aria-label="Peluang hasil fight">
+      <GlassCard>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-display text-2xl uppercase tracking-wide">
+            Peluang Hasil
+          </h2>
+          <Badge tone="amber">Undian • Total {total}%</Badge>
+        </div>
+        <p className="mt-1 text-sm text-paper-dim">
+          Hasil fight diundi dari bobot di bawah — peluang menang {nameA} vs{" "}
+          {nameB} adalah 50 : 50.
+        </p>
+
+        {/* Peluang menang 50:50 (bila ada pemenang) */}
+        <div className="mt-4">
+          <div className="flex justify-between gap-2 text-sm font-bold">
+            <span className="min-w-0 truncate">{nameA} — 50%</span>
+            <span className="min-w-0 truncate text-right">
+              50% — {nameB}
+            </span>
+          </div>
+          <div
+            className="mt-1.5 flex h-3 overflow-hidden rounded-full bg-white/10"
+            role="img"
+            aria-label={`Peluang menang ${nameA} 50 persen, ${nameB} 50 persen`}
+          >
+            <div className="bg-amber-brand" style={{ width: "50%" }} />
+            <div className="bg-red-brand" style={{ width: "50%" }} />
+          </div>
+          <p className="mt-1.5 text-xs text-paper-mute">
+            Peluang menang bila ada pemenang (hasil seri tidak dihitung).
+          </p>
+        </div>
+
+        {/* Breakdown metode kemenangan */}
+        <ul className="mt-4 space-y-3">
+          {rows.map((r) => (
+            <li key={r.label}>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate font-semibold">
+                  {r.label}
+                </span>
+                <span className="shrink-0 font-display text-lg">
+                  {r.pct}%
+                </span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className={`h-full ${r.bar}`}
+                  style={{ width: `${r.pct}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-xs leading-relaxed text-paper-mute">
+          Dari 100 undian: 45 untuk {nameA} menang (30 decision + 15 KO), 45
+          untuk {nameB} menang, 10 seri. Rating Elo tetap tampil di kartu
+          petarung di atas — tapi hasil fight diundi 50:50, bukan dari rating.
+        </p>
+      </GlassCard>
+    </section>
+  );
+}
+
+/**
+ * Hero layar juri — hasil akhir BESAR dan menonjol, bukan teks kecil:
+ * metode (Menang KO / Menang Angka / Seri), nama pemenang, skor raksasa,
+ * dan waktu KO bila ada. Menangani ketiga metode: KO, decision, draw.
+ */
+function VerdictHero({
+  fight,
+  fighterA,
+  fighterB,
+}: {
+  fight: GameFight;
+  fighterA: Fighter;
+  fighterB: Fighter;
+}) {
+  const verdict = resolveVerdict(fight, fighterA, fighterB);
+  if (!verdict) return null;
+  const { method, winner, loser } = verdict;
+  const isDraw = method === "draw" || !winner;
+  const headline = isDraw
+    ? "Seri"
+    : method === "KO"
+      ? "Menang KO"
+      : "Menang Angka";
+  const headlineCls = isDraw
+    ? "text-cyan-accent"
+    : method === "KO"
+      ? "text-red-brand"
+      : "text-amber-brand";
+  const score = fight.result?.score ?? null;
+  const koTimeSec = fight.result?.koTimeSec ?? null;
+  const narrative =
+    !isDraw && winner && loser && method === "KO"
+      ? `${winner.displayName} menang KO atas ${loser.displayName}${
+          koTimeSec != null ? ` di detik ${koTimeSec}` : ""
+        }.`
+      : !isDraw && winner && loser && score
+        ? `${winner.displayName} menang angka ${score.a}–${score.b} atas ${loser.displayName}.`
+        : "Fight berakhir seri — kedua petarung sama kuat.";
+  return (
+    <section aria-labelledby="hasil-heading" className="animate-pop-in">
+      <GlassCard
+        strong
+        className="overflow-hidden px-4 py-6 text-center sm:px-8 sm:py-8"
+      >
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Badge tone={isDraw ? "cyan" : method === "KO" ? "red" : "amber"}>
+            Keputusan Juri
+          </Badge>
+          {fight.isTitleFight ? (
+            <Badge tone="red">Perebutan Gelar</Badge>
+          ) : null}
+        </div>
+        <h2
+          id="hasil-heading"
+          className={`mt-4 font-display text-5xl uppercase leading-none tracking-wide sm:text-7xl ${headlineCls}`}
+        >
+          {headline}
+        </h2>
+        {winner ? (
+          <p className="mt-3 break-words font-display text-3xl uppercase leading-tight tracking-wide sm:text-5xl">
+            {winner.displayName}
+          </p>
+        ) : (
+          <p className="mt-3 break-words font-display text-2xl uppercase leading-tight tracking-wide sm:text-4xl">
+            {nameOf(fighterA, "Petarung A")}{" "}
+            <span className="text-amber-brand">vs</span>{" "}
+            {nameOf(fighterB, "Petarung B")}
+          </p>
+        )}
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-paper-dim sm:text-base">
+          {narrative}
+        </p>
+        {score ? (
+          <div
+            className="mt-6 flex items-start justify-center gap-5 sm:gap-10"
+            role="img"
+            aria-label={`Skor akhir ${score.a} lawan ${score.b}`}
+          >
+            <div className="min-w-0">
+              <p
+                className={`font-display text-6xl leading-none sm:text-7xl ${
+                  !isDraw && winner === fighterA
+                    ? "text-amber-brand"
+                    : "text-paper"
+                }`}
+              >
+                {score.a}
+              </p>
+              <p
+                className="mx-auto mt-2 max-w-[150px] truncate text-xs font-semibold uppercase tracking-wide text-paper-dim"
+                title={nameOf(fighterA, "Kiri")}
+              >
+                {nameOf(fighterA, "Kiri")}
+              </p>
+            </div>
+            <p
+              aria-hidden="true"
+              className="pt-2 font-display text-4xl text-paper-mute sm:text-5xl"
+            >
+              –
+            </p>
+            <div className="min-w-0">
+              <p
+                className={`font-display text-6xl leading-none sm:text-7xl ${
+                  !isDraw && winner === fighterB
+                    ? "text-amber-brand"
+                    : "text-paper"
+                }`}
+              >
+                {score.b}
+              </p>
+              <p
+                className="mx-auto mt-2 max-w-[150px] truncate text-xs font-semibold uppercase tracking-wide text-paper-dim"
+                title={nameOf(fighterB, "Kanan")}
+              >
+                {nameOf(fighterB, "Kanan")}
+              </p>
+            </div>
+          </div>
+        ) : null}
+        {method === "KO" && koTimeSec != null ? (
+          <p className="mt-6 inline-flex min-h-[44px] items-center rounded-full bg-red-brand/15 px-4 py-2 text-sm font-bold text-red-400 ring-1 ring-red-brand/40">
+            KO di detik {koTimeSec} dari 60 detik
+          </p>
+        ) : null}
+        {method !== "KO" ? (
+          <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-paper-mute">
+            Full time • 60 detik
+          </p>
+        ) : null}
+      </GlassCard>
+    </section>
+  );
+}
+
+function Breakdown({
+  fight,
+  fighterA,
+  fighterB,
+}: {
   fight: GameFight;
   fighterA: Fighter;
   fighterB: Fighter;
 }) {
   const r = fight.result;
   if (!r) return null;
-  const winnerName =
-    r.winnerSide === "R"
-      ? nameOf(fighterA, "Kiri")
-      : r.winnerSide === "B"
-        ? nameOf(fighterB, "Kanan")
-        : null;
   const s = fight.stats;
   const km = fight.keyMoments;
   const totalDamage = (s?.damageDealtA ?? 0) + (s?.damageDealtB ?? 0);
-  const pctA = totalDamage > 0 ? Math.round(((s?.damageDealtA ?? 0) / totalDamage) * 100) : 50;
+  const pctA =
+    totalDamage > 0
+      ? Math.round(((s?.damageDealtA ?? 0) / totalDamage) * 100)
+      : 50;
   const hitName = (by: "L" | "R"): string =>
     by === "L" ? nameOf(fighterA, "Kiri") : nameOf(fighterB, "Kanan");
-  const narrative =
-    winnerName && r.method === "KO"
-      ? `${winnerName} menang KO atas ${r.winnerSide === "R" ? nameOf(fighterB, "Kanan") : nameOf(fighterA, "Kiri")}${r.koTimeSec ? ` di detik ${r.koTimeSec}` : ""}.`
-      : winnerName && r.score
-        ? `${winnerName} menang angka ${r.score.a}–${r.score.b}.`
-        : "Fight berakhir seri.";
 
   return (
     <div className="space-y-4">
-      <p className="text-base leading-relaxed text-paper">{narrative}</p>
       {s ? (
         <>
           <div>
-            <div className="mb-1 flex justify-between text-xs font-semibold text-paper-dim">
-              <span>
+            <div className="mb-1 flex justify-between gap-2 text-xs font-semibold text-paper-dim">
+              <span className="min-w-0 truncate">
                 {nameOf(fighterA, "Kiri")} — damage {s.damageDealtA ?? 0}
               </span>
-              <span>
+              <span className="min-w-0 truncate text-right">
                 {nameOf(fighterB, "Kanan")} — damage {s.damageDealtB ?? 0}
               </span>
             </div>
@@ -99,7 +441,10 @@ function Breakdown({ fight, fighterA, fighterB }: {
               aria-label={`Damage ${pctA}% vs ${100 - pctA}%`}
             >
               <div className="bg-amber-brand" style={{ width: `${pctA}%` }} />
-              <div className="bg-red-brand" style={{ width: `${100 - pctA}%` }} />
+              <div
+                className="bg-red-brand"
+                style={{ width: `${100 - pctA}%` }}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -118,7 +463,11 @@ function Breakdown({ fight, fighterA, fighterB }: {
               value={`${s.strikesLandedA ?? 0} : ${s.strikesLandedB ?? 0}`}
               tone="paper"
             />
-            <StatChip label="Knockdown" value={s.knockdowns ?? 0} tone="cyan" />
+            <StatChip
+              label="Knockdown"
+              value={s.knockdowns ?? 0}
+              tone="cyan"
+            />
           </div>
           <dl className="space-y-1 text-sm text-paper-dim">
             <div className="flex justify-between gap-2">
@@ -131,7 +480,8 @@ function Breakdown({ fight, fighterA, fighterB }: {
               <div className="flex justify-between gap-2">
                 <dt>Pukulan terbesar</dt>
                 <dd className="text-right font-semibold text-paper">
-                  {moveLabel(km.biggestHit.move)} ({km.biggestHit.damage ?? "?"} dmg)
+                  {moveLabel(km.biggestHit.move)} (
+                  {km.biggestHit.damage ?? "?"} dmg)
                   {" — "}
                   {hitName(km.biggestHit.by)}, detik {km.biggestHit.timeSec}
                 </dd>
@@ -141,8 +491,8 @@ function Breakdown({ fight, fighterA, fighterB }: {
               <div className="flex justify-between gap-2">
                 <dt>Finisher</dt>
                 <dd className="text-right font-semibold text-paper">
-                  {moveLabel(km.finisher.move)} — {hitName(km.finisher.by)}, detik{" "}
-                  {km.finisher.timeSec}
+                  {moveLabel(km.finisher.move)} — {hitName(km.finisher.by)},
+                  detik {km.finisher.timeSec}
                 </dd>
               </div>
             ) : null}
@@ -150,8 +500,8 @@ function Breakdown({ fight, fighterA, fighterB }: {
               <div className="flex justify-between gap-2">
                 <dt>Momen balik</dt>
                 <dd className="text-right font-semibold text-paper">
-                  Detik {km.leadChange.timeSec} — {hitName(km.leadChange.by)} merebut
-                  keunggulan
+                  Detik {km.leadChange.timeSec} — {hitName(km.leadChange.by)}{" "}
+                  merebut keunggulan
                 </dd>
               </div>
             ) : null}
@@ -159,7 +509,9 @@ function Breakdown({ fight, fighterA, fighterB }: {
               <div className="flex justify-between gap-2">
                 <dt>Knockdown</dt>
                 <dd className="text-right font-semibold text-paper">
-                  {km.knockdowns.map((k) => `${hitName(k.by)} (${k.timeSec}d)`).join(", ")}
+                  {km.knockdowns
+                    .map((k) => `${hitName(k.by)} (${k.timeSec}d)`)
+                    .join(", ")}
                 </dd>
               </div>
             ) : null}
@@ -190,7 +542,10 @@ export default function GameArena({ fightId }: { fightId: string }) {
     }
     setDetail(res.data);
     setPhase("ready");
-    if (res.data.fight.status === "completed" || res.data.fight.status === "disputed") {
+    if (
+      res.data.fight.status === "completed" ||
+      res.data.fight.status === "disputed"
+    ) {
       submittedRef.current = true;
     }
   }, [fightId]);
@@ -279,9 +634,14 @@ export default function GameArena({ fightId }: { fightId: string }) {
 
   if (phase === "loading") {
     return (
-      <div className="space-y-4" role="status" aria-label="Memuat…">
-        <div className="glass h-24 animate-pulse" />
-        <div className="glass mx-auto h-[640px] max-w-[420px] animate-pulse" />
+      <div
+        className="mx-auto w-full max-w-3xl space-y-5"
+        role="status"
+        aria-label="Memuat…"
+      >
+        <div className="glass h-10 animate-pulse" />
+        <div className="glass h-28 animate-pulse" />
+        <div className="glass mx-auto aspect-[9/16] w-full max-w-[420px] animate-pulse" />
       </div>
     );
   }
@@ -322,8 +682,9 @@ export default function GameArena({ fightId }: { fightId: string }) {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header duel */}
+    <div className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-6">
+      {/* Header ringkas — tanpa H1 nama raksasa dan tanpa seed di sini,
+          supaya kartu petarung + arena langsung terlihat di layar HP. */}
       <header className="animate-fade-up">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={fight.isTitleFight ? "amber" : "neutral"}>
@@ -332,54 +693,87 @@ export default function GameArena({ fightId }: { fightId: string }) {
           <Badge tone={done ? "green" : disputed ? "red" : "cyan"}>
             {done ? "Selesai" : disputed ? "Disputed" : "Belum Dimainkan"}
           </Badge>
-          <span className="text-sm text-paper-mute">
-            {MAP_LABELS[fight.map ?? "ring"] ?? fight.map} • 60 detik • Seed{" "}
-            {fight.seed}
-          </span>
+          {detail.fightsRemaining !== null ? (
+            <Badge tone="outline">
+              Sisa tarung hari ini: {detail.fightsRemaining}/3
+            </Badge>
+          ) : null}
         </div>
-        <h1 className="mt-4 font-display text-4xl uppercase leading-tight tracking-wide sm:text-6xl">
-          {nameOf(fighterA, "?")}{" "}
-          <span className="text-amber-brand">VS</span> {nameOf(fighterB, "?")}
-        </h1>
-        <p className="mt-2 text-sm text-paper-dim">
-          {styleLabel(fighterA.style, fighterA.styleOther)} vs{" "}
-          {styleLabel(fighterB.style, fighterB.styleOther)}
-          {detail.fightsRemaining !== null
-            ? ` • Sisa tarung hari ini: ${detail.fightsRemaining}/3`
-            : ""}
+        <p className="mt-3 text-sm text-paper-mute">
+          {MAP_LABELS[fight.map ?? "ring"] ?? fight.map} • 60 detik
         </p>
       </header>
 
-      {/* Win% pra-fight */}
+      {/* Layar juri — hero hasil besar, hanya bila fight selesai. */}
+      {done ? (
+        <VerdictHero fight={fight} fighterA={fighterA} fighterB={fighterB} />
+      ) : null}
+
+      {/* Aksi utama hasil: unduh poster, bagikan, tantang lagi. */}
+      {done ? (
+        <div className="grid gap-3 sm:flex sm:flex-wrap sm:justify-center">
+          {poster ? (
+            <a
+              href={poster}
+              download={`street-fight-${fightId}-poster.jpg`}
+              className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-amber-brand px-5 py-3 text-sm font-bold text-on-amber transition-transform hover:scale-[1.02] sm:w-auto"
+            >
+              Unduh Poster
+            </a>
+          ) : null}
+          <Button
+            variant="ghost"
+            onClick={share}
+            className="w-full sm:w-auto"
+          >
+            Bagikan
+          </Button>
+          <ButtonLink
+            href="/tantangan"
+            variant="glass"
+            className="w-full sm:w-auto"
+          >
+            Tantang Lagi
+          </ButtonLink>
+        </div>
+      ) : null}
+      {done && shareMsg ? (
+        <p role="status" className="text-center text-sm text-paper-dim">
+          {shareMsg}
+        </p>
+      ) : null}
+
+      {/* Kartu duel: nama di atas, dua kolom di semua lebar. */}
+      <FighterDuelCard fighterA={fighterA} fighterB={fighterB} />
+
+      {/* Peluang hasil pra-fight (breakdown lotere + 50:50). */}
       {!done ? (
-        <section aria-label="Peluang menang" className="grid gap-3 sm:grid-cols-2">
-          {[
-            { f: fighterA, pct: detail.winPercentA },
-            { f: fighterB, pct: detail.winPercentB },
-          ].map(({ f, pct }) => (
-            <GlassCard key={f.id ?? f.displayName} className="px-4 py-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="truncate font-display text-xl uppercase tracking-wide">
-                  {f.displayName}
-                </p>
-                <p className="font-display text-2xl text-amber-brand">{pct}%</p>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full bg-amber-brand" style={{ width: `${pct}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-paper-dim">
-                Rating {f.rating ?? 1000} • Rekor kasual{" "}
-                {f.casualRecord?.wins ?? 0}M–{f.casualRecord?.losses ?? 0}K
-                {f.signatureMove ? ` • Jurus: ${moveLabel(f.signatureMove)}` : ""}
-                {f.tempo ? ` • Tempo: ${f.tempo}` : ""}
-              </p>
-            </GlassCard>
-          ))}
+        <OutcomeBreakdown fighterA={fighterA} fighterB={fighterB} />
+      ) : null}
+
+      {/* Statistik pertarungan (hanya bila selesai). */}
+      {done ? (
+        <section aria-label="Statistik pertarungan">
+          <h2 className="mb-3 font-display text-2xl uppercase tracking-wide">
+            Statistik <span className="text-amber-brand">Pertarungan</span>
+          </h2>
+          <GlassCard>
+            <Breakdown
+              fight={fight}
+              fighterA={fighterA}
+              fighterB={fighterB}
+            />
+          </GlassCard>
         </section>
       ) : null}
 
-      {/* Arena iframe */}
-      <section aria-label="Arena pertarungan">
+      {/* Arena iframe — rasio 9:16 PERSIS (aspect, bukan tinggi tetap) supaya
+          layout HUD di dalam arena tampil sesuai desainnya di semua lebar:
+          tinggi tetap lama (640px / 720px di sm+) membuat arena terpotong /
+          terdistorsi di lebar ≥640px. Seed TIDAK ditampilkan di sekitar
+          arena — hanya di catatan kaki hasil di bawah — supaya tidak ada
+          teks Hub yang menutupi HUD arena. */}
+      <section aria-label="Arena pertarungan" id="arena" className="scroll-mt-20">
         <div className="mx-auto w-full max-w-[420px]">
           <div className="overflow-hidden rounded-2xl border border-white/15 bg-ink-900 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
             <iframe
@@ -388,14 +782,15 @@ export default function GameArena({ fightId }: { fightId: string }) {
               title={`Arena: ${nameOf(fighterA, "Kiri")} vs ${nameOf(fighterB, "Kanan")}`}
               width={720}
               height={1280}
-              className="block h-[640px] w-full sm:h-[720px]"
+              className="block aspect-[9/16] w-full"
               allow="autoplay"
               sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"
             />
           </div>
-          <p className="mt-2 text-center text-xs text-paper-mute">
-            Tekan tombol <strong className="text-paper">Tarung</strong> di dalam
-            arena untuk memulai (suara komentator butuh klik di dalam arena).
+          <p className="mt-2 text-center text-xs leading-relaxed text-paper-mute">
+            Tekan tombol <strong className="text-paper">Tarung</strong> di
+            dalam arena untuk memulai (suara komentator butuh klik di dalam
+            arena).
             {detail.canSubmit
               ? ""
               : " Kamu menonton sebagai penonton — hasil dikirim oleh peserta fight."}
@@ -405,12 +800,18 @@ export default function GameArena({ fightId }: { fightId: string }) {
 
       {/* Status pengiriman hasil */}
       {submitting ? (
-        <p role="status" className="text-center text-sm font-semibold text-amber-brand">
+        <p
+          role="status"
+          className="text-center text-sm font-semibold text-amber-brand"
+        >
           Mengirim hasil ke server untuk verifikasi…
         </p>
       ) : null}
       {submitError ? (
-        <p role="alert" className="text-center text-sm font-semibold text-red-400">
+        <p
+          role="alert"
+          className="text-center text-sm font-semibold text-red-400"
+        >
           Gagal mengirim hasil: {submitError}
         </p>
       ) : null}
@@ -423,68 +824,28 @@ export default function GameArena({ fightId }: { fightId: string }) {
         </GlassCard>
       ) : null}
 
-      {/* Hasil + breakdown */}
-      {done ? (
-        <section aria-labelledby="hasil-heading">
-          <h2
-            id="hasil-heading"
-            className="mb-4 font-display text-3xl uppercase tracking-wide"
-          >
-            Hasil <span className="text-amber-brand">Pertarungan</span>
-          </h2>
-          <GlassCard strong>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <p className="font-display text-2xl uppercase tracking-wide">
-                {fight.result?.score
-                  ? `${fight.result.score.a} – ${fight.result.score.b}`
-                  : "—"}
-              </p>
-              <div className="flex gap-2">
-                <Badge tone="amber">{fight.result?.method ?? "—"}</Badge>
-                {fight.isTitleFight ? <Badge tone="red">Title Fight</Badge> : null}
-              </div>
-            </div>
-            <Breakdown fight={fight} fighterA={fighterA} fighterB={fighterB} />
-            <div className="mt-5 flex flex-wrap gap-3">
-              {poster ? (
-                <a
-                  href={poster}
-                  download={`street-fight-${fightId}-poster.jpg`}
-                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-amber-brand px-5 py-2.5 text-sm font-bold text-on-amber transition-transform hover:scale-[1.02]"
-                >
-                  Unduh Poster
-                </a>
-              ) : null}
-              <Button variant="ghost" onClick={share}>
-                Bagikan
-              </Button>
-              <ButtonLink href="/tantangan" variant="glass">
-                Tantang Lagi
-              </ButtonLink>
-            </div>
-            {shareMsg ? (
-              <p role="status" className="mt-3 text-sm text-paper-dim">
-                {shareMsg}
-              </p>
-            ) : null}
-            {poster ? (
-              <div className="mt-5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={poster}
-                  alt={`Poster hasil ${nameOf(fighterA, "Kiri")} vs ${nameOf(fighterB, "Kanan")}`}
-                  className="mx-auto w-full max-w-[420px] rounded-2xl border border-white/15"
-                />
-              </div>
-            ) : null}
-            {fight.completedAt ? (
-              <p className="mt-4 text-center text-xs text-paper-mute">
-                Selesai {formatWIB(fight.completedAt)} • Hasil terverifikasi dari
-                seed {fight.seed}
-              </p>
-            ) : null}
-          </GlassCard>
-        </section>
+      {/* Poster hasil */}
+      {done && poster ? (
+        <figure>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={poster}
+            alt={`Poster hasil ${nameOf(fighterA, "Kiri")} vs ${nameOf(fighterB, "Kanan")}`}
+            className="mx-auto w-full max-w-[420px] rounded-2xl border border-white/15"
+          />
+          <figcaption className="mt-2 text-center text-xs text-paper-mute">
+            Poster resmi hasil fight
+          </figcaption>
+        </figure>
+      ) : null}
+
+      {/* Catatan kaki hasil — seed hanya disebut di sini, kecil, di bawah
+          semua konten, bukan di atas arena. */}
+      {done && fight.completedAt ? (
+        <p className="text-center text-xs text-paper-mute">
+          Selesai {formatWIB(fight.completedAt)} • Hasil terverifikasi dari
+          seed {fight.seed}
+        </p>
       ) : null}
 
       {/* Chat global */}
@@ -492,8 +853,11 @@ export default function GameArena({ fightId }: { fightId: string }) {
         <GlobalChat />
       </section>
 
-      <p className="text-center text-sm text-paper-mute">
-        <Link href="/tantangan" className="font-semibold text-amber-brand hover:underline">
+      <p className="pb-2 text-center text-sm text-paper-mute">
+        <Link
+          href="/tantangan"
+          className="font-semibold text-amber-brand hover:underline"
+        >
           ← Kembali ke Tantangan
         </Link>
       </p>

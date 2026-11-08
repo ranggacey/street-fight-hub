@@ -13,6 +13,7 @@ import {
 import type {
   Announcement,
   Fighter,
+  LeaderboardEntry,
   MatchItem,
   Tournament,
   TournamentDetail,
@@ -23,7 +24,6 @@ import Badge from "@/components/Badge";
 import { ButtonLink } from "@/components/Button";
 import FighterCard from "@/components/FighterCard";
 import EmptyState from "@/components/EmptyState";
-import GlobalChat from "@/components/GlobalChat";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +95,10 @@ export default async function Home() {
       serverApiGet<{ tournaments: Tournament[] }>(
         "/api/tournaments?status=completed",
       ),
-      serverApiGet<{ fighters: Fighter[] }>("/api/fighters?sort=wins"),
+      // Top 5 kasual: urutan berdasarkan rating point (Elo), BUKAN rekor
+      // turnamen — sumbernya /api/leaderboard (rating desc, lalu
+      // casualRecord.wins desc, lalu createdAt asc).
+      serverApiGet<{ entries: LeaderboardEntry[] }>("/api/leaderboard"),
       // Sesi dibaca server-side supaya CTA penutup tidak menawarkan
       // "Daftar" ke user yang sudah login. Gagal baca sesi (mis. secret
       // belum terkonfigurasi) dianggap belum login, bukan error halaman.
@@ -106,7 +109,24 @@ export default async function Home() {
   const upcoming = dataOr(upcomingRes, { tournaments: [] }).tournaments;
   const live = dataOr(liveRes, { tournaments: [] }).tournaments;
   const completed = dataOr(completedRes, { tournaments: [] }).tournaments;
-  const topFighters = dataOr(topRes, { fighters: [] }).fighters.slice(0, 5);
+  // Kartu Top 5 memakai rekor KASUAL (casualRecord) sebagai baris M/K/S/KO,
+  // supaya konsisten dengan judul section — rekor turnamen tidak dipakai
+  // di sini. Rating point dibawa lewat field rating untuk FighterCard.
+  const topFighters: Fighter[] = dataOr(topRes, { entries: [] })
+    .entries.slice(0, 5)
+    .map((e) => {
+      const casual = e.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
+      return {
+        _id: e.fighterId,
+        displayName: e.displayName ?? "-",
+        igUsername: e.igUsername ?? "",
+        style: (e.style ?? "tinju") as Fighter["style"],
+        record: casual,
+        rating: e.rating ?? 1000,
+        casualRecord: casual,
+        status: "active" as const,
+      };
+    });
 
   // Juara terakhir: ambil detail turnamen selesai terbaru, cari champion-nya.
   const lastCompleted = completed[0];
@@ -298,20 +318,21 @@ export default async function Home() {
         </section>
       ) : null}
 
-      {/* Top 5 klasemen */}
+      {/* Top 5 rating point kasual */}
       <section aria-labelledby="top-heading">
         <div className="mb-4 flex items-end justify-between gap-3">
           <h2
             id="top-heading"
             className="font-display text-3xl uppercase tracking-wide sm:text-4xl"
           >
-            Top 5 <span className="text-red-brand">Klasemen</span>
+            Top 5{" "}
+            <span className="text-amber-brand">Rating Point Kasual</span>
           </h2>
           <Link
-            href="/klasemen"
+            href="/klasemen?tab=kasual"
             className="shrink-0 text-sm font-bold text-amber-brand hover:underline"
           >
-            Klasemen lengkap →
+            Klasemen kasual →
           </Link>
         </div>
         {topFighters.length === 0 ? (
@@ -323,7 +344,12 @@ export default async function Home() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {topFighters.map((f, i) => (
-              <FighterCard key={getId(f) || i} fighter={f} rank={i + 1} />
+              <FighterCard
+                key={getId(f) || i}
+                fighter={f}
+                rank={i + 1}
+                showRating
+              />
             ))}
           </div>
         )}
@@ -374,7 +400,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Obrolan global */}
+      {/* Obrolan global — pindah ke halaman sendiri (/obrolan). */}
       <section aria-labelledby="chat-heading">
         <h2
           id="chat-heading"
@@ -382,7 +408,18 @@ export default async function Home() {
         >
           Obrolan <span className="text-amber-brand">Global</span>
         </h2>
-        <GlobalChat />
+        <GlassCard className="flex flex-col items-start gap-3 border-amber-brand/40">
+          <Badge tone="amber">Baru</Badge>
+          <h3 className="font-display text-2xl uppercase leading-tight tracking-wide">
+            Ngobrol & Tantangan Terbuka
+          </h3>
+          <p className="text-sm leading-relaxed text-paper-dim">
+            Obrolan global sekarang punya halaman sendiri — ngobrol bareng
+            semua fighter, plus buka tantangan terbuka: bukan ke 1 orang
+            tertentu, tapi ke semua orang. Yang pertama menerima yang gelud.
+          </p>
+          <ButtonLink href="/obrolan">Buka Obrolan →</ButtonLink>
+        </GlassCard>
       </section>
 
       {/* CTA penutup — beda untuk yang sudah login vs belum.

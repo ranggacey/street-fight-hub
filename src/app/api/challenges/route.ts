@@ -126,7 +126,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = {
+      // Daftar ini khusus tantangan langsung; tantangan terbuka (kind
+      // 'open') tinggal di /obrolan. $ne dipakai supaya dokumen lama
+      // yang belum punya field kind tetap tampil.
+      kind: { $ne: 'open' },
+    };
     if (box === 'in') filter.challengedFighterId = mine._id;
     else if (box === 'out') filter.challengerFighterId = mine._id;
     else {
