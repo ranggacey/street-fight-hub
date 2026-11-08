@@ -37,10 +37,13 @@ export async function GET(req: NextRequest) {
     await connectDB();
 
     // 1. Index koleksi fighters — apakah unique index userId benar ada?
+    // getIndexes() Mongoose hanya mengembalikan key — untuk spek mentah
+    // (termasuk flag `unique`) pakai listIndexes() driver langsung.
     const indexes = (await Fighter.collection.getIndexes()) as Record<
       string,
       unknown
     >;
+    const indexesRaw = await Fighter.collection.listIndexes().toArray();
 
     // 2. Semua fighter + user pemiliknya.
     const fighters = (await Fighter.find().sort({ createdAt: 1 }).lean()) as LeanDoc[];
@@ -134,6 +137,7 @@ export async function GET(req: NextRequest) {
 
     return ok({
       indexes,
+      indexesRaw: serialize(indexesRaw),
       fighters: serialize(fighters),
       users: serialize(users),
       duplicatesByUserId,
