@@ -14,6 +14,7 @@ import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import Button from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
+import ArenaPicker from "@/components/ArenaPicker";
 import { Textarea } from "@/components/Input";
 
 /**
@@ -213,24 +214,18 @@ export default function OpenChallenges() {
                 <strong className="text-paper">{fightsRemaining}/3</strong>.
               </p>
               <div>
-                <label
-                  htmlFor="open-map"
+                <p
+                  id="open-arena-heading"
                   className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-paper"
                 >
                   Arena
-                </label>
-                <select
-                  id="open-map"
+                </p>
+                <ArenaPicker
                   value={map}
-                  onChange={(e) => setMap(e.target.value)}
-                  className="min-h-[44px] w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-paper focus:border-amber-brand focus:outline-none focus:ring-2 focus:ring-amber-brand/40"
-                >
-                  {Object.entries(MAP_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setMap}
+                  name="open-map"
+                  labelledBy="open-arena-heading"
+                />
               </div>
               <div>
                 <Textarea

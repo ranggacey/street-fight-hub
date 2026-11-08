@@ -8,8 +8,6 @@ import {
   formatWIB,
   getId,
   MAP_LABELS,
-  styleColor,
-  styleLabel,
 } from "@/components/api";
 import type {
   Challenge,
@@ -21,6 +19,8 @@ import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
+import ArenaPicker from "@/components/ArenaPicker";
+import OpponentPicker from "@/components/OpponentPicker";
 import { Textarea } from "@/components/Input";
 
 type ChallengesResponse = {
@@ -80,30 +80,6 @@ function QuotaCard({
         </p>
       ) : null}
     </GlassCard>
-  );
-}
-
-/** Lingkaran centang untuk baris yang terpilih. */
-function CheckMark({ checked }: { checked: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-150 ${
-        checked
-          ? "border-amber-brand bg-amber-brand text-ink-950"
-          : "border-white/25 text-transparent"
-      }`}
-    >
-      <svg viewBox="0 0 12 10" className="h-3 w-3" fill="none">
-        <path
-          d="M1 5.5 4.5 9 11 1"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
   );
 }
 
@@ -313,7 +289,7 @@ export default function TantanganClient() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-8">
       {notice ? (
         <p
           role="status"
@@ -350,7 +326,7 @@ export default function TantanganClient() {
         <section aria-labelledby="tantang-heading">
           <h2
             id="tantang-heading"
-            className="mb-4 font-display text-2xl uppercase tracking-wide sm:text-3xl"
+            className="mb-4 overflow-visible break-words font-display text-[1.35rem] uppercase leading-[1.15] tracking-wide sm:text-3xl sm:leading-[1.1]"
           >
             Tantang <span className="text-amber-brand">Fighter Lain</span>
           </h2>
@@ -372,71 +348,11 @@ export default function TantanganClient() {
                     Pilih lawan
                   </h3>
                 </div>
-                {others.length === 0 ? (
-                  <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-paper-dim">
-                    Belum ada fighter lain yang bisa ditantang.
-                  </p>
-                ) : (
-                  <div
-                    role="radiogroup"
-                    aria-labelledby="lawan-heading"
-                    className="space-y-2"
-                  >
-                    {others.map((f) => {
-                      const id = getId(f);
-                      const selected = targetId === id;
-                      const body =
-                        f.colors?.body && f.colors.body !== "none"
-                          ? f.colors.body
-                          : styleColor(f.style);
-                      const rec = f.casualRecord ?? f.record;
-                      return (
-                        <label
-                          key={id}
-                          className={`flex min-h-[64px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-colors duration-150 focus-within:ring-2 focus-within:ring-amber-brand/60 ${
-                            selected
-                              ? "border-amber-brand bg-amber-brand/10"
-                              : "border-white/10 bg-white/[0.03] hover:border-white/25"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="target"
-                            value={id}
-                            checked={selected}
-                            onChange={() => setTargetId(id)}
-                            className="sr-only"
-                          />
-                          <span
-                            aria-hidden="true"
-                            className="h-10 w-1 shrink-0 rounded-full"
-                            style={{ backgroundColor: styleColor(f.style) }}
-                          />
-                          <span
-                            aria-hidden="true"
-                            className="h-9 w-9 shrink-0 rounded-full border border-white/20"
-                            style={{ backgroundColor: body }}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-display text-lg uppercase leading-tight tracking-wide text-paper">
-                              {f.displayName}
-                            </span>
-                            <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper-dim">
-                              <Badge tone="outline">
-                                {styleLabel(f.style, f.styleOther)}
-                              </Badge>
-                              <span className="truncate">
-                                @{f.igUsername} • Menang {rec.wins} • Kalah{" "}
-                                {rec.losses}
-                              </span>
-                            </span>
-                          </span>
-                          <CheckMark checked={selected} />
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                <OpponentPicker
+                  fighters={others}
+                  selectedId={targetId}
+                  onSelect={setTargetId}
+                />
               </div>
 
               {/* Langkah 2 — pilih arena */}
@@ -455,36 +371,11 @@ export default function TantanganClient() {
                     Pilih arena
                   </h3>
                 </div>
-                <div
-                  role="radiogroup"
-                  aria-labelledby="arena-heading"
-                  className="grid grid-cols-2 gap-2"
-                >
-                  {Object.entries(MAP_LABELS).map(([value, label]) => {
-                    const selected = map === value;
-                    return (
-                      <label
-                        key={value}
-                        className={`flex min-h-[48px] cursor-pointer items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-sm font-semibold transition-colors duration-150 focus-within:ring-2 focus-within:ring-amber-brand/60 ${
-                          selected
-                            ? "border-amber-brand bg-amber-brand/10 text-paper"
-                            : "border-white/10 bg-white/[0.03] text-paper-dim hover:border-white/25"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="map"
-                          value={value}
-                          checked={selected}
-                          onChange={() => setMap(value)}
-                          className="sr-only"
-                        />
-                        {label}
-                        <CheckMark checked={selected} />
-                      </label>
-                    );
-                  })}
-                </div>
+                <ArenaPicker
+                  value={map}
+                  onChange={setMap}
+                  labelledBy="arena-heading"
+                />
               </div>
 
               {/* Langkah 3 — pesan */}
@@ -553,7 +444,7 @@ export default function TantanganClient() {
       <section aria-labelledby="masuk-heading">
         <h2
           id="masuk-heading"
-          className="mb-4 font-display text-2xl uppercase tracking-wide sm:text-3xl"
+          className="mb-4 overflow-visible break-words font-display text-[1.35rem] uppercase leading-[1.15] tracking-wide sm:text-3xl sm:leading-[1.1]"
         >
           Tantangan <span className="text-red-brand">Masuk</span>
         </h2>
@@ -573,7 +464,7 @@ export default function TantanganClient() {
       <section aria-labelledby="keluar-heading">
         <h2
           id="keluar-heading"
-          className="mb-4 font-display text-2xl uppercase tracking-wide sm:text-3xl"
+          className="mb-4 overflow-visible break-words font-display text-[1.35rem] uppercase leading-[1.15] tracking-wide sm:text-3xl sm:leading-[1.1]"
         >
           Tantangan <span className="text-amber-brand">Keluar</span>
         </h2>

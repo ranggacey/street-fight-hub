@@ -10,10 +10,17 @@ export const metadata: Metadata = {
 
 export default function TantanganPage() {
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <BackToHome />
-      <header>
-        <h1 className="font-display text-4xl uppercase tracking-wide sm:text-5xl">
+      <header className="min-w-0">
+        {/*
+          Pola yang sama dengan perbaikan judul /obrolan: Anton (display)
+          punya kap huruf yang tinggi sementara text-4xl memakai leading
+          2.5rem — di layar kecil glyph atas/bawah keluar dari kotak baris
+          dan terpotong di bawah navbar sticky. Perbaiki: ukuran dasar
+          lebih kecil (2rem), leading eksplisit 1.15, break-words.
+        */}
+        <h1 className="overflow-visible break-words font-display text-[2rem] uppercase leading-[1.15] tracking-wide sm:text-4xl sm:leading-[1.1] lg:text-5xl">
           Tantangan
         </h1>
         <p className="mt-2 max-w-2xl text-paper-dim">
