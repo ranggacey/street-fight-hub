@@ -2,7 +2,37 @@ import type { NextRequest } from 'next/server';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { forbidden, handleError, ok, parseJson, serialize } from '@/lib/http';
+import { Challenge } from '@/models/Challenge';
 import { Notification } from '@/models/Notification';
+
+/**
+ * Detail tantangan untuk popup notifikasi: nama penantang + nama yang
+ * ditantang (bila ada — tantangan terbuka belum punya yang ditantang).
+ * Model Notification hanya menyimpan type + relatedId, jadi nama
+ * diambil di sini dari Challenge terkait; tanpa ini popup hanya bisa
+ * menampilkan kalimat generik tanpa nama fighter.
+ */
+async function challengeDetailsById(
+  relatedIds: string[],
+): Promise<Record<string, { challengerName: string | null; challengedName: string | null; kind: string | null; map: string | null }>> {
+  const out: Record<string, { challengerName: string | null; challengedName: string | null; kind: string | null; map: string | null }> = {};
+  if (relatedIds.length === 0) return out;
+  const challenges = await Challenge.find({ _id: { $in: relatedIds } })
+    .populate('challengerFighterId', 'displayName')
+    .populate('challengedFighterId', 'displayName')
+    .lean();
+  for (const c of challenges) {
+    const challenger = c.challengerFighterId as unknown as { displayName?: string } | null;
+    const challenged = c.challengedFighterId as unknown as { displayName?: string } | null;
+    out[c._id.toString()] = {
+      challengerName: challenger?.displayName ?? null,
+      challengedName: challenged?.displayName ?? null,
+      kind: typeof c.kind === 'string' ? c.kind : null,
+      map: typeof c.map === 'string' ? c.map : null,
+    };
+  }
+  return out;
+}
 
 /** GET /api/notifications?unread=1 — notifikasi saya, terbaru dulu. */
 export async function GET(req: NextRequest) {
@@ -17,7 +47,26 @@ export async function GET(req: NextRequest) {
       Notification.find(filter).sort({ createdAt: -1 }).limit(50).lean(),
       Notification.countDocuments({ userId: session.userId, read: false }),
     ]);
-    return ok({ notifications: serialize(notifications), unreadCount });
+    const serialized = serialize(notifications) as Array<Record<string, unknown>>;
+    // Lampirkan detail hanya untuk notifikasi tantangan (relatedId =
+    // Challenge). Jenis lain (fight_result/title) tetap tanpa detail —
+    // popup tantangan tidak memakainya.
+    const challengeIds = serialized
+      .filter(
+        (n) =>
+          typeof n.type === 'string' &&
+          n.type.startsWith('challenge_') &&
+          typeof n.relatedId === 'string' &&
+          n.relatedId !== '',
+      )
+      .map((n) => n.relatedId as string);
+    const details = await challengeDetailsById(challengeIds);
+    for (const n of serialized) {
+      if (typeof n.relatedId === 'string' && details[n.relatedId]) {
+        n.detail = details[n.relatedId];
+      }
+    }
+    return ok({ notifications: serialized, unreadCount });
   } catch (err) {
     return handleError(err);
   }

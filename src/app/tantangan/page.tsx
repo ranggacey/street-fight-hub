@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import TantanganClient from "./TantanganClient";
+import BackToHome from "@/components/BackToHome";
 
 export const metadata: Metadata = {
   title: "Tantangan",
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 export default function TantanganPage() {
   return (
     <div className="space-y-6">
+      <BackToHome />
       <header>
         <h1 className="font-display text-4xl uppercase tracking-wide sm:text-5xl">
           Tantangan

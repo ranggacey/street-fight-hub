@@ -15,7 +15,6 @@ import Badge from "@/components/Badge";
 import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
 import StatChip from "@/components/StatChip";
-import GlobalChat from "@/components/GlobalChat";
 
 const ARENA_URL =
   process.env.NEXT_PUBLIC_ARENA_URL ??
@@ -848,10 +847,9 @@ export default function GameArena({ fightId }: { fightId: string }) {
         </p>
       ) : null}
 
-      {/* Chat global */}
-      <section aria-label="Obrolan global">
-        <GlobalChat />
-      </section>
+      {/* Obrolan Global TIDAK lagi tertanam di sini — pindah ke tombol chat
+          mengambang (FloatingChat di layout root) supaya tidak memanjangkan
+          halaman game dan tidak overflow di HP. */}
 
       <p className="pb-2 text-center text-sm text-paper-mute">
         <Link

@@ -285,6 +285,13 @@ export interface AppNotification {
   relatedId?: string | null;
   read?: boolean;
   createdAt?: string;
+  /** Detail tantangan (nama fighter) — dilampirkan GET /api/notifications. */
+  detail?: {
+    challengerName?: string | null;
+    challengedName?: string | null;
+    kind?: string | null;
+    map?: string | null;
+  } | null;
 }
 
 export interface TitlePublic {

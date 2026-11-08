@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import GameArena from "@/components/GameArena";
+import BackToHome from "@/components/BackToHome";
 
 export const metadata: Metadata = {
   title: "Arena Game",
@@ -13,5 +14,10 @@ export default async function GamePage({
   params: Promise<{ fightId: string }>;
 }) {
   const { fightId } = await params;
-  return <GameArena fightId={fightId} />;
+  return (
+    <div className="space-y-4">
+      <BackToHome />
+      <GameArena fightId={fightId} />
+    </div>
+  );
 }

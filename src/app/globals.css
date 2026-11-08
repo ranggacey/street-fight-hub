@@ -53,6 +53,15 @@
       opacity: 0.9;
     }
   }
+  /* Garis sisa waktu popup notifikasi tantangan: menyusut kiri → kanan. */
+  @keyframes countdown-shrink {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
 }
 
 @layer base {

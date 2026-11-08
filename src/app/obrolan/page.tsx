@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import GlobalChat from "@/components/GlobalChat";
 import OpenChallenges from "@/components/OpenChallenges";
+import BackToHome from "@/components/BackToHome";
 
 export const metadata: Metadata = {
   title: "Obrolan Global",
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 export default function ObrolanPage() {
   return (
     <div className="space-y-8">
+      <BackToHome />
       <header>
         <h1 className="font-display text-4xl uppercase tracking-wide sm:text-5xl">
           Obrolan <span className="text-amber-brand">Global</span>

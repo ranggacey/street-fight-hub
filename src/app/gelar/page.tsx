@@ -8,6 +8,7 @@ import Countdown from "@/components/Countdown";
 import EmptyState from "@/components/EmptyState";
 import StatChip from "@/components/StatChip";
 import { ButtonLink } from "@/components/Button";
+import BackToHome from "@/components/BackToHome";
 
 // Ikon sabuk juara, di-inline sebagai data URI karena file biner
 // tidak bisa di-push lewat konektor teks GitHub.
@@ -164,6 +165,7 @@ export default async function GelarPage() {
 
   return (
     <div className="space-y-8">
+      <BackToHome />
       <header>
         <h1 className="font-display text-4xl uppercase tracking-wide sm:text-5xl">
           Gelar <span className="text-amber-brand">Juara</span>

@@ -5,6 +5,7 @@ import { getId, STYLE_LABELS, styleLabel } from "@/components/api";
 import type { Fighter, LeaderboardEntry } from "@/components/types";
 import Badge from "@/components/Badge";
 import EmptyState from "@/components/EmptyState";
+import BackToHome from "@/components/BackToHome";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,7 @@ export default async function KlasemenPage({
 
   return (
     <div className="space-y-6">
+      <BackToHome />
       <header>
         <h1 className="font-display text-4xl uppercase tracking-wide sm:text-5xl">
           Klasemen

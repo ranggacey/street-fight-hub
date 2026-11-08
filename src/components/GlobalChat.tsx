@@ -14,8 +14,24 @@ import Button from "@/components/Button";
  * - Teks dirender sebagai teks biasa (React escape default) — tidak ada
  *   dangerouslySetInnerHTML untuk chat.
  * - Prop `tall`: di halaman /obrolan chat diberi ruang lebih tinggi.
+ * - Prop `fill` + `showHeader={false}`: dipakai panel pop-up FloatingChat —
+ *   daftar pesan mengisi tinggi panel (form kirim menempel di bawah) dan
+ *   header disembunyikan karena panel sudah punya header + tombol tutup
+ *   sendiri.
+ * - Baris input memakai flex-1 min-w-0 + tombol shrink-0 supaya input +
+ *   tombol Kirim tidak pernah terpotong di layar HP 390px.
  */
-export default function GlobalChat({ tall = false }: { tall?: boolean }) {
+export default function GlobalChat({
+  tall = false,
+  fill = false,
+  showHeader = true,
+  className = "",
+}: {
+  tall?: boolean;
+  fill?: boolean;
+  showHeader?: boolean;
+  className?: string;
+}) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [text, setText] = useState("");
@@ -76,20 +92,26 @@ export default function GlobalChat({ tall = false }: { tall?: boolean }) {
   };
 
   return (
-    <GlassCard className="p-0">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="font-display text-xl uppercase tracking-wide">
-          Obrolan <span className="text-amber-brand">Global</span>
-        </h3>
-        <p className="mt-0.5 text-xs text-paper-mute">
-          Ngobrol bareng semua fighter. Sopan, tanpa spam — maks 1 pesan / 3
-          detik.
-        </p>
-      </div>
+    <GlassCard className={`p-0 ${fill ? "flex min-h-0 flex-1 flex-col" : ""} ${className}`}>
+      {showHeader ? (
+        <div className="border-b border-white/10 px-5 py-4">
+          <h3 className="font-display text-xl uppercase tracking-wide">
+            Obrolan <span className="text-amber-brand">Global</span>
+          </h3>
+          <p className="mt-0.5 text-xs text-paper-mute">
+            Ngobrol bareng semua fighter. Sopan, tanpa spam — maks 1 pesan / 3
+            detik.
+          </p>
+        </div>
+      ) : null}
       <div
         ref={listRef}
         className={`space-y-3 overflow-y-auto px-5 py-4 ${
-          tall ? "max-h-[32rem]" : "max-h-80"
+          fill
+            ? "min-h-0 flex-1"
+            : tall
+              ? "max-h-[32rem]"
+              : "max-h-80"
         }`}
         aria-live="polite"
       >
@@ -103,7 +125,7 @@ export default function GlobalChat({ tall = false }: { tall?: boolean }) {
           </p>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className="text-sm leading-relaxed">
+            <div key={m.id} className="break-words text-sm leading-relaxed">
               <span className="font-bold text-amber-brand">
                 @{m.username ?? "—"}
               </span>
@@ -118,7 +140,7 @@ export default function GlobalChat({ tall = false }: { tall?: boolean }) {
       <div className="border-t border-white/10 px-5 py-4">
         {user ? (
           <form onSubmit={send} className="space-y-2">
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <input
                 type="text"
                 value={text}
@@ -126,9 +148,13 @@ export default function GlobalChat({ tall = false }: { tall?: boolean }) {
                 placeholder="Tulis pesan… (maks 500 karakter)"
                 maxLength={500}
                 aria-label="Pesan chat"
-                className="min-h-[44px] flex-1 rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-paper placeholder:text-paper-mute focus:border-amber-brand focus:outline-none focus:ring-2 focus:ring-amber-brand/40"
+                className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-paper placeholder:text-paper-mute focus:border-amber-brand focus:outline-none focus:ring-2 focus:ring-amber-brand/40"
               />
-              <Button type="submit" disabled={busy || text.trim().length === 0}>
+              <Button
+                type="submit"
+                disabled={busy || text.trim().length === 0}
+                className="shrink-0"
+              >
                 {busy ? "…" : "Kirim"}
               </Button>
             </div>
