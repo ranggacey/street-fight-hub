@@ -339,7 +339,7 @@ function VerdictHero({
         </p>
         {score ? (
           <div
-            className="mt-6 flex items-start justify-center gap-5 sm:gap-10"
+            className="mt-6 flex items-start justify-center gap-4 sm:gap-6"
             role="img"
             aria-label={`Skor akhir ${score.a} lawan ${score.b}`}
           >
@@ -360,12 +360,19 @@ function VerdictHero({
                 {nameOf(fighterA, "Kiri")}
               </p>
             </div>
-            <p
+            {/* Pemisah skor sebagai BATANG, bukan glyph '–': glyph dash
+                terlalu kecil dibanding angka raksasa (text-6xl/7xl) dan
+                melayang di celah lebar (15-0 di layar lama: bintik kecil).
+                Batang proporsional: lebar ~0,45x ukuran digit (27px di
+                text-6xl, 32px di sm:text-7xl), tebal ~0,12x (7px/9px),
+                terpusat vertikal terhadap angka lewat wrapper setinggi
+                line-box digit (60px/72px). */}
+            <span
               aria-hidden="true"
-              className="pt-2 font-display text-4xl text-paper-mute sm:text-5xl"
+              className="flex h-[60px] items-center sm:h-[72px]"
             >
-              –
-            </p>
+              <span className="block h-[7px] w-[27px] rounded-full bg-amber-brand sm:h-[9px] sm:w-[32px]" />
+            </span>
             <div className="min-w-0">
               <p
                 className={`font-display text-6xl leading-none sm:text-7xl ${
