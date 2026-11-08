@@ -777,20 +777,45 @@ export function mergePose(base, over) {
   return o;
 }
 export function lerpPoseFull(a, b, k) {
+  // Sudut sendi di-lerp lewat BUSUR TERPENDEK (riset arcs 2026-11-08):
+  // sudut itu periodik — lerp linear naif dari a=-2,94 ke 0,80 menempuh
+  // Δ=+3,74 rad (214°, jalan panjang lewat bawah) padahal busur terpendek
+  // adalah -2,54 rad (145°, lewat atas). Tanpa ini, lengan "windmill"
+  // 78 px/frame saat pulih dari hook yang di-block (IK elbow-up
+  // meninggalkan pose di cabang a≈-2,9, b≈-2,5). Keyframe techniquePose
+  // tidak berubah: semua pasangan keyframe punya |Δa|,|Δb| < π.
   const o = {
     lean: lerpNum(a.lean, b.lean, k), crouch: lerpNum(a.crouch, b.crouch, k),
     head: lerpNum(a.head, b.head, k), hipRot: lerpNum(a.hipRot, b.hipRot, k),
     shRot: lerpNum(a.shRot, b.shRot, k), sway: lerpNum(a.sway, b.sway, k),
     stretch: lerpNum(a.stretch, b.stretch, k),
-    armF: { a: lerpNum(a.armF.a, b.armF.a, k), b: lerpNum(a.armF.b, b.armF.b, k) },
-    armB: { a: lerpNum(a.armB.a, b.armB.a, k), b: lerpNum(a.armB.b, b.armB.b, k) },
-    legF: { a: lerpNum(a.legF.a, b.legF.a, k), k: lerpNum(a.legF.k, b.legF.k, k) },
-    legB: { a: lerpNum(a.legB.a, b.legB.a, k), k: lerpNum(a.legB.k, b.legB.k, k) },
+    armF: { a: lerpAngle(a.armF.a, b.armF.a, k), b: lerpAngle(a.armF.b, b.armF.b, k) },
+    armB: { a: lerpAngle(a.armB.a, b.armB.a, k), b: lerpAngle(a.armB.b, b.armB.b, k) },
+    legF: { a: lerpAngle(a.legF.a, b.legF.a, k), k: lerpNum(a.legF.k, b.legF.k, k) },
+    legB: { a: lerpAngle(a.legB.a, b.legB.a, k), k: lerpNum(a.legB.k, b.legB.k, k) },
     footF: { ang: lerpNum(a.footF.ang, b.footF.ang, k), pivot: lerpNum(a.footF.pivot, b.footF.pivot, k), lift: lerpNum(a.footF.lift, b.footF.lift, k) },
     footB: { ang: lerpNum(a.footB.ang, b.footB.ang, k), pivot: lerpNum(a.footB.pivot, b.footB.pivot, k), lift: lerpNum(a.footB.lift, b.footB.lift, k) },
   };
   return o;
 }
+// Delta sudut terpendek (∈ [-π, π]) + normalisasi ke [-π, π].
+// Normalisasi menjaga lerp(..., k=1) == target persis (pose win memakai k=1).
+const TAU = Math.PI * 2;
+function wrapDelta(d) {
+  d %= TAU;
+  if (d > Math.PI) d -= TAU;
+  else if (d < -Math.PI) d += TAU;
+  return d;
+}
+function normAng(a) {
+  a %= TAU;
+  if (a > Math.PI) a -= TAU;
+  else if (a < -Math.PI) a += TAU;
+  return a;
+}
+// Lerp sudut lewat busur terpendek (shortest-arc): dari -2,94 ke 0,80
+// menempuh -2,54 rad (lewat atas), bukan +3,74 rad (lewat bawah).
+export function lerpAngle(a, b, k) { return normAng(a + wrapDelta(b - a) * k); }
 // Pose teknik pada dt detik relatif terhadap impact (dt negatif = sebelum impact).
 // guard = pose guard penuh. Di luar rentang keys, kembalikan guard.
 export function techniquePose(kind, dt, guard) {
