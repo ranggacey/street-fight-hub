@@ -327,11 +327,24 @@ export interface TitleHistoryEvent {
   raceStartAt?: string | null;
 }
 
+/** Identitas fighter yang tampil di chat (PP + nama), bukan username akun. */
+export interface ChatFighterIdentity {
+  displayName: string;
+  style?: string;
+  colors?: FighterColors | null;
+  accessories?: FighterAccessories | null;
+}
+
 export interface ChatMessageItem {
   id?: string;
+  /** Id user pengirim — dipakai client untuk menandai pesan sendiri. */
+  userId?: string;
   text?: string;
   createdAt?: string;
+  /** Username akun — hanya fallback tampil kalau pengirim belum punya fighter. */
   username?: string;
+  /** Fighter pengirim (null = belum punya fighter → tampil username). */
+  fighter?: ChatFighterIdentity | null;
 }
 
 export interface LeaderboardEntry {

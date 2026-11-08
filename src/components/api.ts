@@ -265,6 +265,20 @@ export function formatDateWIB(value: string | Date | null | undefined): string {
   return dtfDate.format(d);
 }
 
+/** Jam saja (HH:mm WIB) — untuk baris chat yang tidak butuh tanggal penuh. */
+const dtfTime = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export function formatTimeWIB(value: string | Date | null | undefined): string {
+  if (!value) return "-";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return `${dtfTime.format(d)} WIB`;
+}
+
 /** Sisa waktu menuju target. Dipakai Countdown (client). */
 export function timeLeft(target: string): {
   days: number;

@@ -12,6 +12,45 @@ import {
 } from '@/lib/http';
 import { validateChatText } from '@/lib/validation';
 import { ChatMessage } from '@/models/ChatMessage';
+import { Fighter } from '@/models/Fighter';
+
+/**
+ * Identitas fighter untuk satu pesan chat (PP + nama di client).
+ * Bentuknya sama dengan `ChatFighterIdentity` di components/types.ts.
+ */
+export interface ChatFighterShape {
+  displayName: string;
+  style?: string;
+  colors?: Record<string, unknown> | null;
+  accessories?: Record<string, unknown> | null;
+}
+
+/** Ambil fighter (displayName, style, colors, accessories) per userId. */
+async function fighterByUserId(
+  userIds: string[],
+): Promise<Map<string, ChatFighterShape>> {
+  const map = new Map<string, ChatFighterShape>();
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return map;
+  const fighters = (await Fighter.find({ userId: { $in: ids } })
+    .select('userId displayName style colors accessories')
+    .lean()) as Record<string, unknown>[];
+  for (const f of fighters) {
+    const uid =
+      typeof f.userId === 'string'
+        ? f.userId
+        : (f.userId as { toString?: () => string } | null)?.toString?.() ?? '';
+    if (!uid || typeof f.displayName !== 'string') continue;
+    map.set(uid, {
+      displayName: f.displayName,
+      style: typeof f.style === 'string' ? f.style : undefined,
+      colors: (f.colors as Record<string, unknown> | null) ?? null,
+      accessories:
+        (f.accessories as Record<string, unknown> | null) ?? null,
+    });
+  }
+  return map;
+}
 
 /** GET /api/chat/messages?limit= — 50 pesan terakhir (urut kronologis). */
 export async function GET(req: NextRequest) {
@@ -26,16 +65,26 @@ export async function GET(req: NextRequest) {
       .lean();
     // Balik: tampil kronologis (terlama dulu) supaya chat mengalir ke bawah.
     const ordered = [...messages].reverse();
-    const shaped = (serialize(ordered) as Record<string, unknown>[]).map((m) => ({
-      id: m.id,
-      text: m.text,
-      createdAt: m.createdAt,
-      username:
-        m.userId && typeof m.userId === 'object'
-          ? (m.userId as Record<string, unknown>).username ?? '—'
-          : '—',
-    }));
-    return ok({ messages: shaped });
+    const shaped = serialize(ordered) as Record<string, unknown>[];
+    // Identitas fighter per pengirim — satu query untuk semua pesan.
+    const senderIds = shaped.map((m) => {
+      const u = m.userId as Record<string, unknown> | null;
+      return typeof u?.id === 'string' ? u.id : '';
+    });
+    const fighters = await fighterByUserId(senderIds);
+    const withFighter = shaped.map((m) => {
+      const u = (m.userId ?? {}) as Record<string, unknown>;
+      const senderId = typeof u.id === 'string' ? u.id : '';
+      return {
+        id: m.id,
+        userId: senderId,
+        text: m.text,
+        createdAt: m.createdAt,
+        username: u.username ?? '—',
+        fighter: fighters.get(senderId) ?? null,
+      };
+    });
+    return ok({ messages: withFighter });
   } catch (err) {
     return handleError(err);
   }
@@ -58,13 +107,18 @@ export async function POST(req: NextRequest) {
     }
 
     const message = await ChatMessage.create({ userId: session.userId, text });
+    // Lampirkan fighter pengirim supaya pesan baru langsung tampil
+    // dengan PP + nama fighter (tanpa menunggu polling berikutnya).
+    const fighters = await fighterByUserId([session.userId]);
     return ok(
       {
         message: {
           id: message._id.toString(),
+          userId: session.userId,
           text: message.text,
           createdAt: message.createdAt.toISOString(),
           username: session.username,
+          fighter: fighters.get(session.userId) ?? null,
         },
       },
       201,
