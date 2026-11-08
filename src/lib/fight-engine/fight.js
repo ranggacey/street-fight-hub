@@ -41,11 +41,17 @@ function dmgOf(atk) {
   return 0;
 }
 
-// Pilih outcome: hit 55% / block 15% / dodge 30% (slip/duck/roll/sidestep/parry/flinch).
+// Pilih outcome (2026-11-08, perintah user "full bak bikbuk": guard 10%,
+// hindar 10%, sisanya 80% kena): hit 80% / block 10% / dodge 10%
+// (slip/duck/roll/sidestep/parry/flinch). Dulu hit 55% / block 15% /
+// dodge 30% — tapi steering mengubah sebagian besar hit jadi slip
+// (rate efektif terukur: hit 13,6% / block 17,3% / dodge 69,1%),
+// karena damage lama terlalu besar. Dengan damage baru (x0,25) steering
+// baru mengikat di akhir fight, jadi rate efektif mendekati rate ini.
 function pickOutcome(rng) {
   const r = rng();
-  if (r < 0.55) return 'hit';
-  if (r < 0.70) return 'block';
+  if (r < 0.80) return 'hit';
+  if (r < 0.90) return 'block';
   const dodges = ['slip', 'slip', 'duck', 'roll', 'sidestep', 'parry', 'flinch'];
   return dodges[Math.floor(rng() * dodges.length)];
 }
@@ -200,6 +206,16 @@ export const BODY_LEN_PX = 166;
 export const GUARD_GAP_PX = 250;
 export const RING_CENTER_X = 640;
 export const START_X = { R: 440, B: 840 };
+// Batas DALAM ring untuk posisi petarung (2026-11-08): tali ring di
+// x 330-950 (film.js drawArena, world coords). Petarung di-clamp ke
+// [380, 900] supaya badan (pusat ±~50px) tidak melewati tali — dulu
+// clamp [80, 1200] membiarkan petarung terdorong sampai ke tepi/keluar
+// tali (terukur seed 657095: 16,9% sampel di luar tali, xR sampai 155)
+// dan kamera mengikutinya sehingga lingkaran lantai ring menyapu layar
+// seperti busur raksasa ("sampai keluar luar"). Senjata kayu di x 380
+// (kiri) / 900 (kanan) tetap terjangkau persis di batas clamp.
+export const RING_X_MIN = 380;
+export const RING_X_MAX = 900;
 const LUNGE_SPEED = 450; // px/dtk — step-in/lunge eksplosif
 const RETURN_SPEED = 250; // px/dtk per sisi — kembali ke jarak jaga.
 // 250 (bukan 200): sesudah approach diprioritaskan + PRE_APPROACH 0,30,
@@ -460,7 +476,7 @@ export function buildPositions(fight) {
       const vicX = xOf(vic);
       const dir = other === 'R' ? -1 : 1;
       const tx = vicX + dir * GUARD_GAP_PX;
-      moveTo(other, _clamp(tx, 80, 1200), RETURN_SPEED);
+      moveTo(other, _clamp(tx, RING_X_MIN, RING_X_MAX), RETURN_SPEED);
     } else if (wpActive) {
       phase = 'pickup';
       const picker = weapon.who, other = otherOf(picker);
@@ -492,7 +508,7 @@ export function buildPositions(fight) {
       ghostX[ghostPending.idx] = xOf(otherOf(w.by));
       ghostPending = null;
     }
-    xR = _clamp(xR, 80, 1200); xB = _clamp(xB, 80, 1200);
+    xR = _clamp(xR, RING_X_MIN, RING_X_MAX); xB = _clamp(xB, RING_X_MIN, RING_X_MAX);
     samples.push({
       t: Math.round(s * 1000) / 1000,
       xR: Math.round(xR * 10) / 10, xB: Math.round(xB * 10) / 10,
@@ -576,14 +592,49 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     }
   }
 
-  const koT = result === 'ko' ? duration - 1.2 - rng() * 1.2 : 99;
+  let koT = result === 'ko' ? duration - 1.2 - rng() * 1.2 : 99;
   const attacks = [], knockdowns = [], cheers = [], retreats = [], clinches = [];
   const hp = { R: 100, B: 100 };
 
-  // Knockdown tengah fight (sekali, 50%): korban bangkit lagi.
-  const midKdT = 8 + rng() * Math.max(4, duration * 0.45);
-  let midKdDone = false;
-  let midKdVictim = rng() < 0.5 ? 'R' : 'B';
+  // Helper finisher KO (2026-11-08) — dipakai di loop DAN sebagai fallback
+  // sesudah loop. Power TIDAK ada batas atas: damage finisher harus =
+  // sisa HP pecundang persis (KO bersih, HP pecundang 0); power besar
+  // tidak merusak visual karena film.js triggerAttack men-clamp power
+  // visual ke 2,2. koT di-update ke waktu finisher sebenarnya (dipakai
+  // keyMoments + teks KO — harus sama dengan attacks[].t finisher).
+  let finisherPushed = false;
+  const pushFinisher = () => {
+    const wf = fighters[winner];
+    const hasStick = weapon && weapon.who === winner && koT > weapon.t + 3.0;
+    let finKind = 'finisher';
+    if (hasStick) finKind = 'stickchop';
+    else if (normalizeStyle(wf.style) === 'muaythai') finKind = 'flyknee';
+    const finBase = DMG_BASE[finKind] ?? 5;
+    const power = Math.max(1.4, hp[loser] / (finBase * 1.5));
+    // Finisher tidak boleh terlalu rapat setelah serangan sebelumnya
+    // (kadens normal >= 0,55 dtk): kalau terlalu rapat, defender masih
+    // dalam reaksi slip serangan sebelumnya (kepala menjauh ~55px) saat
+    // finisher mendarat dan tangan tidak sampai (terukur: finisher KO
+    // 0,31 dtk setelah slip meleset 103px).
+    const prev = attacks.length ? attacks[attacks.length - 1] : null;
+    let finT = Math.max(koT, prev ? prev.t + 0.55 : koT);
+    // Kalau serangan terakhir menjatuhkan korban, finisher menunggu korban
+    // bangun (getup di prev.t+0,4+1,8) + jeda 0,55 — kalau tidak, finisher
+    // menghantam korban yang masih terbaring (triggerAttack mengabaikan
+    // reaksi korban yang down). Di-clamp ke dalam durasi fight.
+    if (prev && prev.knockdown) finT = Math.max(finT, prev.t + 0.4 + 1.8 + 0.55);
+    finT = Math.min(finT, duration - 0.1);
+    attacks.push({ t: finT, by: winner, kind: finKind, target: 'head', outcome: 'hit', power, knockdown: true });
+    knockdowns.push({ who: loser, t: finT + 0.4, getupStart: null });
+    cheers.push({ t: finT, dur: 1.6, power: 1 });
+    hp[loser] = Math.max(0, hp[loser] - dmgOf({ kind: finKind, outcome: 'hit', power }));
+    koT = finT;
+    finisherPushed = true;
+  };
+
+  // (Knockdown tengah fight lama — sekali per fight, 50% — DIHAPUS
+  // 2026-11-08, diganti knockdown 10% per hit yang kena, diundi setelah
+  // steering di bawah.)
 
   cheers.push({ t: 0.8, dur: 1.2, power: 0.5 });
 
@@ -600,24 +651,7 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     }
     // --- Finisher KO (serangan terakhir) ---
     if (result === 'ko' && t >= koT - 0.3) {
-      const wf = fighters[winner];
-      const hasStick = weapon && weapon.who === winner && koT > weapon.t + 3.0;
-      let finKind = 'finisher';
-      if (hasStick) finKind = 'stickchop';
-      else if (normalizeStyle(wf.style) === 'muaythai') finKind = 'flyknee';
-      const finBase = DMG_BASE[finKind] ?? 20;
-      const power = Math.min(2.2, Math.max(1.4, hp[loser] / (finBase * 1.5)));
-      // Finisher tidak boleh terlalu rapat setelah serangan sebelumnya
-      // (kadens normal >= 0,55 dtk): kalau terlalu rapat, defender masih
-      // dalam reaksi slip serangan sebelumnya (kepala menjauh ~55px) saat
-      // finisher mendarat dan tangan tidak sampai (terukur: finisher KO
-      // 0,31 dtk setelah slip meleset 103px).
-      const prevT = attacks.length ? attacks[attacks.length - 1].t : 0;
-      const finT = Math.max(koT, prevT + 0.55);
-      attacks.push({ t: finT, by: winner, kind: finKind, target: 'head', outcome: 'hit', power, knockdown: true });
-      knockdowns.push({ who: loser, t: finT + 0.4, getupStart: null });
-      cheers.push({ t: finT, dur: 1.6, power: 1 });
-      hp[loser] = Math.max(0, hp[loser] - dmgOf({ kind: finKind, outcome: 'hit', power }));
+      pushFinisher();
       break;
     }
     // --- Clinch sesekali (gulat / muay thai / judo / kudo) ---
@@ -663,16 +697,9 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     // guard sudah 11px dari kepala hantu, jadi flick feint menembus
     // kepala lawan. Feint tetap ada di techniques.js untuk pemakaian
     // manual nanti.
-    // --- Knockdown tengah fight ---
-    let knockdown = false;
-    if (!midKdDone && t >= midKdT && move.kind !== 'feint') {
-      midKdDone = true;
-      if (rng() < 0.5) midKdVictim = def; // korban = yang diserang sekarang
-      knockdown = by !== midKdVictim; // serangan ini yang menjatuhkan
-      if (knockdown && (move.kind === 'takedown' || move.kind === 'sweep' || move.kind === 'finisher')) {
-        // takedown/sweep sudah cocok sebagai bantingan
-      }
-    }
+    // (Knockdown tengah fight lama — sekali per fight, 50% — DIHAPUS
+    // 2026-11-08, diganti knockdown 10% per hit yang kena, diundi setelah
+    // steering di bawah.)
     // --- Outcome + HP steering ---
     let outcome = pickOutcome(rng);
     // Ginga = stance, bukan serangan (seperti feint): outcome 'feint'
@@ -711,10 +738,9 @@ export function buildFight(left, right, duration, seed, opts = {}) {
         //   margin kecil tapi kedua HP bisa sama-sama terkikis ke 0);
         // (2) selisih |hpR − hpB| ≤ DRAW_MARGIN. Hit yang melanggar
         //   salah satunya dilunakkan jadi block (kalau chip-nya masih
-        //   lolos kedua penjaga) atau slip. Batas 12 ≈ satu pukulan
-        //   keras: cukup longgar supaya pukulan BISA mendarat (batas 6
-        //   lebih kecil dari damage jab terkecil 7,2 — semua hit akan
-        //   selalu dilunakkan), cukup ketat supaya selisih akhir kecil.
+        //   lolos kedua penjaga) atau slip. Batas 12 ≈ dua pukulan keras
+        //   (damage baru x0,25: hit terbesar ~6,8): cukup longgar supaya
+        //   pukulan BISA mendarat, cukup ketat supaya selisih akhir kecil.
         //   Selisih sisa dibereskan di akhir dengan menyesuaikan power
         //   beberapa serangan terakhir — lihat "Penyeimbang draw".
         const margin = hp.R - hp.B; // > 0 = R unggul
@@ -723,29 +749,70 @@ export function buildFight(left, right, duration, seed, opts = {}) {
         const okHit = newHp >= 12 && Math.abs(newMargin) <= DRAW_MARGIN;
         const okBlock = (hp[def] - blockDmg) >= 12 && Math.abs(marginAfter(blockDmg)) <= DRAW_MARGIN;
         if (!okHit) outcome = okBlock ? 'block' : 'slip';
-      } else if (result === 'decision') {
-        // Pecundang tidak boleh KO; pemenang harus tetap unggul (margin >= 6).
-        // Lantai pecundang di fase 2 ADAPTIF: kalau pemenang sudah sekarat
-        // (mis. 8 HP), lantai 10 akan mengunci margin negatif — turunkan
-        // lantai ke (HP pemenang - 6), min 1, supaya margin bisa pulih
-        // lewat damage (tanpa fix-up akhir yang membalik pemimpin).
-        const loserFloor = hard ? Math.max(1, Math.min(10, hp[winner] - 6)) : 10;
-        if (def === loser && newHp < loserFloor) outcome = 'slip';
-        else if (def === winner && newHp < hp[loser] + 6) {
-          // Fase 1: block saja (margin boleh turun — bisa pulih, ini fase
-          // comeback). Fase 2: block hanya kalau chip-nya masih menjaga
-          // margin; kalau tidak, slip (0 damage).
-          outcome = (hard && hp[winner] - blockDmg < hp[loser] + 6) ? 'slip' : 'block';
-        }
       } else {
-        // Jalur KO: pecundang tidak boleh 0 sebelum finisher; pemenang jangan terlalu sekarat.
-        // Lantai pemenang 15 berlaku untuk hit DAN block, di KEDUA fase:
-        // dulu hanya hit yang dicek — chip block lolos dan menolkan
-        // pemenang selama 60 dtk (5 hit + 11 block = 102 damage, seed 8/72).
-        if (def === loser && newHp < 12) outcome = 'slip';
-        else if (def === winner && newHp < 15) outcome = (hp[winner] - blockDmg < 15) ? 'slip' : 'block';
+        // Lantai LUNAK (2026-11-08, decision + KO): hit yang melewati
+        // lantai TIDAK lagi diubah jadi slip/block — power-nya DISKALA
+        // supaya damage-nya tepat mendaratkan HP di lantai. Pukulan tetap
+        // KENA (terlihat menghantam, damage tercatat), hanya lebih pelan.
+        // Ini yang membuat rate hit efektif mendekati 80%: lantai KERAS
+        // dulu mengubah ~19% serangan jadi slip di fase 2 (terukur rate
+        // hit 62%, dodge 22% — jendela 50-60 dtk cuma 38% hit). Slip
+        // hanya kalau defender SUDAH di lantai (tidak ada ruang damage
+        // tersisa). Block yang melewati lantai jadi slip (chip 0,5).
+        // Batas trail fase 1 decision = 15 HP (pemenang boleh tertinggal
+        // sampai 15 — momen balik; defisit lebih besar tidak bisa
+        // dipulihkan fase 2 dan fix-up akhir jalan, terukur 8/165).
+        // Fase 2 decision: pemenang harus unggul >= 6. Lantai pecundang
+        // decision fase 2 ADAPTIF: kalau pemenang sudah sekarat (mis.
+        // 8 HP), lantai 10 akan mengunci margin negatif — turunkan lantai
+        // ke (HP pemenang - 6), min 1. KO: pecundang lantai 12 (tidak
+        // boleh 0 sebelum finisher), pemenang lantai 15.
+        let minHp;
+        if (result === 'decision') {
+          const loserFloor = hard ? Math.max(1, Math.min(10, hp[winner] - 6)) : 10;
+          const minMargin = hard ? 6 : -15;
+          minHp = def === loser ? loserFloor : Math.max(10, hp[loser] + minMargin);
+        } else { // ko
+          minHp = def === loser ? 12 : 15;
+        }
+        if (newHp < minHp) {
+          if (outcome === 'hit') {
+            const allowed = hp[def] - minHp;
+            // Lantai keras 2: di bawah itu hit jadi slip (jangan KO).
+            // Kalau sudah di lantai, hit tetap KENA sebagai glancing blow
+            // (damage min = chip block 0,5) — HP merayap turun pelan,
+            // bukan membeku. Tanpa ini, begitu defender menyentuh lantai,
+            // semua hit berikutnya jadi slip dan rate dodge meledak di
+            // fase 2 (terukur 5,19/jendela 50-60 dtk).
+            if (hp[def] <= 2) outcome = 'slip';
+            else if (allowed <= 0.05) {
+              // Glancing dibatasi supaya tidak merusak hasil undian:
+              // pemenang harus tetap unggul >= 1 dari pecundang (tanpa
+              // batas, pemenang merayap di bawah pecundang saat pecundang
+              // sudah membeku di lantai keras 2 sementara pemenang terus
+              // kena glancing — fix-up akhir jalan, terukur 3/165);
+              // pecundang tidak boleh di bawah lantai keras 2.
+              const cap = def === winner ? hp[winner] - hp[loser] - 1 : hp[loser] - 2;
+              if (cap <= 0) outcome = 'slip';
+              else power = power * (Math.min(BLOCK_CHIP, cap) / d);
+            }
+            else power = power * (allowed / d);
+          } else if (outcome === 'block') {
+            outcome = 'slip';
+          }
+        }
       }
     }
+    // --- Knockdown: 10% per pukulan/tendangan yang KENA (2026-11-08,
+    // perintah user "rate jatoh 10%"). Diundi SETELAH steering, supaya
+    // hanya hit yang benar-benar mendarat yang bisa menjatuhkan (hit
+    // yang dilunakkan jadi block/slip tidak ikut diundi). Menggantikan
+    // knockdown tengah fight lama (sekali per fight, 50%).
+    // Dampak waktu: tiap knockdown menjeda ~3,6 dtk (jatuh 0,4 +
+    // terbaring 1,8 + bangun 1,4) — dengan ~5 knockdown/fight, ~18 dtk
+    // jeda tersebar di 60 dtk; hit tetap mendarat di semua jendela.
+    let knockdown = false;
+    if (outcome === 'hit' && rng() < 0.10) knockdown = true;
     const atk = { t, by, kind: move.kind, target: move.target || 'head', outcome, power };
     if (knockdown && outcome === 'hit') {
       atk.knockdown = true;
@@ -774,6 +841,13 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     // dtk setelah bangun meleset 50px karena masih mode getup).
     if (atk.knockdown) t = Math.max(t, atk.t + 0.4 + 1.8 + 1.4);
   }
+
+  // Fallback finisher (2026-11-08): knockdown di akhir fight bisa
+  // melompati jendela finisher — lompatan t (jatuh 0,4 + terbaring 1,8 +
+  // bangun 1,4) melewati duration-0,6 sehingga loop keluar tanpa finisher
+  // (terukur: 6/97 KO tanpa finisher, pecundang hidup). Tanpa ini, hasil
+  // KO tidak punya pukulan KO dan HP pecundang > 0.
+  if (result === 'ko' && !finisherPushed) pushFinisher();
 
   // Pastikan decision punya pemenang HP (kalau seri karena steering, beri
   // satu pukulan kecil ke pecundang di akhir — tidak mungkin terjadi karena

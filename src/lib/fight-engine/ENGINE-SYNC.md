@@ -7,14 +7,16 @@ kontrak embed v1 (`EMBED-CONTRACT.md`).
 **Disalin:** 2026-11-07 (Fase 1 integrasi game Hub); **disalin ulang 2026-11-08**
 (perubahan Agen A: jarak gelud + lotere hasil baru — lihat bawah);
 **disalin ulang 2026-11-08 (Agen F: perbaikan `buildPositions` — lihat bawah).**
+**Disalin ulang 2026-11-08 (damage x0,25 + rate 80/10/10 + knockdown 10% +
+clamp ring — lihat bawah).**
 **Checksum md5 saat penyalinan** (verifikasi dengan `md5sum`):
 
 | File | md5 |
 |---|---|
-| `fight.js` | `25d53a66cea4c2aa5382aa0163359b42` |
-| `moves.js` | `e51b601c00717a6cd88ef6ae2546d447` |
-| `techniques.js` | `88b100f78635920e4f0e663eb8c90f38` |
-| `damage.js` | `8675ae2d39794709d945d385a3ee00e8` |
+| `fight.js` | `4b32072497a2fe712a8775ddc061c179` |
+| `moves.js` | `543cb984757d51d816579b4c1e1ce93f` |
+| `techniques.js` | `62618f9a409048d60f82be4ef7c728d2` |
+| `damage.js` | `debb3b2ea36fbbe88cdd1ef8f9813533` |
 
 ## Perubahan 2026-11-08 (Agen A — jarak gelud + lotere hasil)
 
@@ -79,6 +81,40 @@ score/koTime — TIDAK berubah; `buildPositions` murni posisi, tanpa rng):
   kini terkirim sebagai `method: 'draw'`, `winner: null` (dulu lolos
   sebagai `'decision'`). `verify.ts` Hub sudah menanganinya (lihat
   catatan di atas) — tidak ada perubahan verifikasi yang dibutuhkan.
+
+## Perubahan 2026-11-08 (damage x0,25 + rate 80/10/10 + knockdown 10% + clamp ring)
+
+- **Damage x0,25:** `DMG_BASE` semua kind dikali 0,25 (jab 2, cross 2,5,
+  hook 3, uppercut 3,5, headkick 4,5, finisher 5, dst); `BLOCK_CHIP` 2
+  jadi 0,5. `moves.js` disinkronkan ke `DMG_BASE` baru. HP tidak lagi
+  hampir habis di detik 30-40 (terukur 300 fight: HP terendah mean 45
+  di 30 dtk, 33 di 40 dtk — dulu 16 di 30 dtk).
+- **Rate outcome:** `pickOutcome` jadi hit 80% / block 10% / dodge 10%
+  (dulu 55/15/30). Terukur 300 fight: hit 73,5% / block 10,1% / dodge
+  16,5% — dodge di atas target 10% karena steering penjamin hasil
+  undian harus mengubah sebagian hit di akhir fight (lantai lunak +
+  glancing, lihat bawah).
+- **Lantai lunak (soft floor):** hit yang melewati lantai HP tidak lagi
+  diubah jadi slip — power-nya diskala supaya damage tepat mendarat di
+  lantai (pukulan tetap kena, hanya lebih pelan). Kalau defender sudah
+  di lantai, hit jadi glancing blow (damage min = chip block 0,5,
+  dibatasi supaya pemenang tetap unggul >= 1 dan pecundang >= 2).
+  Ini yang menghilangkan zona mati (terukur: tiap jendela 10 dtk 7-8
+  hit, dulu 0,14-0,39 di jendela 30-60 dtk).
+- **Knockdown 10% per hit kena:** knockdown tengah fight (sekali per
+  fight, 50%) dihapus; tiap hit yang kena mengundi knockdown 10%
+  (diundi setelah steering). Terukur 4,7 knockdown/fight.
+- **Finisher KO:** diekstrak ke helper + fallback pasca-loop (knockdown
+  di akhir fight bisa melompati jendela finisher — dulu 6/97 KO tanpa
+  finisher, pecundang hidup). Power finisher tanpa batas atas (damage =
+  sisa HP pecundang persis). Terukur: KO pecundang hidup 0, guard
+  decision 0.
+- **Clamp ring:** `RING_X_MIN = 380`, `RING_X_MAX = 900` (baru, diekspor
+  dari `fight.js`); posisi petarung di-clamp ke [380,900] (dulu
+  [80,1200], melewati tali ring 330-950). Terukur 0,0% sampel di luar
+  tali. Arena `film.js` juga men-clamp power visual finisher ke 2,2
+  (bukan file engine — tidak disalin ke Hub; render Arena saja).
+- **Lotere, pacing CF2, aturan gelar/rating TIDAK berubah.**
 
 ## Aturan
 
