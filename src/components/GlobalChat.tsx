@@ -5,6 +5,7 @@ import Link from "next/link";
 import { clientApi } from "@/components/api";
 import type { ChatMessageItem, SessionUser } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
+import FightLoader from "@/components/FightLoader";
 import Button from "@/components/Button";
 import ChatMessageRow from "@/components/ChatMessageRow";
 
@@ -43,6 +44,10 @@ export default function GlobalChat({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
+  // Loading awal (hanya fetch pertama): tampilkan GIF stickman gelud
+  // sampai daftar pesan pertama selesai dimuat — polling 5 detik
+  // berikutnya TIDAK memunculkan loader lagi.
+  const [loading, setLoading] = useState(true);
   const [newCount, setNewCount] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
@@ -58,6 +63,9 @@ export default function GlobalChat({
     const res = await clientApi<{ messages: ChatMessageItem[] }>(
       "/api/chat/messages?limit=50",
     );
+    // Fetch pertama selesai (sukses/gagal) -> loader awal hilang.
+    // Set di sini supaya loader tidak nempel kalau fetch gagal.
+    setLoading(false);
     if (!res.ok) {
       setLoadError(res.error.message);
       return;
@@ -167,7 +175,9 @@ export default function GlobalChat({
           aria-live="polite"
           aria-label="Pesan obrolan global"
         >
-          {loadError ? (
+          {loading ? (
+            <FightLoader size="sm" label="Memuat obrolan…" />
+          ) : loadError ? (
             <div role="alert" className="rounded-xl border border-red-brand/40 bg-red-brand/10 px-4 py-4 text-center">
               <p className="text-sm font-semibold text-red-400">
                 Chat belum bisa dimuat.
