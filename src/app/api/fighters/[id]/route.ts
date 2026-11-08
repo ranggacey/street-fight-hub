@@ -218,6 +218,15 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       delete patch.top.colors;
     }
 
+    // Aksesoris digabung per bagian (pola yang sama dengan colors).
+    const accessoriesPatch = patch.top.accessories;
+    if (accessoriesPatch) {
+      for (const [key, value] of Object.entries(accessoriesPatch)) {
+        fighter.set(`accessories.${key}`, value);
+      }
+      delete patch.top.accessories;
+    }
+
     Object.assign(fighter, patch.top);
     await fighter.save();
 

@@ -40,6 +40,18 @@ export interface EngineFighter {
     headband: string;
     weapon: string;
   };
+  /** Aksesoris per bagian (katalog Hub) — visual saja, bukan gameplay. */
+  accessories?: {
+    head: string;
+    hands: string;
+    feet: string;
+    body: string;
+    belt: string;
+    weapon: string;
+  };
+  /** Pemetaan legacy dari varian tangan/kaki (untuk arena). */
+  gloves?: { type: string };
+  shoes?: { model: string };
   signatureMove?: string;
   tempo?: 'agresif' | 'seimbang' | 'bertahan';
   weapon?: { kind: string; hand?: string; color?: string };

@@ -11,13 +11,15 @@ import {
   styleLabel,
   TEMPO_OPTIONS,
 } from "@/components/api";
-import { signatureMoveOptions } from "@/lib/game/engine-config";
+import { signatureMoveOptions, resolveFighterAccessories } from "@/lib/game/engine-config";
+import type { AccessoryPart, FighterAccessories } from "@/lib/game/accessories";
+import { accessoryLabel } from "@/lib/game/accessories";
 import type { Fighter, SessionUser } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
 import FighterPreview, {
+  AccessoryIcon,
   COLOR_PRESETS,
-  ItemIcon,
-  type ColorPart,
+  accessoryOptions,
 } from "@/components/FighterPreview";
 import { Input, Select, Textarea } from "@/components/Input";
 import Button, { ButtonLink } from "@/components/Button";
@@ -45,29 +47,51 @@ const DEFAULT_COLORS: ColorsState = {
   weapon: "#8B5E34",
 };
 
-const COLOR_FIELDS: { key: keyof ColorsState; label: string; noneable: boolean }[] = [
-  { key: "body", label: "Badan", noneable: false },
-  { key: "gloves", label: "Sarung tangan", noneable: false },
-  { key: "shoes", label: "Sepatu", noneable: false },
-  { key: "belt", label: "Sabuk", noneable: true },
-  { key: "headband", label: "Ikat kepala", noneable: true },
-  { key: "weapon", label: "Senjata", noneable: true },
+type AccessoriesState = FighterAccessories;
+
+const DEFAULT_ACCESSORIES: AccessoriesState = {
+  head: "none",
+  hands: "boxing",
+  feet: "sneakers",
+  body: "none",
+  belt: "none",
+  weapon: "none",
+};
+
+/**
+ * Satu bagian tubuh = satu pemilih aksesoris + kontrol warnanya.
+ * `colorKey` = field warna bagian itu; `noneable` = boleh "tidak dipakai";
+ * `enableColor` = warna yang dipasang saat varian dipilih dari keadaan
+ * tidak dipakai; `legacyDefault` = varian lama bagian itu (dipakai saat
+ * warna dinyalakan lagi dari "Tidak pakai").
+ */
+const ACCESSORY_FIELDS: {
+  part: AccessoryPart;
+  colorKey: keyof ColorsState;
+  label: string;
+  noneable: boolean;
+  enableColor: string;
+  legacyDefault: string;
+}[] = [
+  { part: "head", colorKey: "headband", label: "Aksesoris kepala", noneable: true, enableColor: "#8B5E34", legacyDefault: "headband" },
+  { part: "hands", colorKey: "gloves", label: "Aksesoris tangan", noneable: false, enableColor: "#141210", legacyDefault: "boxing" },
+  { part: "feet", colorKey: "shoes", label: "Aksesoris kaki", noneable: false, enableColor: "#FBF8F1", legacyDefault: "sneakers" },
+  { part: "body", colorKey: "body", label: "Aksesoris badan", noneable: false, enableColor: "#f97316", legacyDefault: "none" },
+  { part: "belt", colorKey: "belt", label: "Sabuk", noneable: true, enableColor: "#141210", legacyDefault: "belt" },
+  { part: "weapon", colorKey: "weapon", label: "Senjata", noneable: true, enableColor: "#8B5E34", legacyDefault: "stick" },
 ];
 
 /**
- * Pemilih warna satu item secara VISUAL: ikon item + grid banyak
- * pilihan warna preset yang bisa di-tap + color picker RGB bebas +
- * kolom hex + toggle Pakai/Tidak pakai (untuk item yang boleh kosong).
- * Pemilihan dilakukan dengan men-tap pilihan di dalam picker.
+ * Kontrol warna satu item: grid warna preset yang bisa di-tap +
+ * color picker RGB bebas + kolom hex + toggle Pakai/Tidak pakai
+ * (untuk item yang boleh kosong). Dipakai di dalam AccessoryField.
  */
-function ColorField({
-  part,
+function ColorControls({
   label,
   value,
   noneable,
   onChange,
 }: {
-  part: ColorPart;
   label: string;
   value: string;
   noneable: boolean;
@@ -76,21 +100,7 @@ function ColorField({
   const isNone = value === "none";
   const selected = isNone ? "" : value.toLowerCase();
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      {/* Baris item: ikon + nama + nilai saat ini */}
-      <div className="flex items-center gap-2.5">
-        <ItemIcon part={part} color={value} />
-        <span className="min-w-0 flex-1 text-sm font-semibold text-paper">
-          {label}
-        </span>
-        <span
-          className="shrink-0 rounded-md border border-white/15 bg-white/5 px-2 py-1 font-mono text-[11px] text-paper-mute"
-          aria-label={`Warna ${label} saat ini: ${isNone ? "tidak dipakai" : value}`}
-        >
-          {isNone ? "tidak dipakai" : value}
-        </span>
-      </div>
-
+    <div>
       {/* Grid pilihan warna preset — tap untuk memilih */}
       <div
         className="mt-3 flex flex-wrap gap-2"
@@ -158,6 +168,89 @@ function ColorField({
   );
 }
 
+/**
+ * Pemilih visual satu bagian tubuh: tap varian aksesoris di grid
+ * (ikon + nama, yang aktif ditandai cincin amber), lalu atur warna
+ * bagian itu di bawahnya. Preview di atas form berubah langsung.
+ */
+function AccessoryField({
+  part,
+  label,
+  variant,
+  colorValue,
+  noneable,
+  onVariantChange,
+  onColorChange,
+}: {
+  part: AccessoryPart;
+  label: string;
+  variant: string;
+  colorValue: string;
+  noneable: boolean;
+  onVariantChange: (v: string) => void;
+  onColorChange: (v: string) => void;
+}) {
+  const isNone = colorValue === "none";
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+      {/* Baris item: ikon varian aktif + nama bagian + varian saat ini */}
+      <div className="flex items-center gap-2.5">
+        <AccessoryIcon part={part} variant={variant} color={colorValue} />
+        <span className="min-w-0 flex-1 text-sm font-semibold text-paper">
+          {label}
+        </span>
+        <span
+          className="shrink-0 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[11px] text-paper-mute"
+          aria-label={`${label} saat ini: ${accessoryLabel(part, variant)}${isNone ? ", tidak dipakai" : `, ${colorValue}`}`}
+        >
+          {accessoryLabel(part, variant)}
+        </span>
+      </div>
+
+      {/* Grid pilihan aksesoris — tap untuk memilih */}
+      <div
+        className="mt-3 grid grid-cols-3 gap-2"
+        role="group"
+        aria-label={`Pilihan ${label}`}
+      >
+        {accessoryOptions(part).map((opt) => {
+          const active = variant === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onVariantChange(opt.id)}
+              aria-label={`${label}: ${opt.label}`}
+              aria-pressed={active}
+              title={opt.label}
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-amber-brand ${
+                active
+                  ? "border-amber-brand bg-amber-brand/15 ring-2 ring-amber-brand"
+                  : "border-white/15 bg-white/[0.03] hover:border-white/40"
+              }`}
+            >
+              <AccessoryIcon part={part} variant={opt.id} color={colorValue} />
+              <span
+                className={`text-[11px] leading-tight ${active ? "font-semibold text-paper" : "text-paper-mute"}`}
+              >
+                {opt.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Warna bagian ini */}
+      <ColorControls
+        label={label}
+        value={colorValue}
+        noneable={noneable}
+        onChange={onColorChange}
+      />
+    </div>
+  );
+}
+
 export default function FighterSayaForm() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -176,6 +269,7 @@ export default function FighterSayaForm() {
   const [signatureMove, setSignatureMove] = useState("");
   const [tempo, setTempo] = useState("seimbang");
   const [colors, setColors] = useState<ColorsState>(DEFAULT_COLORS);
+  const [accessories, setAccessories] = useState<AccessoriesState>(DEFAULT_ACCESSORIES);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
@@ -199,6 +293,40 @@ export default function FighterSayaForm() {
       headband: f.colors?.headband ?? DEFAULT_COLORS.headband,
       weapon: f.colors?.weapon ?? DEFAULT_COLORS.weapon,
     });
+    // Aksesoris tersimpan; fighter lama tanpa accessories mendapat
+    // default turunan warna (headband/sabuk/senjata terpasang dsb).
+    setAccessories(
+      resolveFighterAccessories({
+        displayName: f.displayName,
+        style: f.style,
+        colors: f.colors,
+        accessories: f.accessories,
+      }),
+    );
+  };
+
+  /** Ganti varian satu bagian; warna disinkronkan (none <-> 'none'). */
+  const changeAccessory = (part: AccessoryPart, next: string) => {
+    const field = ACCESSORY_FIELDS.find((f) => f.part === part);
+    if (!field) return;
+    setAccessories((a) => ({ ...a, [part]: next }));
+    if (next === "none" && field.noneable) {
+      setColors((c) => ({ ...c, [field.colorKey]: "none" }));
+    } else if (next !== "none" && colors[field.colorKey] === "none") {
+      setColors((c) => ({ ...c, [field.colorKey]: field.enableColor }));
+    }
+  };
+
+  /** Ganti warna satu bagian; varian disinkronkan (none <-> 'none'). */
+  const changeAccessoryColor = (part: AccessoryPart, v: string) => {
+    const field = ACCESSORY_FIELDS.find((f) => f.part === part);
+    if (!field) return;
+    setColors((c) => ({ ...c, [field.colorKey]: v }));
+    if (v === "none" && field.noneable) {
+      setAccessories((a) => ({ ...a, [part]: "none" }));
+    } else if (v !== "none" && accessories[part] === "none") {
+      setAccessories((a) => ({ ...a, [part]: field.legacyDefault }));
+    }
   };
 
   useEffect(() => {
@@ -277,6 +405,7 @@ export default function FighterSayaForm() {
     signatureMove: signatureMove || null,
     tempo,
     colors,
+    accessories,
   });
 
   const createFighter = async (e: FormEvent) => {
@@ -456,29 +585,32 @@ export default function FighterSayaForm() {
           />
         </div>
 
-        {/* Warna RGB bebas per bagian — dengan preview karakter live */}
+        {/* Aksesoris + warna RGB bebas per bagian — dengan preview karakter live */}
         <fieldset>
           <legend className="mb-1.5 block text-sm font-semibold text-paper">
-            Warna Fighter (RGB bebas — tampil di arena)
+            Aksesoris Fighter (tampil di arena)
           </legend>
           <p className="mb-3 text-xs text-paper-mute">
-            Tap salah satu warna di tiap item untuk memilihnya, atau atur
-            sendiri lewat color picker dan kode hex (#RRGGBB). Preview di
-            bawah berubah langsung. Sabuk, ikat kepala, dan senjata boleh
-            tidak dipakai.
+            Tap salah satu aksesoris di tiap bagian tubuh untuk memilihnya,
+            lalu atur warnanya di bawahnya (tap warna preset, atau atur
+            sendiri lewat color picker dan kode hex #RRGGBB). Preview di
+            bawah berubah langsung. Sabuk, aksesoris kepala, dan senjata
+            boleh tidak dipakai.
           </p>
           <div className="mb-4">
-            <FighterPreview colors={colors} name={displayName} />
+            <FighterPreview colors={colors} accessories={accessories} name={displayName} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            {COLOR_FIELDS.map((f) => (
-              <ColorField
-                key={f.key}
-                part={f.key}
+            {ACCESSORY_FIELDS.map((f) => (
+              <AccessoryField
+                key={f.part}
+                part={f.part}
                 label={f.label}
-                value={colors[f.key]}
+                variant={accessories[f.part]}
+                colorValue={colors[f.colorKey]}
                 noneable={f.noneable}
-                onChange={(v) => setColors((c) => ({ ...c, [f.key]: v }))}
+                onVariantChange={(v) => changeAccessory(f.part, v)}
+                onColorChange={(v) => changeAccessoryColor(f.part, v)}
               />
             ))}
           </div>
@@ -615,6 +747,46 @@ export default function FighterSayaForm() {
                       );
                     },
                   )}
+                </div>
+                {/* Aksesoris terpasang (fighter lama: default turunan warna) */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-paper-mute">
+                    Aksesoris:
+                  </span>
+                  {(() => {
+                    const acc = resolveFighterAccessories({
+                      displayName: fighter.displayName,
+                      style: fighter.style,
+                      colors: fighter.colors,
+                      accessories: fighter.accessories,
+                    });
+                    const parts = [
+                      { part: "head" as const, label: "Kepala" },
+                      { part: "hands" as const, label: "Tangan" },
+                      { part: "feet" as const, label: "Kaki" },
+                      { part: "body" as const, label: "Badan" },
+                      { part: "belt" as const, label: "Sabuk" },
+                      { part: "weapon" as const, label: "Senjata" },
+                    ];
+                    const items = parts
+                      .map(({ part, label }) => ({
+                        label,
+                        name: accessoryLabel(part, acc[part]),
+                      }))
+                      .filter((i) => !i.name.startsWith("Tanpa"));
+                    if (items.length === 0) {
+                      return (
+                        <span className="text-xs text-paper-mute">
+                          Tanpa aksesoris
+                        </span>
+                      );
+                    }
+                    return items.map((i) => (
+                      <Badge key={i.label} tone="neutral">
+                        {i.label}: {i.name}
+                      </Badge>
+                    ));
+                  })()}
                 </div>
                 {fighter.selfDescription ? (
                   <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-paper-dim">

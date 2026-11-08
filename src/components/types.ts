@@ -26,6 +26,10 @@ export type StyleKey =
 
 export type FighterTempo = "agresif" | "seimbang" | "bertahan";
 
+import type { FighterAccessories } from "@/lib/game/accessories";
+
+export type { FighterAccessories };
+
 export interface FighterColors {
   body: string;
   gloves: string;
@@ -91,6 +95,8 @@ export interface Fighter {
   signatureMove?: string | null;
   tempo?: FighterTempo;
   colors?: FighterColors;
+  /** Aksesoris per bagian (katalog Hub); kosong = fallback turunan warna. */
+  accessories?: FighterAccessories;
 }
 
 /** Ringkasan fighter seperti yang di-populate di bracket/match. */

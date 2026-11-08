@@ -8,6 +8,14 @@
  */
 import { STYLES, movesFor, normalizeStyle } from '../fight-engine/moves.js';
 import type { EngineFighter } from '../fight-engine/verify';
+import {
+  GLOVES_TYPE_MAP,
+  SHOES_MODEL_MAP,
+  resolveAccessories,
+  type FighterAccessories,
+} from './accessories';
+
+export type { FighterAccessories };
 
 export type Tempo = 'agresif' | 'seimbang' | 'bertahan';
 export const TEMPOS: Tempo[] = ['agresif', 'seimbang', 'bertahan'];
@@ -60,6 +68,8 @@ export interface FighterLike {
   signatureMove?: string | null;
   tempo?: string | null;
   colors?: Partial<FighterColors> | null;
+  /** Aksesoris tersimpan (partial) — kosong = fallback turunan warna. */
+  accessories?: Partial<FighterAccessories> | null;
 }
 
 /** Warna lengkap fighter (default per gaya + override tersimpan). */
@@ -76,19 +86,42 @@ export function resolveFighterColors(f: FighterLike): FighterColors {
 }
 
 /**
+ * Aksesoris lengkap fighter: pilihan tersimpan (partial) + fallback
+ * turunan warna untuk bagian yang belum dipilih (aturan katalog:
+ * headband/sabuk/senjata mengikuti apakah warnanya terpasang,
+ * tangan = boxing, kaki = sneakers, badan = tanpa baju).
+ * Fighter lama tanpa `accessories` mendapat default turunan ini.
+ */
+export function resolveFighterAccessories(f: FighterLike): FighterAccessories {
+  return resolveAccessories(f.accessories, {
+    headband: f.colors?.headband,
+    belt: f.colors?.belt,
+    weapon: f.colors?.weapon,
+  });
+}
+
+/**
  * Bangun objek fighter engine dari dokumen Fighter.
  * - `style`: Hub-enum apa adanya (arena yang memetakan).
  * - `weapon`: selalu `{ kind: 'none' }` — game Hub tanpa senjata kayu
  *   (event ambil kayu hanya preset khusus arena, dimatikan di Hub).
+ *   Aksesoris senjata HANYA visual (preview + arena render), move pool
+ *   engine tidak berubah.
+ * - `accessories`: hasil resolve (selalu lengkap 6 bagian).
+ * - `gloves`/`shoes`: pemetaan legacy dari varian tangan/kaki.
  * - `signatureMove`/`tempo`: hanya disertakan kalau valid/terisi.
  */
 export function toEngineFighter(f: FighterLike): EngineFighter {
   const colors = resolveFighterColors(f);
+  const accessories = resolveFighterAccessories(f);
   const out: EngineFighter = {
     name: f.displayName.slice(0, 18),
     color: colors.body,
     style: f.style,
     colors,
+    accessories,
+    gloves: { type: GLOVES_TYPE_MAP[accessories.hands] ?? 'boxing' },
+    shoes: { model: SHOES_MODEL_MAP[accessories.feet] ?? 'sneakers' },
     weapon: { kind: 'none', hand: 'right', color: colors.weapon },
   };
   if (f.signatureMove) out.signatureMove = f.signatureMove;

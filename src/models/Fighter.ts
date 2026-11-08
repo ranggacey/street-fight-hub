@@ -1,4 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
+import { ACCESSORY_IDS } from '../lib/game/accessories';
 
 // Persona AI DIHAPUS 2026-11-07 (perintah rangga — AI generate menggantung
 // 10 menit, user minta hapus). Fighter hanya punya identitas inti:
@@ -76,6 +77,20 @@ const fighterSchema = new Schema(
       belt: { type: String, default: 'none' },
       headband: { type: String, default: 'none' },
       weapon: { type: String, default: '#8B5E34' },
+    },
+    /**
+     * Aksesoris per bagian tubuh (katalog src/lib/game/accessories.ts).
+     * Semua opsional, TANPA default di skema — resolusi (fallback
+     * turunan warna) dilakukan di engine-config, jadi fighter lama
+     * tanpa field ini tetap mendapat varian yang benar.
+     */
+    accessories: {
+      head: { type: String, enum: ACCESSORY_IDS.head, default: undefined },
+      hands: { type: String, enum: ACCESSORY_IDS.hands, default: undefined },
+      feet: { type: String, enum: ACCESSORY_IDS.feet, default: undefined },
+      body: { type: String, enum: ACCESSORY_IDS.body, default: undefined },
+      belt: { type: String, enum: ACCESSORY_IDS.belt, default: undefined },
+      weapon: { type: String, enum: ACCESSORY_IDS.weapon, default: undefined },
     },
   },
   { timestamps: true },

@@ -1,5 +1,10 @@
 import { badRequest } from './http';
 import { isValidSignatureMove } from './game/engine-config';
+import {
+  ACCESSORY_CATALOG,
+  ACCESSORY_PARTS,
+  type AccessoryPart,
+} from './game/accessories';
 
 /**
  * Validasi server-side untuk semua input API.
@@ -98,6 +103,7 @@ export interface FighterGameFields {
   signatureMove: string | null;
   tempo: FighterTempo;
   colors: Record<string, string>;
+  accessories: Record<string, string>;
 }
 
 export interface FighterInput {
@@ -135,6 +141,38 @@ export function parseFighterColors(value: unknown): Record<string, string> {
     } else {
       throw badRequest(`Warna ${key} harus format hex #RRGGBB atau 'none'`);
     }
+  }
+  return out;
+}
+
+/**
+ * Validasi aksesoris per bagian (katalog src/lib/game/accessories.ts).
+ * Partial diizinkan (bagian yang tidak dikirim tidak diubah); key tak
+ * dikenal dan ID tak dikenal DITOLAK dengan pesan yang menyebut
+ * pilihannya — bukan diam-diam diganti default.
+ */
+export function parseFighterAccessories(value: unknown): Record<string, string> {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw badRequest('accessories harus berupa objek');
+  }
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!(ACCESSORY_PARTS as readonly string[]).includes(key)) {
+      throw badRequest(`Bagian aksesoris tidak dikenal: ${key}`);
+    }
+    const part = key as AccessoryPart;
+    if (typeof raw !== 'string') {
+      throw badRequest(`Aksesoris ${key} harus berupa string`);
+    }
+    const v = raw.trim();
+    const known = ACCESSORY_CATALOG[part].map((variant) => variant.id);
+    if (!known.includes(v)) {
+      throw badRequest(
+        `Aksesoris ${key} tidak dikenal: ${v}. Pilihan: ${known.join(', ')}`,
+      );
+    }
+    out[key] = v;
   }
   return out;
 }
@@ -196,6 +234,7 @@ export function validateFighterBody(body: Record<string, unknown>): FighterInput
       signatureMove,
       tempo: parseTempo(body.tempo),
       colors: parseFighterColors(body.colors),
+      accessories: parseFighterAccessories(body.accessories),
     },
   };
 }
@@ -210,6 +249,7 @@ export interface FighterPatch {
     signatureMove?: string | null;
     tempo?: FighterTempo;
     colors?: Record<string, string>;
+    accessories?: Record<string, string>;
   };
 }
 
@@ -259,6 +299,9 @@ export function parseFighterPatch(body: Record<string, unknown>): FighterPatch {
   }
   if (body.colors !== undefined) {
     top.colors = parseFighterColors(body.colors);
+  }
+  if (body.accessories !== undefined) {
+    top.accessories = parseFighterAccessories(body.accessories);
   }
 
   return { top };

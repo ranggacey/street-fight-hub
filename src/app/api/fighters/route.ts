@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
         style: input.style,
         colors: input.game.colors,
       }),
+      ...(Object.keys(input.game.accessories).length > 0
+        ? { accessories: input.game.accessories }
+        : {}),
     });
     return ok({ fighter: serialize(fighter.toObject()) }, 201);
   } catch (err) {
