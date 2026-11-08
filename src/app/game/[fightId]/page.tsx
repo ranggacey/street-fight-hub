@@ -10,14 +10,20 @@ export const metadata: Metadata = {
 
 export default async function GamePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ fightId: string }>;
+  searchParams?: Promise<{ export?: string }>;
 }) {
   const { fightId } = await params;
+  // Mode ekspor video (dari admin "Ekspor Video"): ?export=1 -> GameArena
+  // mengirim autoRecord ke Arena (rekam otomatis saat Tarung diklik).
+  const sp = (await searchParams) ?? {};
+  const exportMode = sp.export === "1";
   return (
     <div className="space-y-4">
       <BackToHome />
-      <GameArena fightId={fightId} />
+      <GameArena fightId={fightId} exportMode={exportMode} />
     </div>
   );
 }

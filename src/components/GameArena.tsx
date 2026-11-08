@@ -528,7 +528,19 @@ function Breakdown({
   );
 }
 
-export default function GameArena({ fightId }: { fightId: string }) {
+export default function GameArena({
+  fightId,
+  exportMode = false,
+}: {
+  fightId: string;
+  /**
+   * Mode ekspor video (dari admin "Ekspor Video", ?export=1): kirim
+   * autoRecord ke Arena — rekaman MediaRecorder mulai otomatis saat tombol
+   * Tarung diklik, video webm terunduh otomatis saat fight selesai.
+   * Hasil fight TIDAK dikirim ulang ke server (fight sudah completed).
+   */
+  exportMode?: boolean;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [detail, setDetail] = useState<FightDetail | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -625,10 +637,15 @@ export default function GameArena({ fightId }: { fightId: string }) {
             seed: detail.config.seed,
             map: detail.config.map,
             duration: detail.config.duration,
+            // Mode ekspor video: Arena merekam otomatis saat Tarung diklik.
+            autoRecord: exportMode,
           },
           ARENA_ORIGIN,
         );
       } else if (d.type === "sfa-result") {
+        // Mode ekspor video = replay fight yang sudah completed: hasilnya
+        // TIDAK dikirim ulang (canSubmit sudah false untuk completed).
+        if (exportMode) return;
         // Hanya peserta yang boleh mengirim hasil ke server.
         if (!detail.canSubmit) return;
         void postResult(d);
@@ -636,7 +653,7 @@ export default function GameArena({ fightId }: { fightId: string }) {
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [phase, detail, fightId, load, submitting]);
+  }, [phase, detail, fightId, load, submitting, exportMode]);
 
   if (phase === "loading") {
     return (
@@ -780,6 +797,21 @@ export default function GameArena({ fightId }: { fightId: string }) {
           arena — hanya di catatan kaki hasil di bawah — supaya tidak ada
           teks Hub yang menutupi HUD arena. */}
       <section aria-label="Arena pertarungan" id="arena" className="scroll-mt-20">
+        {exportMode ? (
+          <div
+            className="mb-3 rounded-xl border border-amber-brand/50 bg-amber-brand/10 px-4 py-3 text-center"
+            role="status"
+          >
+            <p className="text-sm font-bold text-amber-brand">
+              Mode ekspor video — Merekam otomatis
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-paper-dim">
+              Tekan tombol Tarung di arena — rekaman mulai otomatis dan video
+              webm terunduh sendiri saat fight selesai (~60 detik). Jangan
+              tutup halaman ini selama merekam.
+            </p>
+          </div>
+        ) : null}
         <div className="mx-auto w-full max-w-[420px]">
           <div className="overflow-hidden rounded-2xl border border-white/15 bg-ink-900 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
             <iframe

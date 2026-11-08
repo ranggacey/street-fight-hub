@@ -21,6 +21,7 @@ export default function AdminShell({
 
   const links = [
     { href: `/${slug}/dashboard`, label: "Dashboard" },
+    { href: `/${slug}/pertandingan`, label: "Pertandingan" },
     { href: `/${slug}/turnamen`, label: "Turnamen" },
     { href: `/${slug}/video`, label: "Video" },
     { href: `/${slug}/fighter`, label: "Fighter & Pengguna" },
