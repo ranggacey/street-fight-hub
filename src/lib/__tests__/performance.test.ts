@@ -29,10 +29,10 @@ function hasIndex(
 }
 
 describe('index MongoDB (definisi di skema)', () => {
-  it('Fighter: klasemen kasual (rating) + klasemen turnamen (wins)', () => {
+  it('Fighter: klasemen (rating) + klasemen (wins) — SATU rekor', () => {
     const idx = Fighter.schema.indexes() as Array<[IndexSpec, Record<string, unknown>]>;
     expect(
-      hasIndex(idx, { status: 1, rating: -1, 'casualRecord.wins': -1, createdAt: 1 }),
+      hasIndex(idx, { status: 1, rating: -1, 'record.wins': -1, createdAt: 1 }),
     ).toBe(true);
     expect(
       hasIndex(idx, {

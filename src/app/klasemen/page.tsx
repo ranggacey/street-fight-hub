@@ -35,8 +35,9 @@ export default async function KlasemenPage({
             Klasemen
           </h1>
           <p className="mt-2 max-w-2xl text-paper-dim">
-            Klasemen kasual game — diurutkan dari rating Elo (awal 1000, naik
-            kalau menang). Terpisah dari rekor turnamen.
+            Diurutkan dari rating Elo (awal 1000, naik kalau menang).
+            Rekor M/K/S yang tampil adalah satu rekor yang sama di semua
+            tempat — kasual, turnamen, gelar.
           </p>
         </header>
         <nav aria-label="Jenis klasemen" className="flex flex-wrap gap-2">
@@ -77,7 +78,7 @@ export default async function KlasemenPage({
             </div>
             <ol>
               {entries.map((e) => {
-                const record = e.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
+                const record = e.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
                 return (
                   <li key={e.fighterId}>
                     <Link

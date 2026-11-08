@@ -495,7 +495,6 @@ export default function FighterSayaForm() {
   }
 
   const record = fighter?.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
-  const casual = fighter?.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
 
   // Form (dipakai buat baru + edit). Di mode manage, form disembunyikan
   // sampai tombol "Ubah / Customize" ditekan.
@@ -698,9 +697,6 @@ export default function FighterSayaForm() {
             </div>
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatChip label="Rating" value={fighter.rating ?? 1000} tone="cyan" />
-              <StatChip label="Menang Kasual" value={casual.wins} tone="amber" />
-              <StatChip label="Kalah Kasual" value={casual.losses} tone="red" />
-              <StatChip label="KO Kasual" value={casual.kos} tone="red" />
             </div>
           </>
         ) : null}

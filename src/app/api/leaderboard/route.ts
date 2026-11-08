@@ -3,7 +3,7 @@ import { ensureRecentSnapshot } from '@/lib/game/leaderboard';
 import { handleError, ok } from '@/lib/http';
 
 /**
- * GET /api/leaderboard — klasemen kasual (rating Elo + casualRecord).
+ * GET /api/leaderboard — klasemen (rating Elo + SATU rekor).
  * Snapshot diambil lazy kalau belum ada snapshot 7 hari terakhir.
  */
 export async function GET() {

@@ -63,7 +63,7 @@ async function makeFighter(userId: mongoose.Types.ObjectId, name: string, ig: st
     style: "boxing",
     selfDescription: SELF_DESC,
     rating: 1000,
-    casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 },
+    record: { wins: 0, losses: 0, draws: 0, kos: 0 },
   });
 }
 

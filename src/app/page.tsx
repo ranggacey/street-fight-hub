@@ -95,9 +95,9 @@ export default async function Home() {
       serverApiGet<{ tournaments: Tournament[] }>(
         "/api/tournaments?status=completed",
       ),
-      // Top 5 kasual: urutan berdasarkan rating point (Elo), BUKAN rekor
+      // Top 5: urutan berdasarkan rating point (Elo), BUKAN rekor
       // turnamen — sumbernya /api/leaderboard (rating desc, lalu
-      // casualRecord.wins desc, lalu createdAt asc).
+      // record.wins desc, lalu createdAt asc).
       serverApiGet<{ entries: LeaderboardEntry[] }>("/api/leaderboard"),
       // Sesi dibaca server-side supaya CTA penutup tidak menawarkan
       // "Daftar" ke user yang sudah login. Gagal baca sesi (mis. secret
@@ -109,21 +109,20 @@ export default async function Home() {
   const upcoming = dataOr(upcomingRes, { tournaments: [] }).tournaments;
   const live = dataOr(liveRes, { tournaments: [] }).tournaments;
   const completed = dataOr(completedRes, { tournaments: [] }).tournaments;
-  // Kartu Top 5 memakai rekor KASUAL (casualRecord) sebagai baris M/K/S/KO,
-  // supaya konsisten dengan judul section — rekor turnamen tidak dipakai
-  // di sini. Rating point dibawa lewat field rating untuk FighterCard.
+  // Kartu Top 5 memakai SATU rekor (record) sebagai baris M/K/S/KO —
+  // rekor yang sama di semua tempat (kasual, turnamen, gelar). Rating
+  // point dibawa lewat field rating untuk FighterCard.
   const topFighters: Fighter[] = dataOr(topRes, { entries: [] })
     .entries.slice(0, 5)
     .map((e) => {
-      const casual = e.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
+      const record = e.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
       return {
         _id: e.fighterId,
         displayName: e.displayName ?? "-",
         igUsername: e.igUsername ?? "",
         style: (e.style ?? "tinju") as Fighter["style"],
-        record: casual,
+        record,
         rating: e.rating ?? 1000,
-        casualRecord: casual,
         status: "active" as const,
       };
     });

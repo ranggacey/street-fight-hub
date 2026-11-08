@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
         record: { wins: 0, losses: 0, draws: 0, kos: 0 },
         status: 'active',
         rating: 1000,
-        casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 },
         signatureMove: input.game.signatureMove,
         tempo: input.game.tempo,
         colors: resolveFighterColors({

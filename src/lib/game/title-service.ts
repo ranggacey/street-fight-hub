@@ -210,7 +210,7 @@ export async function getTitlePublic(now: Date = new Date()): Promise<{
   let holder: Record<string, unknown> | null = null;
   if (state.holderFighterId) {
     const f = await Fighter.findById(state.holderFighterId)
-      .select('displayName igUsername style styleOther rating casualRecord')
+      .select('displayName igUsername style styleOther rating record')
       .lean();
     if (f) {
       holder = {
@@ -220,7 +220,7 @@ export async function getTitlePublic(now: Date = new Date()): Promise<{
         style: f.style,
         styleOther: f.styleOther ?? null,
         rating: f.rating ?? 1000,
-        casualRecord: f.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 },
+        record: f.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 },
       };
     }
   }

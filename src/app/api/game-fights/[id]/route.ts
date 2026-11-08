@@ -21,11 +21,11 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const fight = await GameFight.findById(id)
       .populate(
         'fighterAId',
-        'displayName igUsername style styleOther rating casualRecord signatureMove tempo colors',
+        'displayName igUsername style styleOther rating record signatureMove tempo colors',
       )
       .populate(
         'fighterBId',
-        'displayName igUsername style styleOther rating casualRecord signatureMove tempo colors',
+        'displayName igUsername style styleOther rating record signatureMove tempo colors',
       )
       .lean();
     if (!fight) throw notFound('Fight tidak ditemukan');

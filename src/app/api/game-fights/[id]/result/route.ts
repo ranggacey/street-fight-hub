@@ -33,7 +33,7 @@ function posterSizeOk(dataUrl: string): boolean {
  * POST /api/game-fights/[id]/result — terima sfa-result dari iframe.
  * - Hanya peserta fight yang boleh submit; seed harus cocok.
  * - Server menjalankan ulang buildFight dari seed + config tersimpan:
- *   cocok → completed + Elo + casualRecord + gelar + notifikasi
+ *   cocok → completed + Elo + record + gelar + notifikasi
  *   (+ VideoTask kalau title fight). Tidak cocok → disputed, ranking
  *   TIDAK berubah.
  * - Idempotent: submit kedua untuk fight yang sudah completed/disputed
@@ -134,7 +134,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     fight.status = 'completed';
     fight.completedAt = now;
 
-    // --- Elo + casualRecord (TERPISAH dari record turnamen) ---
+    // --- Elo + record (SATU rekor untuk semua fight: kasual, turnamen,
+    // gelar — menang ya menang, kalah ya kalah, di mana pun mainnya) ---
     const fighterA = await Fighter.findById(fight.fighterAId);
     const fighterB = await Fighter.findById(fight.fighterBId);
     let eloBefore: { a: number; b: number } = { a: 1000, b: 1000 };
@@ -148,16 +149,16 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       fighterA.rating = newA;
       fighterB.rating = newB;
       if (expected.method === 'draw') {
-        fighterA.casualRecord.draws += 1;
-        fighterB.casualRecord.draws += 1;
+        fighterA.record.draws += 1;
+        fighterB.record.draws += 1;
       } else if (expected.winner === 'R') {
-        fighterA.casualRecord.wins += 1;
-        if (expected.method === 'KO') fighterA.casualRecord.kos += 1;
-        fighterB.casualRecord.losses += 1;
+        fighterA.record.wins += 1;
+        if (expected.method === 'KO') fighterA.record.kos += 1;
+        fighterB.record.losses += 1;
       } else {
-        fighterB.casualRecord.wins += 1;
-        if (expected.method === 'KO') fighterB.casualRecord.kos += 1;
-        fighterA.casualRecord.losses += 1;
+        fighterB.record.wins += 1;
+        if (expected.method === 'KO') fighterB.record.kos += 1;
+        fighterA.record.losses += 1;
       }
       await fighterA.save();
       await fighterB.save();

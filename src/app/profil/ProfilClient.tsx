@@ -174,8 +174,8 @@ export default function ProfilClient() {
   }
 
   // phase === "ready"
-  const casual = fighter?.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
-  const tourney = fighter?.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
+  // SATU rekor (record) untuk semua fight — kasual, turnamen, gelar.
+  const record = fighter?.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
   const myId = fighter ? getId(fighter) : "";
   const isHolder = !!title?.holder && title.holder.id === myId;
   const summaries = fights
@@ -252,21 +252,21 @@ export default function ProfilClient() {
         </div>
       </GlassCard>
 
-      {/* Statistik kasual (game 1v1) */}
+      {/* Statistik (SATU rekor untuk semua fight) */}
       <section aria-labelledby="stat-kasual">
         <h2
           id="stat-kasual"
           className="mb-3 font-display text-2xl uppercase tracking-wide sm:text-3xl"
         >
-          Statistik <span className="text-amber-brand">Kasual</span>
+          Statistik <span className="text-amber-brand">Fighter</span>
         </h2>
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[
             { label: "Rating Point", value: String(fighter?.rating ?? 1000) },
-            { label: "Menang", value: String(casual.wins) },
-            { label: "Kalah", value: String(casual.losses) },
-            { label: "Seri", value: String(casual.draws) },
-            { label: "KO", value: String(casual.kos) },
+            { label: "Menang", value: String(record.wins) },
+            { label: "Kalah", value: String(record.losses) },
+            { label: "Seri", value: String(record.draws) },
+            { label: "KO", value: String(record.kos) },
           ].map((s) => (
             <div
               key={s.label}
@@ -279,13 +279,11 @@ export default function ProfilClient() {
             </div>
           ))}
         </dl>
-        <p className="mt-3 text-sm text-paper-dim">
-          Rekor turnamen: {tourney.wins} menang • {tourney.losses} kalah •{" "}
-          {tourney.draws} seri • {tourney.kos} KO
-          {fightsRemaining !== null
-            ? ` • Sisa jatah fight hari ini: ${fightsRemaining}`
-            : ""}
-        </p>
+        {fightsRemaining !== null ? (
+          <p className="mt-3 text-sm text-paper-dim">
+            Sisa jatah fight hari ini: {fightsRemaining}
+          </p>
+        ) : null}
       </section>
 
       {/* Gelar */}

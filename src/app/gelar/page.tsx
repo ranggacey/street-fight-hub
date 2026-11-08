@@ -211,8 +211,8 @@ export default async function GelarPage() {
                 tone="paper"
               />
               <StatChip
-                label="Menang Kasual"
-                value={title.holder.casualRecord?.wins ?? 0}
+                label="Menang"
+                value={title.holder.record?.wins ?? 0}
                 tone="cyan"
               />
             </div>

@@ -85,13 +85,13 @@ export interface Fighter {
   style: StyleKey;
   styleOther?: string;
   selfDescription?: string;
+  /** SATU rekor (menang/kalah/seri + KO) untuk semua fight. */
   record: FighterRecord;
   status?: "active" | "retired";
   createdAt?: string;
   updatedAt?: string;
-  /** Game kasual (Fase 1). */
+  /** Game (Fase 1). */
   rating?: number;
-  casualRecord?: FighterRecord;
   signatureMove?: string | null;
   tempo?: FighterTempo;
   colors?: FighterColors;
@@ -304,7 +304,7 @@ export interface TitlePublic {
     style?: string;
     styleOther?: string | null;
     rating?: number;
-    casualRecord?: FighterRecord;
+    record?: FighterRecord;
   } | null;
   wonAt?: string | null;
   lastFightAt?: string | null;
@@ -356,7 +356,7 @@ export interface LeaderboardEntry {
   igUsername?: string;
   style?: string;
   rating?: number;
-  casualRecord?: FighterRecord;
+  record?: FighterRecord;
 }
 
 export interface VideoTask {

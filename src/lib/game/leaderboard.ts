@@ -1,8 +1,12 @@
 /**
- * Klasemen kasual + snapshot murah (Fase 1).
+ * Klasemen + snapshot murah (Fase 1).
  * Snapshot diambil lazy saat /api/leaderboard dibuka kalau belum ada
  * snapshot 7 hari terakhir (reason 'periodic'). UI riwayat klasemen
  * (baca snapshot ini) = Fase 2.
+ *
+ * Rekor di sini SATU (record) untuk semua fight — kasual, turnamen,
+ * gelar. Klasemen "kasual" vs "turnamen" hanya beda URUTAN (rating vs
+ * kemenangan), bukan beda rekor.
  */
 import { TtlCache } from '../cache';
 import { Fighter } from '../../models/Fighter';
@@ -25,13 +29,13 @@ export interface LeaderboardEntry {
   igUsername: string;
   style: string;
   rating: number;
-  casualRecord: { wins: number; losses: number; draws: number; kos: number };
+  record: { wins: number; losses: number; draws: number; kos: number };
 }
 
 export async function getCasualLeaderboard(): Promise<LeaderboardEntry[]> {
   const fighters = await Fighter.find({ status: 'active' })
-    .sort({ rating: -1, 'casualRecord.wins': -1, createdAt: 1 })
-    .select('displayName igUsername style rating casualRecord')
+    .sort({ rating: -1, 'record.wins': -1, createdAt: 1 })
+    .select('displayName igUsername style rating record')
     .lean();
   return fighters.map((f, i) => ({
     rank: i + 1,
@@ -40,11 +44,11 @@ export async function getCasualLeaderboard(): Promise<LeaderboardEntry[]> {
     igUsername: f.igUsername,
     style: f.style,
     rating: f.rating ?? 1000,
-    casualRecord: f.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 },
+    record: f.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 },
   }));
 }
 
-/** Klasemen kasual dengan cache TTL 15 detik (per instance serverless). */
+/** Klasemen dengan cache TTL 15 detik (per instance serverless). */
 export async function getCachedCasualLeaderboard(
   now: number = Date.now(),
 ): Promise<LeaderboardEntry[]> {
@@ -71,7 +75,7 @@ export async function takeLeaderboardSnapshot(
     entries: entries.map((e) => ({
       fighterId: e.fighterId,
       rating: e.rating,
-      casualWins: e.casualRecord.wins,
+      wins: e.record.wins,
       rank: e.rank,
     })),
   });

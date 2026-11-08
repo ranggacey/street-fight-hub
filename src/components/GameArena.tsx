@@ -107,7 +107,7 @@ function FighterDuelCard({
 }) {
   const side = (f: Fighter, fallbackColor: string) => {
     const color = f.colors?.body ?? fallbackColor;
-    const record = f.casualRecord;
+    const record = f.record;
     return (
       <div className="min-w-0 px-1 py-1 text-center">
         <span

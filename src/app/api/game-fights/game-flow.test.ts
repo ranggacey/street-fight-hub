@@ -24,7 +24,7 @@ import { TitleHistory } from '../../../models/TitleHistory';
  *
  * Alur: register 2 user → fighter (duplikat 409) → challenge (duplikat
  * 409) → accept salah 403 → accept 200 + config → submit cocok →
- * completed + Elo/casualRecord berubah → submit lagi 409 → submit
+ * completed + Elo/record berubah → submit lagi 409 → submit
  * hasil diubah → disputed (ranking tidak berubah) → limit 3/hari →
  * race 10 kemenangan → holder + event race_10_win → lastFightAt
  * dimundurkan 7 hari → GET /api/title → gelar kosong +
@@ -298,11 +298,11 @@ describe('Game flow integration (challenge → fight → result → gelar)', () 
     expect(fight1?.status).toBe('completed');
     expect(fight1?.result?.winnerSide).toBe(expected1.winner);
     const fighterAAfter = await Fighter.findById(fighterAId).lean();
-    const casualTotal =
-      (fighterAAfter?.casualRecord?.wins ?? 0) +
-      (fighterAAfter?.casualRecord?.losses ?? 0) +
-      (fighterAAfter?.casualRecord?.draws ?? 0);
-    expect(casualTotal).toBe(1);
+    const recordTotal =
+      (fighterAAfter?.record?.wins ?? 0) +
+      (fighterAAfter?.record?.losses ?? 0) +
+      (fighterAAfter?.record?.draws ?? 0);
+    expect(recordTotal).toBe(1);
     // Elo berubah kecuali draw.
     if (expected1.method !== 'draw') {
       expect(fighterAAfter?.rating).not.toBe(ratingBefore);

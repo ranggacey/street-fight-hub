@@ -89,7 +89,6 @@ export default async function FighterProfilePage({
   if (!f) notFound();
 
   const record = f.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
-  const casual = f.casualRecord ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
   const color = styleColor(f.style);
   const history = f.history ?? f.matches ?? [];
   const gameHistory = f.gameHistory ?? [];
@@ -138,7 +137,7 @@ export default async function FighterProfilePage({
         </div>
       </header>
 
-      {/* Rekor */}
+      {/* Rekor (SATU rekor untuk semua fight) */}
       <section aria-label="Rekor fighter">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatChip label="Menang" value={record.wins} tone="amber" />
@@ -147,10 +146,7 @@ export default async function FighterProfilePage({
           <StatChip label="KO" value={record.kos} tone="red" />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatChip label="Rating Kasual" value={f.rating ?? 1000} tone="cyan" />
-          <StatChip label="Menang Kasual" value={casual.wins} tone="amber" />
-          <StatChip label="Kalah Kasual" value={casual.losses} tone="red" />
-          <StatChip label="KO Kasual" value={casual.kos} tone="red" />
+          <StatChip label="Rating" value={f.rating ?? 1000} tone="cyan" />
         </div>
       </section>
 

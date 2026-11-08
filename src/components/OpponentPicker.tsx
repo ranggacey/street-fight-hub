@@ -98,7 +98,7 @@ export default function OpponentPicker({
             f.colors?.body && f.colors.body !== "none"
               ? f.colors.body
               : styleColor(f.style);
-          const rec = f.casualRecord ?? f.record;
+          const rec = f.record;
           return (
             <label
               key={id}

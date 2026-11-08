@@ -6,10 +6,12 @@ import { ACCESSORY_IDS } from '../lib/game/accessories';
 // displayName, igUsername, style, selfDescription. Warna kartu diambil
 // dari gaya bertarung (styleColor di components/api.ts), bukan persona.
 //
-// Fase 1 integrasi game (2026-11-07): field game — rating Elo kasual,
-// casualRecord (TERPISAH dari record turnamen), signatureMove, tempo,
-// dan warna RGB bebas per bagian (colors). Warna TIDAK mengubah gameplay,
-// hanya tampilan di arena (EMBED-CONTRACT §4).
+// Fase 1 integrasi game (2026-11-07): field game — rating Elo,
+// record (SATU rekor untuk SEMUA fight: kasual, turnamen, perebutan
+// gelar — menang ya menang, kalah ya kalah, di mana pun mainnya;
+// 2026-11-08: casualRecord DIHAPUS, disatukan ke record), signatureMove,
+// tempo, dan warna RGB bebas per bagian (colors). Warna TIDAK mengubah
+// gameplay, hanya tampilan di arena (EMBED-CONTRACT §4).
 
 const fighterSchema = new Schema(
   {
@@ -47,6 +49,13 @@ const fighterSchema = new Schema(
     },
     styleOther: { type: String, default: null },
     selfDescription: { type: String, required: true, minlength: 1, maxlength: 600 },
+    /**
+     * SATU rekor (menang/kalah/seri + KO) untuk SEMUA fight yang selesai
+     * — kasual 1v1, tantangan terbuka, turnamen, perebutan gelar.
+     * Diperbarui oleh GameFight selesai (result/route.ts) dan oleh match
+     * turnamen diputuskan (lib/draw.ts). Dulu ada casualRecord terpisah
+     * (dihapus 2026-11-08, digabung ke sini).
+     */
     record: {
       wins: { type: Number, default: 0 },
       losses: { type: Number, default: 0 },
@@ -55,13 +64,10 @@ const fighterSchema = new Schema(
     },
     status: { type: String, enum: ['active', 'retired'], default: 'active' },
     // --- Game kasual (Fase 1) ---
+    // rating Elo: SATU angka (tidak terpecah kasual/turnamen); berubah
+    // hanya saat GameFight selesai (kasual/terbuka/gelar). Match turnamen
+    // (draw.ts) TIDAK mengubah rating — hanya record.
     rating: { type: Number, default: 1000 },
-    casualRecord: {
-      wins: { type: Number, default: 0 },
-      losses: { type: Number, default: 0 },
-      draws: { type: Number, default: 0 },
-      kos: { type: Number, default: 0 },
-    },
     /** Jurus khas: kind gerakan dari moves.js gaya ini (bobot 2.5x di engine). */
     signatureMove: { type: String, default: null },
     tempo: {
@@ -96,12 +102,12 @@ const fighterSchema = new Schema(
   { timestamps: true },
 );
 
-// Klasemen kasual (rating) + klasemen turnamen (wins): keduanya mengurut
-// seluruh fighter aktif — tanpa index, Mongo mengurut di memori (SORT)
-// sambil memindai semua dokumen. Diukur lokal 2000 fighter: SORT, 27 ms;
-// dengan index di bawah: IXSCAN tanpa sort di memori (waktu mirip di
-// skala ini, tapi tidak ada risiko sort memori saat fighter membanyak).
-fighterSchema.index({ status: 1, rating: -1, 'casualRecord.wins': -1, createdAt: 1 });
+// Klasemen (rating) + klasemen (wins): keduanya mengurut seluruh fighter
+// aktif atas SATU rekor (record) — tanpa index, Mongo mengurut di memori
+// (SORT) sambil memindai semua dokumen. Diukur lokal 2000 fighter: SORT,
+// 27 ms; dengan index di bawah: IXSCAN tanpa sort di memori (waktu mirip
+// di skala ini, tapi tidak ada risiko sort memori saat fighter membanyak).
+fighterSchema.index({ status: 1, rating: -1, 'record.wins': -1, createdAt: 1 });
 fighterSchema.index({ status: 1, 'record.wins': -1, 'record.kos': -1, 'record.losses': 1, createdAt: 1 });
 
 // Username IG unik (case-insensitive): satu handle IG hanya boleh
