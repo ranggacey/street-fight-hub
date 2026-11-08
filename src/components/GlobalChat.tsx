@@ -8,6 +8,7 @@ import GlassCard from "@/components/GlassCard";
 import FightLoader from "@/components/FightLoader";
 import Button from "@/components/Button";
 import { CHAT_POLL_INTERVAL_MS, nextPollDelayMs } from "@/lib/polling";
+import { latestMessageAt, loadLastReadAt, saveLastReadAt } from "@/lib/chat-badge";
 import ChatMessageRow from "@/components/ChatMessageRow";
 
 /**
@@ -77,6 +78,15 @@ export default function GlobalChat({
     }
     setLoadError("");
     setMessages(res.data.messages);
+    // Pesan sedang DITAMPILKAN (di pop-up maupun di /obrolan) -> tandai
+    // sudah dibaca: penanda = waktu pesan terbaru. Badge FloatingChat
+    // membaca penanda ini, jadi pesan yang tampil di sini tidak dihitung
+    // belum dibaca (termasuk pesan baru saat pop-up terbuka).
+    const latest = latestMessageAt(res.data.messages);
+    if (latest) {
+      const prev = loadLastReadAt();
+      if (!prev || Date.parse(latest) > Date.parse(prev)) saveLastReadAt(latest);
+    }
     return true;
   }, []);
 
