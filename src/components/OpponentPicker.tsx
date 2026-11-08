@@ -136,6 +136,22 @@ export default function OpponentPicker({
                     @{f.igUsername} • Menang {rec.wins} • Kalah {rec.losses}
                   </span>
                 </span>
+                {/* Sisa jatah tarung lawan hari ini (WIB) — dari API, bukan
+                    tebakan client. 0/3 tetap bisa dipilih (tantangan
+                    berlaku 3 hari, bisa diterima besok setelah reset). */}
+                {typeof f.fightsLeftToday === "number" ? (
+                  <span className="mt-1 block text-xs">
+                    {f.fightsLeftToday > 0 ? (
+                      <span className="font-semibold text-amber-brand">
+                        Sisa tarung: {f.fightsLeftToday}/3
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-red-400">
+                        Sisa tarung: 0/3 — habis hari ini, bisa tarung besok
+                      </span>
+                    )}
+                  </span>
+                ) : null}
               </span>
               <CheckMark checked={isSelected} />
             </label>

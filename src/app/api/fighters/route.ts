@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
+import { countFightsTodayByFighter, DAILY_FIGHT_LIMIT } from '@/lib/game/daily-limit';
 import { conflict, forbidden, handleError, ok, parseJson, serialize } from '@/lib/http';
 import { resolveFighterColors } from '@/lib/game/engine-config';
 import { FIGHTER_STYLES, validateFighterBody } from '@/lib/validation';
@@ -89,7 +90,18 @@ export async function GET(req: NextRequest) {
       // aksesoris) dari satu baris daftar ini, jadi field harus lengkap.
       .limit(100)
       .lean();
-    return ok({ fighters: serialize(fighters) });
+    // Sisa jatah tarung hari ini (WIB) per fighter — dipakai kartu lawan
+    // di /tantangan ("Sisa tarung: 2/3"). Satu agregasi untuk semua
+    // fighter; hitungan sama dengan gate accept (lihat daily-limit).
+    const usedByFighter = await countFightsTodayByFighter();
+    const fightersOut = (serialize(fighters) as Record<string, unknown>[]).map((f) => ({
+      ...f,
+      fightsLeftToday: Math.max(
+        0,
+        DAILY_FIGHT_LIMIT - (usedByFighter.get(String(f.id)) ?? 0),
+      ),
+    }));
+    return ok({ fighters: fightersOut });
   } catch (err) {
     return handleError(err);
   }

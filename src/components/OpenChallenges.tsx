@@ -253,15 +253,23 @@ export default function OpenChallenges() {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={
-                  formBusy || sentRemaining <= 0 || fightsRemaining <= 0
-                }
+                // Nantang TIDAK butuh jatah tarung (perintah user 8 Nov):
+                // tantangan terbuka berlaku 3 hari, bisa diterima besok
+                // setelah jatah reset. Gate jatah tetap ada di ACCEPT.
+                disabled={formBusy || sentRemaining <= 0}
               >
                 {formBusy ? "Membuat…" : "Buat Tantangan Terbuka"}
               </Button>
               {sentRemaining <= 0 ? (
                 <p className="text-sm text-paper-mute">
                   Jatah tantangan hari ini habis — coba lagi besok.
+                </p>
+              ) : null}
+              {fightsRemaining <= 0 && sentRemaining > 0 ? (
+                <p className="text-sm text-paper-mute">
+                  Jatah tarungmu habis hari ini — tantangan tetap bisa
+                  dibuat, yang menerima bisa bertarung besok setelah jatah
+                  reset.
                 </p>
               ) : null}
             </form>

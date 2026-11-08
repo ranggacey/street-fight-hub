@@ -56,3 +56,26 @@ export async function fightsRemainingToday(
   const used = await countFightsToday(fighterId, now);
   return Math.max(0, DAILY_FIGHT_LIMIT - used);
 }
+
+/**
+ * Jumlah fight hari ini (WIB) per fighter — SATU agregasi untuk semua
+ * fighter (dipakai daftar lawan: fightsLeftToday per kartu di
+ * GET /api/fighters). Hitungannya SAMA PERSIS dengan countFightsToday
+ * (semua GameFight yang dibuat hari ini, status apa pun — accept juga
+ * memakai countFightsToday, jadi angka di kartu = angka yang dipakai
+ * gate DAILY_LIMIT_REACHED saat accept; jangan difilter 'completed' saja,
+ * nanti kartu bilang masih ada jatah padahal accept menolak).
+ * Kunci map = id fighter (string hex ObjectId).
+ */
+export async function countFightsTodayByFighter(
+  now: Date = new Date(),
+): Promise<Map<string, number>> {
+  const { start, end } = wibDayWindow(now);
+  const rows = await GameFight.aggregate<{ _id: unknown; count: number }>([
+    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $project: { sides: ['$fighterAId', '$fighterBId'] } },
+    { $unwind: '$sides' },
+    { $group: { _id: '$sides', count: { $sum: 1 } } },
+  ]);
+  return new Map(rows.map((r) => [String(r._id), r.count]));
+}

@@ -14,7 +14,7 @@ import type { Fighter } from '../types';
  * substring ("Lawan 1" adalah substring "Lawan 10").
  */
 
-function makeFighter(i: number): Fighter {
+function makeFighter(i: number, fightsLeftToday?: number): Fighter {
   const n = String(i).padStart(2, '0');
   return {
     id: `fighter-${n}`,
@@ -22,6 +22,7 @@ function makeFighter(i: number): Fighter {
     igUsername: `lawan${n}`,
     style: 'boxing',
     record: { wins: i, losses: 0, draws: 0, kos: 0 },
+    ...(fightsLeftToday !== undefined ? { fightsLeftToday } : {}),
   };
 }
 
@@ -129,6 +130,46 @@ describe('OpponentPicker pagination', () => {
     );
     expect(html).toContain('Belum ada fighter lain yang bisa ditantang.');
     expect(html).not.toContain('Halaman');
+  });
+});
+
+describe('OpponentPicker sisa jatah tarung', () => {
+  it('kartu menampilkan "Sisa tarung: X/3" dari API', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={[makeFighter(1, 2), makeFighter(2, 3)]}
+        selectedId=""
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain('Sisa tarung: 2/3');
+    expect(html).toContain('Sisa tarung: 3/3');
+  });
+
+  it('0/3 tetap bisa dipilih: ada radio-nya + catatan "bisa tarung besok"', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={[makeFighter(1, 0), makeFighter(2, 1)]}
+        selectedId=""
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain('Sisa tarung: 0/3');
+    expect(html).toContain('habis hari ini, bisa tarung besok');
+    // Radio lawan 0/3 tetap ada (tidak di-disable / disembunyikan).
+    expect(html).toContain('value="fighter-01"');
+    expect(html).toContain('>Lawan 01<');
+  });
+
+  it('tanpa fightsLeftToday (data lama): tidak ada baris sisa tarung', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={[makeFighter(1)]}
+        selectedId=""
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).not.toContain('Sisa tarung');
   });
 });
 

@@ -420,13 +420,24 @@ export default function TantanganClient() {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={formBusy || sentRemaining <= 0 || fightsRemaining <= 0}
+                // Nantang TIDAK butuh jatah tarung (perintah user 8 Nov):
+                // tantangan berlaku 3 hari, bisa diterima besok setelah
+                // jatah reset. Gate jatah tetap ada di ACCEPT (kedua
+                // fighter). Yang memblokir kirim hanya jatah tantangan 5/hari.
+                disabled={formBusy || sentRemaining <= 0}
               >
                 {formBusy ? "Mengirim…" : "Kirim Tantangan"}
               </Button>
               {sentRemaining <= 0 ? (
                 <p className="text-sm text-paper-mute">
                   Jatah tantangan hari ini habis — coba lagi besok.
+                </p>
+              ) : null}
+              {fightsRemaining <= 0 && sentRemaining > 0 ? (
+                <p className="text-sm text-paper-mute">
+                  Jatah tarungmu habis hari ini — tantangan tetap bisa
+                  dikirim, lawan bisa menerimanya besok setelah jatah reset
+                  (tantangan berlaku 3 hari).
                 </p>
               ) : null}
             </form>
