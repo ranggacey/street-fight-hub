@@ -1,9 +1,17 @@
 // sfx.js — SFX pukulan anime via WebAudio.
-// Resep (anime-sfx-research): whoosh dibesar-besarkan + impact/thud +
-// SNAP sintetis di atasnya. Bukan thud mentah.
+// Resep (anime-sfx-research + video Reels QF highlight / NF4):
+// whoosh dibesar-besarkan + punch-anime-01 (disetujui user, inti pukulan)
+// + thud di bawahnya + SNAP. Bukan thud mentah.
 // Timeline fight sudah digenerate di depan, jadi semua SFX dijadwalkan di
-// AudioContext clock: whoosh memuncak 0.03 dtk SEBELUM kontak, thud + snap
-// TEPAT di kontak (standar CF2 §17).
+// AudioContext clock: whoosh memuncak 0.03 dtk SEBELUM kontak, peak
+// punch-anime-01 + thud + snap TEPAT di kontak (standar CF2 §17).
+// Peak offset tiap file (terukur): punch-anime-01 0.062 dtk, thudJab 0.013,
+// thudHook 0.012, thudHeavy 0.129, impact-anime-01 0.420.
+// Gain per tier (resep Reels + skala anti-clipping terukur, master 0.765):
+//   punch 0.85*(0.65+0.35*power), thud 0.50/0.55, snap 0.55/0.80,
+//   impact-anime-01 (berat) 0.40 — dikali scale 0.80 (ringan/menengah,
+//   -2.8 dBFS) atau 0.42 (berat, -1.1 dBFS). Tanpa scale, jumlah
+//   peak-aligned berat mencapai 2.75 -> clipping.
 // Audio juga di-route ke MediaStreamDestination agar export MediaRecorder
 // menangkap suara yang sama dengan yang didengar.
 
@@ -18,6 +26,7 @@ const FILES = {
   thudCross: 'audio/thud-cross-01.wav',
   thudHook: 'audio/thud-hook-01.wav',
   thudHeavy: 'audio/thud-heavy-01.wav',
+  punchAnime: 'audio/punch-anime-01.mp3',
   snapSmall: 'audio/snap-synth-small.wav',
   snapMedium: 'audio/snap-synth-medium.wav',
   snapBig: 'audio/snap-synth-big.wav',
@@ -57,16 +66,30 @@ export class SFX {
     this.master.connect(this.ctx.destination);
     this.recDest = this.ctx.createMediaStreamDestination();
     this.master.connect(this.recDest);
-    // Muat semua file secara paralel; gagal satu file tidak menggagalkan yang lain.
-    await Promise.all(Object.entries(FILES).map(async ([key, url]) => {
-      try {
-        const res = await fetch(url);
-        const buf = await res.arrayBuffer();
-        this.buffers[key] = await this.ctx.decodeAudioData(buf);
-      } catch (e) {
-        console.warn('[sfx] gagal muat', url, e);
-      }
-    }));
+    // SFX dimuat dari SATU bundle JSON (audio/sfx-bundle.json: nama file ->
+    // base64). File binari tidak bisa di-push langsung via GitHub API
+    // (create_or_update_file double-encode base64 -> file jadi teks),
+    // jadi semua SFX dikemas sebagai base64 dalam JSON teks, lalu
+    // di-decode di sini. Gagal satu file tidak menggagalkan yang lain.
+    try {
+      const res = await fetch('audio/sfx-bundle.json');
+      const bundle = await res.json();
+      await Promise.all(Object.entries(FILES).map(async ([key, url]) => {
+        try {
+          const name = url.split('/').pop();
+          const b64 = bundle[name];
+          if (!b64) { console.warn('[sfx] tidak ada di bundle', name); return; }
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          this.buffers[key] = await this.ctx.decodeAudioData(bytes.buffer);
+        } catch (e) {
+          console.warn('[sfx] gagal muat', url, e);
+        }
+      }));
+    } catch (e) {
+      console.warn('[sfx] gagal muat bundle', e);
+    }
     this.ready = true;
   }
 
@@ -110,19 +133,29 @@ export class SFX {
     noise.start(when);
   }
 
-  // Satu pukulan: whoosh (puncak 0.03 dtk sebelum kontak) + thud + snap di kontak.
+  // Satu pukulan (resep Reels QF highlight / NF4): punch-anime-01 sebagai
+  // inti (peak TEPAT di kontak) + thud di bawahnya + snap file. Peak tiap
+  // file disejajarkan ke kontak — sebelumnya onset, jadi thudHeavy telat
+  // 0.129 dtk dan impact-anime-01 telat 0.420 dtk. Snap sintetis kode
+  // (_synthSnap) TIDAK lagi dipanggil di sini: snap file sudah memberi
+  // crack-nya (resep Reels), dan memanggil keduanya mendobel snap sampai
+  // clipping; _synthSnap tetap dipakai _boom + sebagai fallback.
   _hit(when, power) {
     const heavy = power >= 0.9;
     const mid = power >= 0.65;
     const whoosh = heavy ? 'whooshAnime' : mid ? 'whooshHook' : 'whooshJab';
     const thud = heavy ? 'thudHeavy' : mid ? 'thudHook' : 'thudJab';
+    const thudPeak = heavy ? 0.129 : mid ? 0.012 : 0.013;
     const snap = heavy ? 'snapBig' : mid ? 'snapMedium' : 'snapSmall';
+    // Skala anti-clipping (terukur, lihat header): 0.42 berat, 0.80 lainnya.
+    const scale = heavy ? 0.42 : 0.80;
     // Whoosh 0.12 dtk, puncaknya di akhir → mulai 0.15 dtk sebelum kontak.
     this._play(whoosh, when - 0.15, { gain: heavy ? 1.0 : 0.8, rate: heavy ? 0.95 : 1.05 });
-    this._play(thud, when, { gain: heavy ? 1.0 : 0.85 });
-    this._play(snap, when, { gain: 0.8 });
-    this._synthSnap(when, heavy ? 'big' : mid ? 'medium' : 'small');
-    if (heavy) this._play('impactAnime', when, { gain: 0.7 });
+    // Inti pukulan Reels: punch-anime-01 (disetujui user), peak di 0.062 dtk.
+    this._play('punchAnime', when - 0.062, { gain: 0.85 * (0.65 + 0.35 * power) * scale });
+    this._play(thud, when - thudPeak, { gain: (heavy ? 0.55 : 0.50) * scale });
+    this._play(snap, when, { gain: (heavy ? 0.8 : 0.55) * scale });
+    if (heavy) this._play('impactAnime', when - 0.420, { gain: 0.40 * scale });
   }
 
   _block(when) { this._play('blockTok', when, { gain: 0.9 }); }
