@@ -1,13 +1,22 @@
 /**
- * Bracket single-elimination — fungsi murni (CONTRACT §5).
- * - target = pangkat 2 terbesar ≤ n (min 4)
- * - n === target → 0 bye
- * - n > target → matchesR1 = n - target, byes = 2*target - n
+ * Bracket single-elimination — fungsi murni.
+ * PENYIMPANGAN dari CONTRACT §5 (skema floor) atas permintaan user 2026-11-09:
+ * skema floor memberi label ronde yang SALAH pada ronde pendahuluan
+ * (mis. 7 peserta → target 4 → ronde pertama dilabel 'SF', lalu advanceWinners
+ * membuat 2 match 'F' — bracket rusak dan panel admin menampilkan
+ * "Ronde R16 belum siap" padahal match-nya ada di 'SF'). Skema baru (ceiling):
+ * - target = pangkat 2 TERKECIL ≥ n (min 4, maks 32)
+ * - byes = target - n (dipilih acak, penerima bye langsung lolos ke ronde berikut)
+ * - match ronde pertama = (n - byes) / 2, pasangan acak
  * - Ronde berikut dibuat hanya saat kedua pemenang diketahui (advanceWinners di lib/draw.ts)
  */
 
 export type RoundName = 'R32' | 'R16' | 'QF' | 'SF' | 'F';
 
+/**
+ * Dipertahankan untuk kompatibilitas (CONTRACT §5 + test lama).
+ * buildBracket kini memakai smallestPowerOfTwoAtLeast (ceiling).
+ */
 export function largestPowerOfTwo(n: number): number {
   if (!Number.isInteger(n) || n < 4) {
     throw new Error('Turnamen butuh min 4 peserta');
@@ -23,6 +32,24 @@ export function roundNameForTarget(target: number): RoundName[] {
   if (target === 8) return ['QF', 'SF', 'F'];
   if (target === 4) return ['SF', 'F'];
   throw new Error('Target bracket tidak valid');
+}
+
+/**
+ * Pangkat 2 terkecil ≥ n (min 4, maks 32). Dipakai buildBracket supaya
+ * ronde pertama selalu bernama benar (7 peserta → bracket 8 → 'QF',
+ * 9 peserta → bracket 16 → 'R16') dan undian bisa jalan dengan jumlah
+ * peserta berapa pun.
+ */
+export function smallestPowerOfTwoAtLeast(n: number): number {
+  if (!Number.isInteger(n) || n < 4) {
+    throw new Error('Turnamen butuh min 4 peserta');
+  }
+  if (n > 32) {
+    throw new Error('Turnamen maksimal 32 peserta');
+  }
+  let p = 4;
+  while (p < n) p *= 2;
+  return p;
 }
 
 export function nextRound(round: RoundName): RoundName | null {
@@ -122,7 +149,7 @@ export interface BuildBracketResult {
 
 export function buildBracket(entries: string[], seed?: number): BuildBracketResult {
   const n = entries.length;
-  const target = largestPowerOfTwo(n);
+  const target = smallestPowerOfTwoAtLeast(n);
   const bracketSeed = seed ?? Math.floor(Math.random() * 2 ** 31);
   const shuffled = shuffleSeeded(entries, bracketSeed);
   const rounds = roundNameForTarget(target);
@@ -130,42 +157,31 @@ export function buildBracket(entries: string[], seed?: number): BuildBracketResu
   const matches: BracketMatchInput[] = [];
   const byes: string[] = [];
 
-  if (n === target) {
-    for (let i = 0; i < n; i += 2) {
-      matches.push({
-        fighterAId: shuffled[i],
-        fighterBId: shuffled[i + 1],
-        isBye: false,
-        winnerId: null,
-        method: null,
-        status: 'scheduled',
-      });
-    }
-  } else {
-    const matchesR1 = n - target;
-    const byeCount = 2 * target - n;
-    for (let i = 0; i < matchesR1; i++) {
-      matches.push({
-        fighterAId: shuffled[i * 2],
-        fighterBId: shuffled[i * 2 + 1],
-        isBye: false,
-        winnerId: null,
-        method: null,
-        status: 'scheduled',
-      });
-    }
-    for (let i = 0; i < byeCount; i++) {
-      const fighter = shuffled[matchesR1 * 2 + i];
-      byes.push(fighter);
-      matches.push({
-        fighterAId: fighter,
-        fighterBId: null,
-        isBye: true,
-        winnerId: fighter,
-        method: 'bye',
-        status: 'decided',
-      });
-    }
+  // Bye acak: target - n fighter terakhir hasil shuffle langsung lolos.
+  // Sisanya dipasangkan acak: match = (n - byes) / 2.
+  const byeCount = target - n;
+  const matchCount = (n - byeCount) / 2;
+  for (let i = 0; i < matchCount; i++) {
+    matches.push({
+      fighterAId: shuffled[i * 2],
+      fighterBId: shuffled[i * 2 + 1],
+      isBye: false,
+      winnerId: null,
+      method: null,
+      status: 'scheduled',
+    });
+  }
+  for (let i = 0; i < byeCount; i++) {
+    const fighter = shuffled[matchCount * 2 + i];
+    byes.push(fighter);
+    matches.push({
+      fighterAId: fighter,
+      fighterBId: null,
+      isBye: true,
+      winnerId: fighter,
+      method: 'bye',
+      status: 'decided',
+    });
   }
 
   return { target, rounds, firstRound, matches, byes, bracketSeed, order: shuffled };

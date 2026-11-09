@@ -6,6 +6,7 @@ import {
   largestPowerOfTwo,
   nextRound,
   roundNameForTarget,
+  smallestPowerOfTwoAtLeast,
   sortMatchesForTree,
 } from '../bracket';
 
@@ -28,6 +29,28 @@ describe('largestPowerOfTwo', () => {
   });
 });
 
+describe('smallestPowerOfTwoAtLeast', () => {
+  it('mengembalikan pangkat 2 terkecil ≥ n', () => {
+    expect(smallestPowerOfTwoAtLeast(4)).toBe(4);
+    expect(smallestPowerOfTwoAtLeast(5)).toBe(8);
+    expect(smallestPowerOfTwoAtLeast(7)).toBe(8);
+    expect(smallestPowerOfTwoAtLeast(8)).toBe(8);
+    expect(smallestPowerOfTwoAtLeast(9)).toBe(16);
+    expect(smallestPowerOfTwoAtLeast(16)).toBe(16);
+    expect(smallestPowerOfTwoAtLeast(17)).toBe(32);
+    expect(smallestPowerOfTwoAtLeast(32)).toBe(32);
+  });
+
+  it('throw jika n < 4', () => {
+    expect(() => smallestPowerOfTwoAtLeast(3)).toThrow('Turnamen butuh min 4 peserta');
+    expect(() => smallestPowerOfTwoAtLeast(0)).toThrow('Turnamen butuh min 4 peserta');
+  });
+
+  it('throw jika n > 32 (di luar ukuran bracket maksimal)', () => {
+    expect(() => smallestPowerOfTwoAtLeast(33)).toThrow('Turnamen maksimal 32 peserta');
+  });
+});
+
 describe('buildBracket', () => {
   it('n == target: 0 bye, semua masuk ronde pertama', () => {
     const r = buildBracket(ids(8), 42);
@@ -39,30 +62,75 @@ describe('buildBracket', () => {
     expect(r.matches.every((m) => m.fighterBId !== null)).toBe(true);
   });
 
-  it('n=10: 2 match R1 + 6 bye (byes = 2*target - n)', () => {
-    const r = buildBracket(ids(10), 7);
+  it('n=7 (kasus user): bracket 8, 1 bye acak, 3 match QF — 6 lawan, 1 lolos', () => {
+    const r = buildBracket(ids(7), 42);
     expect(r.target).toBe(8);
+    expect(r.byes).toHaveLength(1);
+    expect(r.matches.filter((m) => m.isBye)).toHaveLength(1);
+    expect(r.matches.filter((m) => !m.isBye)).toHaveLength(3);
+    expect(r.firstRound).toBe('QF');
+    expect(r.rounds).toEqual(['QF', 'SF', 'F']);
+    // Semua fighter terpakai tepat 1x
+    const used = r.matches.flatMap((m) => [m.fighterAId, m.fighterBId]).filter(Boolean);
+    expect(new Set(used).size).toBe(7);
+    // Bye: langsung decided, winner = fighterA, method 'bye'
+    const bye = r.matches.find((m) => m.isBye)!;
+    expect(bye.status).toBe('decided');
+    expect(bye.winnerId).toBe(bye.fighterAId);
+    expect(bye.method).toBe('bye');
+    expect(bye.fighterBId).toBeNull();
+  });
+
+  it('n=6: bracket 8, 2 bye, 2 match QF', () => {
+    const r = buildBracket(ids(6), 42);
+    expect(r.target).toBe(8);
+    expect(r.byes).toHaveLength(2);
+    expect(r.matches.filter((m) => !m.isBye)).toHaveLength(2);
+    expect(r.firstRound).toBe('QF');
+  });
+
+  it('n=5: bracket 8, 3 bye, 1 match QF', () => {
+    const r = buildBracket(ids(5), 99);
+    expect(r.target).toBe(8);
+    expect(r.byes).toHaveLength(3);
+    expect(r.matches.filter((m) => !m.isBye)).toHaveLength(1);
+    expect(r.firstRound).toBe('QF');
+  });
+
+  it('n=4: bracket 4, 0 bye, 2 match SF', () => {
+    const r = buildBracket(ids(4), 42);
+    expect(r.target).toBe(4);
+    expect(r.byes).toHaveLength(0);
+    expect(r.matches).toHaveLength(2);
+    expect(r.firstRound).toBe('SF');
+  });
+
+  it('n=9: bracket 16, 7 bye, 1 match R16', () => {
+    const r = buildBracket(ids(9), 42);
+    expect(r.target).toBe(16);
+    expect(r.byes).toHaveLength(7);
+    expect(r.matches.filter((m) => !m.isBye)).toHaveLength(1);
+    expect(r.firstRound).toBe('R16');
+  });
+
+  it('n=10: bracket 16, 6 bye, 2 match R16', () => {
+    const r = buildBracket(ids(10), 7);
+    expect(r.target).toBe(16);
     expect(r.byes).toHaveLength(6);
     expect(r.matches.filter((m) => m.isBye)).toHaveLength(6);
     expect(r.matches.filter((m) => !m.isBye)).toHaveLength(2);
+    expect(r.firstRound).toBe('R16');
     // Semua fighter terpakai tepat 1x
     const used = r.matches.flatMap((m) => [m.fighterAId, m.fighterBId]).filter(Boolean);
     expect(new Set(used).size).toBe(10);
-    // Match bye: langsung decided, winner = fighterA, method 'bye'
-    for (const m of r.matches.filter((m) => m.isBye)) {
-      expect(m.status).toBe('decided');
-      expect(m.winnerId).toBe(m.fighterAId);
-      expect(m.method).toBe('bye');
-      expect(m.fighterBId).toBeNull();
-    }
   });
 
-  it('n=5: 1 match + 3 bye (target 4)', () => {
-    const r = buildBracket(ids(5), 99);
-    expect(r.target).toBe(4);
-    expect(r.firstRound).toBe('SF');
-    expect(r.matches).toHaveLength(4);
-    expect(r.byes).toHaveLength(3);
+  it('invarian struktur: pemenang ronde pertama = target/2 (pas untuk ronde berikut)', () => {
+    for (const n of [4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 32]) {
+      const r = buildBracket(ids(n), 1234);
+      const advancers = r.matches.filter((m) => !m.isBye).length + r.byes.length;
+      expect(advancers).toBe(r.target / 2);
+    }
   });
 
   it('n=16: 0 bye, ronde pertama R16', () => {

@@ -15,7 +15,9 @@ type Ctx = { params: Promise<{ id: string }> };
  * Putuskan semua match 'scheduled' di ronde itu (bye tidak di-draw),
  * buat videoTask per match yang diputuskan, majukan pemenang ke ronde berikut.
  * Jika ronde = F → set champion, status turnamen 'completed'.
- * 400 jika ronde belum siap / sudah diputuskan.
+ * 400 jika ronde belum siap / sudah diputuskan. Pesan "belum siap" menyebut
+ * ronde mana yang sebenarnya bisa diundi (supaya admin tidak menebak-nebak
+ * ronde dari ukuran bracket nominal).
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   try {
@@ -49,7 +51,24 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         status: { $in: ['decided', 'video_done'] },
       });
       if (decidedCount > 0) throw badRequest(`Ronde ${round} sudah diputuskan`);
-      throw badRequest(`Ronde ${round} belum siap`);
+      // Bantu admin: sebutkan ronde mana yang sebenarnya bisa diundi
+      // (ukuran bracket efektif bisa lebih kecil dari ukuran nominal).
+      const ROUND_ORDER = ['R32', 'R16', 'QF', 'SF', 'F'];
+      const readyRounds = (
+        await Match.distinct('round', {
+          tournamentId: tournament._id,
+          status: 'scheduled',
+        })
+      ).filter((r): r is string => typeof r === 'string');
+      readyRounds.sort((a, b) => ROUND_ORDER.indexOf(a) - ROUND_ORDER.indexOf(b));
+      if (readyRounds.length > 0) {
+        throw badRequest(
+          `Ronde ${round} belum siap — ronde yang bisa diundi sekarang: ${readyRounds.join(', ')}`,
+        );
+      }
+      throw badRequest(
+        `Ronde ${round} belum siap — bracket belum dibuat atau semua ronde sudah diputuskan`,
+      );
     }
 
     const results = [];
