@@ -146,4 +146,89 @@ describe("record migration helpers", () => {
     expect(plan[0].alreadyMigrated).toBe(true);
     expect(plan[0].mergedRecord).toEqual({ wins: 1, losses: 1, draws: 1, kos: 1 });
   });
+
+  /**
+   * Gate migrasi LIVE 2026-11-09 (data dari GET /api/leaderboard +
+   * /api/fighters pagi itu): 8 fighter, 6 GameFight completed, 0 match
+   * turnamen decided. Gabungan HARUS sama persis dengan tabel harapan
+   * (record lama + casualRecord lama), DAN gabungan HARUS sama dengan
+   * hitung ulang dari semua GameFight (bukti tidak ada fight yang
+   * hilang / terhitung ganda).
+   *
+   * Catatan: casualMatchesRecount == false untuk Dayrot, Pitung, dan
+   * pemuda licik itu WAJAR (bukan alasan menahan migrasi) — mereka sudah
+   * main SETELAH update penyatuan rekor, jadi fight barunya sudah
+   * tercatat di `record`, bukan di `casualRecord`. Hitung ulang (semua
+   * fight) memang lebih besar dari kasual tersimpan untuk mereka.
+   */
+  it("plan LIVE 2026-11-09: merged == tabel harapan dan == hitung ulang", () => {
+    const dayrot = "6aeed045411a1fbd5582e5b7";
+    const pitung = "6af03c462554da0ac2c5c667";
+    const jamal = "6aef67b59135c58ce1258d4d";
+    const strivox = "6aefc93ef622565688a5a641";
+    const licik = "6af0c542694c6a8bb48a14ca";
+    const sijagoan = "6aeefa7fe9c854457ca67890";
+    const nope = "6aeefcaff02653174c59d114";
+    const zahran = "6aefdde571c6501d524561e0";
+
+    const liveFights: CompletedFightForRecount[] = [
+      // Dayrot menang decision atas STRIVOX
+      { fighterAId: dayrot, fighterBId: strivox, result: { winnerFighterId: dayrot, method: "decision" } },
+      // STRIVOX menang decision atas Dayrot
+      { fighterAId: dayrot, fighterBId: strivox, result: { winnerFighterId: strivox, method: "decision" } },
+      // Dayrot menang KO atas Jamal
+      { fighterAId: dayrot, fighterBId: jamal, result: { winnerFighterId: dayrot, method: "KO" } },
+      // Pitung menang KO atas Jamal (8 Nov 16:27)
+      { fighterAId: pitung, fighterBId: jamal, result: { winnerFighterId: pitung, method: "KO" } },
+      // Pagi 9 Nov: Dayrot menang decision atas Pitung
+      { fighterAId: dayrot, fighterBId: pitung, result: { winnerFighterId: dayrot, method: "decision" } },
+      // Pagi 9 Nov: Dayrot menang KO atas pemuda licik
+      { fighterAId: dayrot, fighterBId: licik, result: { winnerFighterId: dayrot, method: "KO" } },
+    ];
+
+    const plan = planRecordMigration(
+      [
+        { _id: dayrot, displayName: "Dayrot jagoan", record: { wins: 2, losses: 0, draws: 0, kos: 1 }, casualRecord: { wins: 2, losses: 1, draws: 0, kos: 1 }, hasCasualRecord: true },
+        { _id: pitung, displayName: "Pitung", record: { wins: 0, losses: 1, draws: 0, kos: 0 }, casualRecord: { wins: 1, losses: 0, draws: 0, kos: 1 }, hasCasualRecord: true },
+        { _id: jamal, displayName: "Jamal geng sebelah", record: { wins: 0, losses: 0, draws: 0, kos: 0 }, casualRecord: { wins: 0, losses: 2, draws: 0, kos: 0 }, hasCasualRecord: true },
+        { _id: strivox, displayName: "STRIVOX", record: { wins: 0, losses: 0, draws: 0, kos: 0 }, casualRecord: { wins: 1, losses: 1, draws: 0, kos: 0 }, hasCasualRecord: true },
+        { _id: licik, displayName: "pemuda licik", record: { wins: 0, losses: 1, draws: 0, kos: 0 }, casualRecord: null, hasCasualRecord: false },
+        { _id: sijagoan, displayName: "Sijagoan Batak", record: { wins: 0, losses: 0, draws: 0, kos: 0 }, casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 }, hasCasualRecord: true },
+        { _id: nope, displayName: "Nope boy", record: { wins: 0, losses: 0, draws: 0, kos: 0 }, casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 }, hasCasualRecord: true },
+        { _id: zahran, displayName: "zahran petarung", record: { wins: 0, losses: 0, draws: 0, kos: 0 }, casualRecord: { wins: 0, losses: 0, draws: 0, kos: 0 }, hasCasualRecord: true },
+      ],
+      liveFights,
+    );
+
+    const byId = new Map(plan.map((p) => [p.fighterId, p]));
+    const expected: Record<string, { wins: number; losses: number; draws: number; kos: number }> = {
+      [dayrot]: { wins: 4, losses: 1, draws: 0, kos: 2 },
+      [pitung]: { wins: 1, losses: 1, draws: 0, kos: 1 },
+      [jamal]: { wins: 0, losses: 2, draws: 0, kos: 0 },
+      [strivox]: { wins: 1, losses: 1, draws: 0, kos: 0 },
+      [licik]: { wins: 0, losses: 1, draws: 0, kos: 0 },
+      [sijagoan]: { wins: 0, losses: 0, draws: 0, kos: 0 },
+      [nope]: { wins: 0, losses: 0, draws: 0, kos: 0 },
+      [zahran]: { wins: 0, losses: 0, draws: 0, kos: 0 },
+    };
+
+    for (const [id, want] of Object.entries(expected)) {
+      const p = byId.get(id);
+      expect(p).toBeDefined();
+      expect(p!.mergedRecord).toEqual(want);
+      // Integritas: gabungan (record + kasual tersimpan) harus sama
+      // dengan hitung ulang dari semua GameFight — tidak ada fight
+      // yang hilang atau terhitung ganda.
+      expect(p!.mergedRecord).toEqual(p!.recountFromGameFights);
+    }
+
+    // Kasual cocok dengan hitung ulang hanya untuk fighter yang TIDAK
+    // main setelah update (Jamal, STRIVOX, dan yang 0-0-0).
+    expect(byId.get(dayrot)!.casualMatchesRecount).toBe(false);
+    expect(byId.get(pitung)!.casualMatchesRecount).toBe(false);
+    expect(byId.get(licik)!.casualMatchesRecount).toBe(false);
+    expect(byId.get(jamal)!.casualMatchesRecount).toBe(true);
+    expect(byId.get(strivox)!.casualMatchesRecount).toBe(true);
+    expect(byId.get(zahran)!.casualMatchesRecount).toBe(true);
+  });
 });

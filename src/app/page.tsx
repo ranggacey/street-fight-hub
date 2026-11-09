@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth";
 import {
   asFighter,
   formatWIB,
-  getId,
   IG_URL,
   normalizeBracket,
   TOURNAMENT_STATUS_LABELS,
@@ -22,7 +21,7 @@ import type {
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import { ButtonLink } from "@/components/Button";
-import FighterCard from "@/components/FighterCard";
+import TopFighters from "@/components/TopFighters";
 import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
@@ -110,22 +109,11 @@ export default async function Home() {
   const live = dataOr(liveRes, { tournaments: [] }).tournaments;
   const completed = dataOr(completedRes, { tournaments: [] }).tournaments;
   // Kartu Top 5 memakai SATU rekor (record) sebagai baris M/K/S/KO —
-  // rekor yang sama di semua tempat (kasual, turnamen, gelar). Rating
-  // point dibawa lewat field rating untuk FighterCard.
-  const topFighters: Fighter[] = dataOr(topRes, { entries: [] })
-    .entries.slice(0, 5)
-    .map((e) => {
-      const record = e.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
-      return {
-        _id: e.fighterId,
-        displayName: e.displayName ?? "-",
-        igUsername: e.igUsername ?? "",
-        style: (e.style ?? "tinju") as Fighter["style"],
-        record,
-        rating: e.rating ?? 1000,
-        status: "active" as const,
-      };
-    });
+  // rekor yang sama di semua tempat (kasual, turnamen, gelar). Data
+  // awal dari server; TopFighters menyegarkan sendiri dari
+  // /api/leaderboard saat tampil / tab kembali terlihat (anti angka
+  // basi dari tab browser yang dipulihkan).
+  const topEntries = dataOr(topRes, { entries: [] }).entries.slice(0, 5);
 
   // Juara terakhir: ambil detail turnamen selesai terbaru, cari champion-nya.
   const lastCompleted = completed[0];
@@ -334,23 +322,14 @@ export default async function Home() {
             Klasemen kasual →
           </Link>
         </div>
-        {topFighters.length === 0 ? (
+        {topEntries.length === 0 ? (
           <EmptyState
             title="Belum Ada Fighter"
             description="Jadilah fighter pertama di arena — buat fighter-mu dan daftarkan ke turnamen berikutnya."
             action={<ButtonLink href="/fighter-saya">Buat Fighter</ButtonLink>}
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {topFighters.map((f, i) => (
-              <FighterCard
-                key={getId(f) || i}
-                fighter={f}
-                rank={i + 1}
-                showRating
-              />
-            ))}
-          </div>
+          <TopFighters initial={topEntries} />
         )}
       </section>
 

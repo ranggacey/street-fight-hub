@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Klasemen",
   description:
-    "Leaderboard fighter Street Fight Hub — turnamen (kemenangan) dan kasual (rating Elo).",
+    "Leaderboard fighter Street Fight Hub — satu rekor untuk semua mode, diurutkan per kemenangan atau rating Elo.",
 };
 
 export default async function KlasemenPage({
@@ -36,7 +36,7 @@ export default async function KlasemenPage({
           </h1>
           <p className="mt-2 max-w-2xl text-paper-dim">
             Diurutkan dari rating Elo (awal 1000, naik kalau menang).
-            Rekor M/K/S yang tampil adalah satu rekor yang sama di semua
+            Rekor M/K/S/KO yang tampil adalah satu rekor yang sama di semua
             tempat — kasual, turnamen, gelar.
           </p>
         </header>
@@ -67,7 +67,7 @@ export default async function KlasemenPage({
           />
         ) : (
           <div className="glass overflow-hidden p-0">
-            <div className="hidden grid-cols-[3rem_1fr_8rem_5rem_4rem_4rem_4rem] gap-2 border-b border-white/10 bg-white/5 px-5 py-3 text-xs font-bold uppercase tracking-wider text-paper-mute md:grid">
+            <div className="hidden grid-cols-[3rem_1fr_8rem_5rem_4rem_4rem_4rem_4rem] gap-2 border-b border-white/10 bg-white/5 px-5 py-3 text-xs font-bold uppercase tracking-wider text-paper-mute md:grid">
               <span>#</span>
               <span>Fighter</span>
               <span>Gaya</span>
@@ -75,6 +75,7 @@ export default async function KlasemenPage({
               <span className="text-center">M</span>
               <span className="text-center">K</span>
               <span className="text-center">S</span>
+              <span className="text-center">KO</span>
             </div>
             <ol>
               {entries.map((e) => {
@@ -83,7 +84,7 @@ export default async function KlasemenPage({
                   <li key={e.fighterId}>
                     <Link
                       href={`/fighter/${e.fighterId}`}
-                      className="grid grid-cols-[3rem_1fr_auto] items-center gap-2 px-4 py-3 transition-colors hover:bg-white/5 md:grid-cols-[3rem_1fr_8rem_5rem_4rem_4rem_4rem] md:px-5"
+                      className="grid grid-cols-[3rem_1fr_auto] items-center gap-2 px-4 py-3 transition-colors hover:bg-white/5 md:grid-cols-[3rem_1fr_8rem_5rem_4rem_4rem_4rem_4rem] md:px-5"
                     >
                       <span className="font-display text-xl text-amber-brand">
                         {e.rank}
@@ -102,8 +103,14 @@ export default async function KlasemenPage({
                       <span className="hidden text-sm text-paper-dim md:block">
                         {styleLabel(e.style)}
                       </span>
-                      <span className="text-center font-display text-lg tabular-nums text-amber-brand md:hidden">
-                        {e.rating}
+                      <span className="flex flex-col items-end text-right md:hidden">
+                        <span className="font-display text-lg tabular-nums text-amber-brand">
+                          {e.rating}
+                        </span>
+                        <span className="font-display text-xs tabular-nums text-paper-dim">
+                          {record.wins}M {record.losses}K {record.draws}S •{" "}
+                          {record.kos}KO
+                        </span>
                       </span>
                       <span className="hidden text-center font-display text-lg tabular-nums text-amber-brand md:block">
                         {e.rating}
@@ -116,6 +123,9 @@ export default async function KlasemenPage({
                       </span>
                       <span className="hidden text-center font-display text-lg tabular-nums text-paper-dim md:block">
                         {record.draws}
+                      </span>
+                      <span className="hidden text-center font-display text-lg tabular-nums text-red-brand md:block">
+                        {record.kos}
                       </span>
                     </Link>
                   </li>
@@ -148,7 +158,8 @@ export default async function KlasemenPage({
         </h1>
         <p className="mt-2 max-w-2xl text-paper-dim">
           Diurutkan dari kemenangan terbanyak, lalu KO terbanyak, lalu
-          kekalahan tersedikit.
+          kekalahan tersedikit. Rekor yang tampil adalah satu rekor yang sama
+          di semua tempat — kasual, turnamen, gelar.
         </p>
       </header>
 
@@ -241,8 +252,9 @@ export default async function KlasemenPage({
                     <span className="hidden text-sm text-paper-dim md:block">
                       {styleLabel(f.style, f.styleOther)}
                     </span>
-                    <span className="text-center font-display text-lg tabular-nums md:hidden">
-                      {record.wins}M • {record.kos}KO
+                    <span className="text-center font-display text-base tabular-nums md:hidden">
+                      {record.wins}M {record.losses}K {record.draws}S •{" "}
+                      {record.kos}KO
                     </span>
                     <span className="hidden text-center font-display text-lg tabular-nums text-paper md:block">
                       {record.wins}

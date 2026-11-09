@@ -7,6 +7,7 @@ import GlassCard from "@/components/GlassCard";
 import StatChip from "@/components/StatChip";
 import EmptyState from "@/components/EmptyState";
 import { ButtonLink } from "@/components/Button";
+import AdminRecordMigration from "./AdminRecordMigration";
 
 /** Normalisasi stats — nama field backend bisa bervariasi, pakai fallback. */
 function normalizeStats(raw: Record<string, unknown>): AdminStats {
@@ -70,6 +71,8 @@ export default function AdminDashboard({ slug }: { slug: string }) {
           <StatChip label="Tugas Pending" value={stats.pendingTasks} tone="amber" />
         </div>
       )}
+
+      <AdminRecordMigration slug={slug} />
 
       <GlassCard>
         <h2 className="font-display text-xl uppercase tracking-wide text-amber-brand">
