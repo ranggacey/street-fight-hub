@@ -76,21 +76,31 @@ async function writeEvents(events: TitleEvent[]): Promise<void> {
   }
 }
 
+/**
+ * Ambil dokumen Title (singleton slug 'juara-street-fight'), buat kalau
+ * belum ada. ATOMIK via upsert: findOne lalu create rawan race — dua
+ * request bersamaan (mis. dua quick-fight / dua accept) sama-sama
+ * menemukan kosong lalu create ganda dan satu kena E11000 (slug unik).
+ * findOneAndUpdate + $setOnInsert hanya membuat SATU dokumen.
+ */
 export async function getOrCreateTitle(): Promise<TitleDoc> {
-  let doc = (await Title.findOne({ slug: 'juara-street-fight' })) as TitleDoc | null;
-  if (!doc) {
-    doc = (await Title.create({
-      name: 'Juara Street Fight',
-      slug: 'juara-street-fight',
-      holderFighterId: null,
-      wonAt: null,
-      lastFightAt: null,
-      defenses: 0,
-      raceTarget: 10,
-      raceStartAt: new Date(),
-      everVacated: false,
-    })) as unknown as TitleDoc;
-  }
+  const doc = (await Title.findOneAndUpdate(
+    { slug: 'juara-street-fight' },
+    {
+      $setOnInsert: {
+        name: 'Juara Street Fight',
+        slug: 'juara-street-fight',
+        holderFighterId: null,
+        wonAt: null,
+        lastFightAt: null,
+        defenses: 0,
+        raceTarget: 10,
+        raceStartAt: new Date(),
+        everVacated: false,
+      },
+    },
+    { upsert: true, returnDocument: 'after' },
+  )) as unknown as TitleDoc;
   return doc;
 }
 

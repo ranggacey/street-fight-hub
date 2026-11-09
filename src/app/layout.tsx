@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FloatingChat from "@/components/FloatingChat";
+import QuickFightButton from "@/components/QuickFightButton";
 import ChallengeNotifications from "@/components/ChallengeNotifications";
 import "./globals.css";
 
@@ -56,6 +57,7 @@ export default function RootLayout({
         </main>
         <Footer />
         <FloatingChat />
+        <QuickFightButton />
         <ChallengeNotifications />
       </body>
     </html>
