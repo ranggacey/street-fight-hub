@@ -1462,6 +1462,32 @@ export function cameraShakeAt(tf) {
   return { x: amp * shakeNoise(tf, 1), y: amp * shakeNoise(tf, 2), trauma };
 }
 
+// ---------------- Hit-stop flash (Langkah 3) ----------------
+// Kilau putih singkat di AWAL hit-stop (waktu NYATA — sim sedang beku,
+// jadi kilau ini yang membuat freeze-nya "terasa" di layar, bukan sekadar
+// frame yang diam). Alpha puncak ikut tier (light 0,10 / mid 0,16 /
+// heavy-KO 0,22; block 0,05), meluruh dalam 0,08 dtk. Digambar di ruang
+// dunia (sebelum restore) supaya HUD/komentator tidak ikut berkilau.
+const HITSTOP_FLASH_DUR = 0.08;
+export function hitStopFlashAt(tf) {
+  const t = tf - S.INTRO_DUR;
+  if (t < 0) return 0;
+  let peak = 0;
+  for (const hs of S.HITSTOPS) {
+    const age = t - hs.realT;
+    if (age < 0 || age >= HITSTOP_FLASH_DUR) continue;
+    const atk = S.ATTACKS.find((a) => a.t === hs.simT);
+    let p = 0.05; // default: block (1 frame hit-stop)
+    if (atk && atk.outcome === 'hit') {
+      const tier = impactTier(atk.power);
+      p = tier === 'heavy' ? 0.22 : tier === 'mid' ? 0.16 : 0.10;
+      if (atk.knockdown) p = 0.22;
+    }
+    peak = Math.max(peak, p * (1 - age / HITSTOP_FLASH_DUR));
+  }
+  return peak;
+}
+
 function cameraFor(R, B) {
   const ext = (f) => {
     const down = f.mode === 'falling' || f.mode === 'down' || f.mode === 'getup';
@@ -1712,6 +1738,16 @@ export function render(c, tf) {
   drawParticles(c, s, sim.particles);
   drawImpacts(c, s, sim.impacts);
   drawSpeedLines(c, s, sim);
+  // Kilau hit-stop (Langkah 3): overlay putih di area pandang kamera
+  // (koordinat dunia), di atas dunia tapi di bawah HUD.
+  const hsFlash = hitStopFlashAt(tf);
+  if (hsFlash > 0.003) {
+    c.save();
+    c.globalAlpha = hsFlash;
+    c.fillStyle = '#FFFFFF';
+    c.fillRect(cam.x - W / 2 / cam.z - 10, cam.y - H / 2 / cam.z - 10, W / cam.z + 20, H / cam.z + 20);
+    c.restore();
+  }
   c.restore();
   drawHealthBar(c, tf, sim);
   drawFacecam(c, tf, s);
