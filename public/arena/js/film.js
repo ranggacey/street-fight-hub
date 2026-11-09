@@ -1490,6 +1490,84 @@ function drawKOFX(c, tf, sim) {
   c.restore();
 }
 
+// ---------------- Aura / energi (Langkah 5, opsional) ----------------
+// Angin ambient: 6 garis tipis melayang di latar arena (di belakang
+// petarung, di atas dinding/penonton), alpha 0,08 — hadir terus tapi
+// nyaris tak terasa, supaya fight tetap terbaca. Posisi deterministik
+// dari waktu sim (hash01), bukan Math.random.
+const WIND_STREAKS = 6;
+export function windStreaksAt(s) {
+  const out = [];
+  const dark = getMapPalette(S.MAP).dark;
+  for (let i = 0; i < WIND_STREAKS; i++) {
+    const h1 = hash01(i * 7 + 1), h2 = hash01(i * 7 + 2), h3 = hash01(i * 7 + 3);
+    const y = 180 + h1 * 620; // pita dinding + ring (bukan HUD)
+    const spd = 60 + h2 * 90; // px/dtk
+    const len = 60 + h3 * 60;
+    const dir = h2 < 0.5 ? 1 : -1; // arah angin per garis (tetap)
+    const span = 1400;
+    let x = (h1 * 1200 + dir * spd * s) % span;
+    if (x < 0) x += span;
+    x -= 100;
+    out.push({ x1: x, y1: y, x2: x + dir * len, y2: y, alpha: 0.08, width: 2, color: dark ? '#FFFFFF' : PALETTE.ink });
+  }
+  return out;
+}
+
+function drawWindStreaks(c, s) {
+  const lines = windStreaksAt(s);
+  c.save();
+  c.lineCap = 'round';
+  for (const ln of lines) {
+    c.globalAlpha = ln.alpha;
+    c.strokeStyle = ln.color;
+    c.lineWidth = ln.width;
+    c.beginPath();
+    c.moveTo(ln.x1, ln.y1);
+    c.lineTo(ln.x2, ln.y2);
+    c.stroke();
+  }
+  c.restore();
+}
+
+// Aura petarung: kilau energi lembut di belakang penyerang selama 0,5 dtk
+// setelah pukulan/tendangan HEAVY kena (bukan tiap pukulan — hanya momen
+// besar). Radial gradient warna penyerang, alpha puncak 0,12, membesar +
+// memudar. Digambar SEBELUM petarung (cahaya dari belakang, tidak
+// menutupi badan). Fungsi MURNI.
+export function auraAt(s, sim) {
+  if (!sim) return null;
+  let last = null;
+  for (const atk of S.ATTACKS) {
+    if (atk.outcome !== 'hit' || atk.power < 1.4) continue;
+    if (s < atk.t || s > atk.t + 0.5) continue;
+    if (!last || atk.t > last.t) last = atk;
+  }
+  if (!last) return null;
+  const att = last.by === 'R' ? sim.R : sim.B;
+  const j = computeJoints(att);
+  const k = (s - last.t) / 0.5;
+  return {
+    x: j.torso.x, y: j.torso.y, r: 90 + k * 40,
+    alpha: 0.12 * (1 - k), color: att.color, kind: last.kind,
+  };
+}
+
+function drawAura(c, s, sim) {
+  const a = auraAt(s, sim);
+  if (!a) return;
+  // Glow jatuh (falloff) — bukan cakram datar: tengah warna penyerang,
+  // tepi transparan. Alpha puncak di auraAt (0,12).
+  const r = parseInt(a.color.slice(1, 3), 16), g = parseInt(a.color.slice(3, 5), 16), b = parseInt(a.color.slice(5, 7), 16);
+  c.save();
+  const grad = c.createRadialGradient(a.x, a.y, 10, a.x, a.y, a.r);
+  grad.addColorStop(0, `rgba(${r},${g},${b},${a.alpha})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  c.fillStyle = grad;
+  c.beginPath(); c.arc(a.x, a.y, a.r, 0, Math.PI * 2); c.fill();
+  c.restore();
+}
+
 // ---------------- kamera (pusat pada (camX, camY), seperti NF4) ----------------
 // ---------------- Camera shake (trauma-based) ----------------
 // Riset 2026-11-09 (MOTION-LOG §32): Eiserloh, GDC 2016 — trauma 0..1,
@@ -1808,8 +1886,10 @@ export function render(c, tf) {
   c.scale(cam.z, cam.z);
   c.translate(-cam.x, -cam.y);
   drawArena(c, s, sim, tf);
+  drawWindStreaks(c, s);
   drawShadow(c, R);
   drawShadow(c, B);
+  drawAura(c, s, sim);
   // Lemparan: korban digambar terangkat di atas bahu penyerang (overlay
   // visual — lihat throwOverlay; sim tidak disentuh, bayangan tetap di tanah).
   const ov = throwOverlay(s);
