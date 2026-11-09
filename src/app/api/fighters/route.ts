@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
       .limit(100)
       .lean();
     // Sisa jatah tarung hari ini (WIB) per fighter — dipakai kartu lawan
-    // di /tantangan ("Sisa tarung: 2/3"). Satu agregasi untuk semua
+    // di /tantangan ("Sisa tarung: 2/5"). Satu agregasi untuk semua
     // fighter; hitungan sama dengan gate accept (lihat daily-limit).
     const usedByFighter = await countFightsTodayByFighter();
     const fightersOut = (serialize(fighters) as Record<string, unknown>[]).map((f) => ({

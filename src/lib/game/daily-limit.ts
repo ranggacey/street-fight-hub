@@ -4,11 +4,11 @@
  */
 import { GameFight } from '../../models/GameFight';
 
-export const DAILY_FIGHT_LIMIT = 3;
+export const DAILY_FIGHT_LIMIT = 5;
 
 // Tantangan TIDAK ADA batas harian (perintah user 9 Nov 2026): berapa
 // pun tantangan boleh dikirim per hari. Yang dibatasi hanya jatah
-// tarung 3/hari (dicek saat accept, bukan saat kirim).
+// tarung 5/hari (dicek saat accept, bukan saat kirim).
 
 export interface DayWindow {
   start: Date;

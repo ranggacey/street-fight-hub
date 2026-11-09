@@ -718,7 +718,7 @@ export default function GameArena({
           </Badge>
           {detail.fightsRemaining !== null ? (
             <Badge tone="outline">
-              Sisa tarung hari ini: {detail.fightsRemaining}/3
+              Sisa tarung hari ini: {detail.fightsRemaining}/5
             </Badge>
           ) : null}
         </div>

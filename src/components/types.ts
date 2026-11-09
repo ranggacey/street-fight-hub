@@ -97,7 +97,7 @@ export interface Fighter {
   colors?: FighterColors;
   /** Aksesoris per bagian (katalog Hub); kosong = fallback turunan warna. */
   accessories?: FighterAccessories;
-  /** Sisa jatah tarung hari ini (WIB), 0–3 — diisi GET /api/fighters. */
+  /** Sisa jatah tarung hari ini (WIB), 0–5 — diisi GET /api/fighters. */
   fightsLeftToday?: number;
 }
 

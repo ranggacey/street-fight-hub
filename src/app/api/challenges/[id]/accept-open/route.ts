@@ -34,7 +34,7 @@ type Ctx = { params: Promise<{ id: string }> };
  * baru dibuat SETELAH klaim menang, supaya tidak ada fight yatim;
  * kalau pembuatan fight gagal, klaim di-rollback ke pending.
  *
- * Limit harian: cek 3 fight/hari (WIB) untuk KEDUA fighter — penantang
+ * Limit harian: cek 5 fight/hari (WIB) untuk KEDUA fighter — penantang
  * dan yang menerima — sama seperti alur terima tantangan langsung.
  * Tantangan UNLIMITED (tidak ada jatah tantangan/hari); di sini tidak
  * dicek lagi (menerima bukan mengirim).
@@ -71,14 +71,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const challenger = await Fighter.findById(challenge.challengerFighterId);
     if (!challenger) throw notFound('Fighter penantang tidak ditemukan');
 
-    // Limit 3 fight/hari (WIB) — kedua fighter.
+    // Limit 5 fight/hari (WIB) — kedua fighter.
     const [usedA, usedB] = await Promise.all([
       countFightsToday(challenger._id.toString()),
       countFightsToday(accepter._id.toString()),
     ]);
     if (usedA >= DAILY_FIGHT_LIMIT || usedB >= DAILY_FIGHT_LIMIT) {
       throw conflict(
-        'Jatah tarung hari ini sudah habis (maks 3 fight/hari, reset tengah malam WIB)',
+        'Jatah tarung hari ini sudah habis (maks 5 fight/hari, reset tengah malam WIB)',
         'DAILY_LIMIT_REACHED',
       );
     }

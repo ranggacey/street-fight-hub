@@ -121,7 +121,7 @@ export function QuickFightFab({
           Jatah tarung hari ini habis
         </p>
         <p className="mt-1 text-sm text-white/70">
-          Maks 3 fight per hari, reset tengah malam WIB. Besok gas lagi.
+          Maks 5 fight per hari, reset tengah malam WIB. Besok gas lagi.
         </p>
         <div className="mt-4">
           <button type="button" onClick={onClose} className={ghostBtn}>

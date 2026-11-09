@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
-import { fightsRemainingToday } from '@/lib/game/daily-limit';
+import { DAILY_FIGHT_LIMIT, fightsRemainingToday } from '@/lib/game/daily-limit';
 import { handleError, ok, serialize } from '@/lib/http';
 import { Fighter } from '@/models/Fighter';
 import { GameFight } from '@/models/GameFight';
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     await connectDB();
     const mine = await Fighter.findOne({ userId: session.userId }).select('_id');
     if (!mine) {
-      return ok({ fights: [], fightsRemaining: 3, hasFighter: false });
+      return ok({ fights: [], fightsRemaining: DAILY_FIGHT_LIMIT, hasFighter: false });
     }
     const fights = await GameFight.find({
       $or: [{ fighterAId: mine._id }, { fighterBId: mine._id }],

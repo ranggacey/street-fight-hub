@@ -56,7 +56,7 @@ function parseOpenChallengeBody(body: Record<string, unknown>): {
 /**
  * POST /api/challenges/open — buat tantangan TERBUKA (auth).
  * Satu open aktif per fighter. Tantangan UNLIMITED (perintah user
- * 9 Nov 2026): tidak ada batas tantangan/hari; jatah tarung 3/hari
+ * 9 Nov 2026): tidak ada batas tantangan/hari; jatah tarung 5/hari
  * tetap dicek saat accept.
  */
 export async function POST(req: NextRequest) {

@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     // Jatah saya hari ini (WIB).
     if ((await countFightsToday(mine._id.toString())) >= DAILY_FIGHT_LIMIT) {
       throw conflict(
-        'Jatah tarung hari ini sudah habis (maks 3 fight/hari, reset tengah malam WIB)',
+        'Jatah tarung hari ini sudah habis (maks 5 fight/hari, reset tengah malam WIB)',
         'DAILY_LIMIT_REACHED',
       );
     }
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // Jatah 3 fight/hari (WIB) — kedua fighter (dicek ulang setelah
+      // Jatah 5 fight/hari (WIB) — kedua fighter (dicek ulang setelah
       // klaim: jatah bisa habis di antara pemilihan lawan dan klaim).
       const [usedA, usedB] = await Promise.all([
         countFightsToday(mine._id.toString()),
@@ -135,13 +135,13 @@ export async function POST(req: NextRequest) {
           {
             $set: {
               status: 'cancelled',
-              cancelReason: 'Jatah tarung hari ini sudah habis (maks 3 fight/hari)',
+              cancelReason: 'Jatah tarung hari ini sudah habis (maks 5 fight/hari)',
               respondedAt: new Date(),
             },
           },
         );
         throw conflict(
-          'Jatah tarung hari ini sudah habis (maks 3 fight/hari, reset tengah malam WIB)',
+          'Jatah tarung hari ini sudah habis (maks 5 fight/hari, reset tengah malam WIB)',
           'DAILY_LIMIT_REACHED',
         );
       }

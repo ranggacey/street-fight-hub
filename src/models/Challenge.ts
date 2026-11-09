@@ -5,7 +5,7 @@ import mongoose, { Schema } from 'mongoose';
 //
 // TANTANGAN TIDAK ADA BATAS HARIAN (perintah user 9 Nov 2026): berapa
 // pun tantangan boleh dikirim per hari; yang dibatasi hanya jatah
-// tarung 3/hari (dicek saat accept, bukan saat kirim).
+// tarung 5/hari (dicek saat accept, bukan saat kirim).
 //
 // DUA JENIS TANTANGAN (field `kind`):
 // - 'direct' (default): tantangan ke 1 fighter tertentu —

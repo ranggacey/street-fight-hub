@@ -14,12 +14,12 @@ import { wibDayWindow } from '../../../lib/game/daily-limit';
  * Integration test sisa jatah tarung + nantang tanpa jatah
  * (perintah user 8 Nov 15:13 WIB).
  *
- * - GET /api/fighters mengembalikan fightsLeftToday per fighter (3/hari,
+ * - GET /api/fighters mengembalikan fightsLeftToday per fighter (5/hari,
  *   hari WIB, hitungan SAMA dengan gate accept: semua GameFight yang
  *   dibuat hari ini, status apa pun; fight kemarin WIB tidak dihitung).
- * - Kirim tantangan dengan sisa tarung 0/3 BERHASIL (201) — nantang
+ * - Kirim tantangan dengan sisa tarung 0/5 BERHASIL (201) — nantang
  *   tidak butuh jatah tarung.
- * - Accept dengan salah satu fighter 0/3 tetap DITOLAK 409
+ * - Accept dengan salah satu fighter 0/5 tetap DITOLAK 409
  *   DAILY_LIMIT_REACHED — gate di accept dipertahankan.
  *
  * Pola setup sama dengan open-challenge.test.ts: kalau binary MongoDB
@@ -121,7 +121,7 @@ interface FightersOut {
 }
 
 describe('Sisa jatah tarung di kartu lawan + nantang tanpa jatah', () => {
-  it('fightsLeftToday benar (batas hari WIB) → kirim tantangan 0/3 lolos → accept 0/3 ditolak', async () => {
+  it('fightsLeftToday benar (batas hari WIB) → kirim tantangan 0/5 lolos → accept 0/5 ditolak', async () => {
     if (skipIfNoDb()) return;
 
     const a = await makeUserFighter('quota_a', 'Quota A', 'quota_a', 'boxing');
@@ -129,8 +129,8 @@ describe('Sisa jatah tarung di kartu lawan + nantang tanpa jatah', () => {
     const c = await makeUserFighter('quota_c', 'Quota C', 'quota_c', 'karate');
     const d = await makeUserFighter('quota_d', 'Quota D', 'quota_d', 'judo');
 
-    // Fight hari ini (WIB): A vs D x3 (A habis, D habis), B vs D x1 (B sisa 2).
-    // Fight kemarin WIB: C vs D x1 (tidak dihitung — C tetap 3).
+    // Fight hari ini (WIB): A vs D x5 (A habis, D habis), B vs D x1 (B sisa 4).
+    // Fight kemarin WIB: C vs D x1 (tidak dihitung — C tetap 5).
     const { start } = wibDayWindow(new Date());
     const yesterdayWib = new Date(start.getTime() - 60 * 60 * 1000);
     const oid = (id: string) => new mongoose.Types.ObjectId(id);
@@ -151,6 +151,8 @@ describe('Sisa jatah tarung di kartu lawan + nantang tanpa jatah', () => {
       fightDoc(a.fighterId, d.fighterId),
       fightDoc(a.fighterId, d.fighterId),
       fightDoc(a.fighterId, d.fighterId),
+      fightDoc(a.fighterId, d.fighterId),
+      fightDoc(a.fighterId, d.fighterId),
       fightDoc(b.fighterId, d.fighterId),
       fightDoc(c.fighterId, d.fighterId, yesterdayWib),
     ]);
@@ -161,11 +163,11 @@ describe('Sisa jatah tarung di kartu lawan + nantang tanpa jatah', () => {
     const listBody = await json<ApiData<FightersOut>>(listRes);
     const left = new Map(listBody.data.fighters.map((f) => [f.displayName, f.fightsLeftToday]));
     expect(left.get('Quota A')).toBe(0);
-    expect(left.get('Quota B')).toBe(2);
-    expect(left.get('Quota C')).toBe(3);
+    expect(left.get('Quota B')).toBe(4);
+    expect(left.get('Quota C')).toBe(5);
     expect(left.get('Quota D')).toBe(0);
 
-    // 2. A (0/3) menantang C → 201 (nantang tidak butuh jatah tarung).
+    // 2. A (0/5) menantang C → 201 (nantang tidak butuh jatah tarung).
     const chRes = await createChallenge(
       req('/api/challenges', {
         method: 'POST',
@@ -177,7 +179,7 @@ describe('Sisa jatah tarung di kartu lawan + nantang tanpa jatah', () => {
     const chBody = await json<ApiData<{ challenge: { id: string } }>>(chRes);
     const challengeId = chBody.data.challenge.id;
 
-    // 3. C menerima tantangan A (A 0/3) → 409 DAILY_LIMIT_REACHED;
+    // 3. C menerima tantangan A (A 0/5) → 409 DAILY_LIMIT_REACHED;
     // tantangan tetap pending.
     const accRes = await acceptDirect(
       req(`/api/challenges/${challengeId}/accept`, { method: 'POST', cookie: c.cookie }),

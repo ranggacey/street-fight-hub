@@ -2,7 +2,7 @@
  * Gas Tarung (quick match): cari lawan yang tersedia untuk satu fighter.
  *
  * Lawan yang eligible: fighter aktif (bukan diri sendiri), masih punya
- * jatah tarung hari ini (3 fight/hari WIB), dan TIDAK sedang dalam
+ * jatah tarung hari ini (5 fight/hari WIB), dan TIDAK sedang dalam
  * fight aktif (status pending/playing). Diprioritaskan yang ratingnya
  * dalam ±100 dari ratingku; kalau tidak ada, fallback ke lawan
  * tersedia yang ratingnya paling dekat.
@@ -83,7 +83,7 @@ export async function findQuickFightOpponent(
     const id = f._id.toString();
     // Sibuk: sedang dalam fight yang belum selesai.
     if (busy.has(id)) continue;
-    // Jatah habis: sudah 3 fight hari ini (WIB).
+    // Jatah habis: sudah 5 fight hari ini (WIB).
     if ((usedToday.get(id) ?? 0) >= DAILY_FIGHT_LIMIT) continue;
     const rating = f.rating ?? 1000;
     candidates.push({

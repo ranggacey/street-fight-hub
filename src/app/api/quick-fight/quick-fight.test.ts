@@ -266,10 +266,12 @@ describe('Gas Tarung (quick match)', () => {
     const c = await makeUserFighter('qf_c4', 'QF C', 'qf_c4', 'karate', 1020);
     const d = await makeUserFighter('qf_d4', 'QF D', 'qf_d4', 'judo', 1030);
 
-    // B sibuk (fight pending), C sudah 3 fight hari ini (lawan acak,
+    // B sibuk (fight pending), C sudah 5 fight hari ini (lawan acak,
     // supaya tidak memakan jatah A).
     await insertFight(b.fighterId, new mongoose.Types.ObjectId().toString(), 'pending');
     await insertFight(c.fighterId, new mongoose.Types.ObjectId().toString(), 'pending');
+    await insertFight(c.fighterId, new mongoose.Types.ObjectId().toString(), 'completed');
+    await insertFight(c.fighterId, new mongoose.Types.ObjectId().toString(), 'completed');
     await insertFight(c.fighterId, new mongoose.Types.ObjectId().toString(), 'completed');
     await insertFight(c.fighterId, new mongoose.Types.ObjectId().toString(), 'completed');
 
@@ -292,12 +294,14 @@ describe('Gas Tarung (quick match)', () => {
     expect(await Challenge.countDocuments()).toBe(0);
   }, 180000);
 
-  it('jatah saya habis (3 fight hari ini) → 409 DAILY_LIMIT_REACHED', async () => {
+  it('jatah saya habis (5 fight hari ini) → 409 DAILY_LIMIT_REACHED', async () => {
     if (skipIfNoDb()) return;
 
     const a = await makeUserFighter('qf_a6', 'QF A', 'qf_a6', 'boxing', 1000);
     const b = await makeUserFighter('qf_b6', 'QF B', 'qf_b6', 'muay-thai', 1000);
     await insertFight(a.fighterId, b.fighterId, 'pending');
+    await insertFight(a.fighterId, b.fighterId, 'completed');
+    await insertFight(a.fighterId, b.fighterId, 'completed');
     await insertFight(a.fighterId, b.fighterId, 'completed');
     await insertFight(a.fighterId, b.fighterId, 'completed');
 

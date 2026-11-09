@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Tantangan UNLIMITED (perintah user 9 Nov 2026): tidak ada batas
-    // tantangan/hari. Jatah tarung 3/hari tetap dicek saat accept.
+    // tantangan/hari. Jatah tarung 5/hari tetap dicek saat accept.
 
     const now = new Date();
     const challenge = await Challenge.create({

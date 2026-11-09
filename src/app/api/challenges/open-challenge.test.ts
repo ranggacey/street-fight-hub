@@ -22,7 +22,7 @@ import { GameFight } from '../../../models/GameFight';
  * B terima 200 + config + GameFight → C terima lagi 409 (sudah diterima)
  * → tantangan UNLIMITED (perintah user 9 Nov 2026): buat +
  * kedaluwarsakan 5x, yang ke-6 tetap 201 (bukan 409) →
- * limit 3 fight/hari si penerima (3 fight disisipkan langsung, terima 409).
+ * limit 5 fight/hari si penerima (5 fight disisipkan langsung, terima 409).
  */
 
 let mongod: MongoMemoryServer | null = null;
@@ -249,7 +249,7 @@ describe('Tantangan terbuka (open challenge)', () => {
     const sixthBody = await json<ApiData<OpenOut>>(sixth);
     expect(sixthBody.data.challenge.kind).toBe('open');
 
-    // 9. Limit 3 fight/hari si penerima: sisipkan 3 fight hari ini
+    // 9. Limit 5 fight/hari si penerima: sisipkan 5 fight hari ini
     // untuk C, lalu C menerima open baru dari A → 409 DAILY_LIMIT_REACHED.
     const open2Res = await createOpen(
       req('/api/challenges/open', {
@@ -261,7 +261,7 @@ describe('Tantangan terbuka (open challenge)', () => {
     expect(open2Res.status).toBe(201);
     const open2Body = await json<ApiData<OpenOut>>(open2Res);
     const open2Id = open2Body.data.challenge.id;
-    const fightDocs = [0, 1, 2].map(() => ({
+    const fightDocs = [0, 1, 2, 3, 4].map(() => ({
       fighterAId: new mongoose.Types.ObjectId(c.fighterId),
       fighterBId: new mongoose.Types.ObjectId(b.fighterId),
       challengeId: null,

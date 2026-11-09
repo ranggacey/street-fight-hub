@@ -53,7 +53,7 @@ export default function OpenChallenges() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [myFighter, setMyFighter] = useState<Fighter | null>(null);
   const [openList, setOpenList] = useState<OpenChallenge[]>([]);
-  const [fightsRemaining, setFightsRemaining] = useState(3);
+  const [fightsRemaining, setFightsRemaining] = useState(5);
   const [phase, setPhase] = useState<"loading" | "ready">("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -206,7 +206,7 @@ export default function OpenChallenges() {
                 menanggapi yang gelud lawan{" "}
                 <strong className="text-paper">{myFighter.displayName}</strong>.
                 Sisa tarung:{" "}
-                <strong className="text-paper">{fightsRemaining}/3</strong>.
+                <strong className="text-paper">{fightsRemaining}/5</strong>.
               </p>
               <div>
                 <p

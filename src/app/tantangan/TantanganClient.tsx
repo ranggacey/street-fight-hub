@@ -99,7 +99,7 @@ export default function TantanganClient() {
   const [outgoing, setOutgoing] = useState<Challenge[]>([]);
   const [allFighters, setAllFighters] = useState<Fighter[]>([]);
   const [batches, setBatches] = useState<Record<string, BatchSummary>>({});
-  const [fightsRemaining, setFightsRemaining] = useState(3);
+  const [fightsRemaining, setFightsRemaining] = useState(5);
   const [phase, setPhase] = useState<"loading" | "need-login" | "ready">("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -392,7 +392,7 @@ export default function TantanganClient() {
       <QuotaCard
         label="Sisa tarung hari ini"
         remaining={fightsRemaining}
-        total={3}
+        total={5}
       />
 
       {/* Form tantang */}

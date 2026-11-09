@@ -28,7 +28,7 @@ type Ctx = { params: Promise<{ id: string }> };
 /**
  * POST /api/challenges/[id]/accept — yang ditantang menerima.
  * Membuat GameFight + seed server, mengembalikan payload sfa-config.
- * Cek limit 3 fight/hari (WIB) untuk KEDUA fighter + kekosongan gelar (lazy).
+ * Cek limit 5 fight/hari (WIB) untuk KEDUA fighter + kekosongan gelar (lazy).
  *
  * Anti-race (pola yang sama dengan accept-open): klaim dilakukan dengan
  * SATU update atomik findOneAndUpdate({ _id, status: 'pending' }) —
@@ -89,14 +89,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const challenger = await Fighter.findById(challenge.challengerFighterId);
     if (!challenger) throw notFound('Fighter penantang tidak ditemukan');
 
-    // Limit 3 fight/hari (WIB) — kedua fighter.
+    // Limit 5 fight/hari (WIB) — kedua fighter.
     const [usedA, usedB] = await Promise.all([
       countFightsToday(challenger._id.toString()),
       countFightsToday(challenged._id.toString()),
     ]);
     if (usedA >= DAILY_FIGHT_LIMIT || usedB >= DAILY_FIGHT_LIMIT) {
       throw conflict(
-        'Jatah tarung hari ini sudah habis (maks 3 fight/hari, reset tengah malam WIB)',
+        'Jatah tarung hari ini sudah habis (maks 5 fight/hari, reset tengah malam WIB)',
         'DAILY_LIMIT_REACHED',
       );
     }

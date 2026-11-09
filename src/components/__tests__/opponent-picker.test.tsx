@@ -134,7 +134,7 @@ describe('OpponentPicker pagination', () => {
 });
 
 describe('OpponentPicker sisa jatah tarung', () => {
-  it('kartu menampilkan "Sisa tarung: X/3" dari API', () => {
+  it('kartu menampilkan "Sisa tarung: X/5" dari API', () => {
     const html = renderToStaticMarkup(
       <OpponentPicker
         fighters={[makeFighter(1, 2), makeFighter(2, 3)]}
@@ -142,11 +142,11 @@ describe('OpponentPicker sisa jatah tarung', () => {
         onSelect={() => {}}
       />,
     );
-    expect(html).toContain('Sisa tarung: 2/3');
-    expect(html).toContain('Sisa tarung: 3/3');
+    expect(html).toContain('Sisa tarung: 2/5');
+    expect(html).toContain('Sisa tarung: 3/5');
   });
 
-  it('0/3 tetap bisa dipilih: ada radio-nya + catatan "bisa tarung besok"', () => {
+  it('0/5 tetap bisa dipilih: ada radio-nya + catatan "bisa tarung besok"', () => {
     const html = renderToStaticMarkup(
       <OpponentPicker
         fighters={[makeFighter(1, 0), makeFighter(2, 1)]}
@@ -154,9 +154,9 @@ describe('OpponentPicker sisa jatah tarung', () => {
         onSelect={() => {}}
       />,
     );
-    expect(html).toContain('Sisa tarung: 0/3');
+    expect(html).toContain('Sisa tarung: 0/5');
     expect(html).toContain('habis hari ini, bisa tarung besok');
-    // Radio lawan 0/3 tetap ada (tidak di-disable / disembunyikan).
+    // Radio lawan 0/5 tetap ada (tidak di-disable / disembunyikan).
     expect(html).toContain('value="fighter-01"');
     expect(html).toContain('>Lawan 01<');
   });

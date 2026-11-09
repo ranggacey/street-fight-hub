@@ -21,7 +21,7 @@ import { GameFight } from '../../../models/GameFight';
  * /api/challenges?box=out menampilkan ringkasan batches (total/pending)
  * → B terima challenge batch pertama → sibling C, D otomatis 'cancelled'
  * + alasan, tepat 1 GameFight untuk batch itu → bulk TIDAK cek jatah
- * tarung saat pembuatan (A sudah 3 fight hari ini, bulk ke [F, G] tetap
+ * tarung saat pembuatan (A sudah 5 fight hari ini, bulk ke [F, G] tetap
  * 201) → H bulk ke [F, G], lalu F dan G accept BERSAMAAN (Promise.all):
  * maksimal satu 200, tepat 1 GameFight untuk batch itu, yang kalah
  * 'cancelled' (kalau keduanya 409 karena race, retry satu accept → 200).
@@ -216,10 +216,10 @@ describe('Tantang banyak orang (bulk challenge, first-accept-wins)', () => {
     const batchFights = await GameFight.find({ challengeId: { $in: batchDocs.map((ch) => ch._id) } }).lean();
     expect(batchFights).toHaveLength(1);
 
-    // 5. Bulk TIDAK cek jatah tarung saat pembuatan: sisipkan 3 fight
+    // 5. Bulk TIDAK cek jatah tarung saat pembuatan: sisipkan 5 fight
     // hari ini untuk A, lalu A bulk ke [F, G] tetap 201 (created 2).
     // (Jatah dicek saat accept, bukan saat nantang — aturan lama.)
-    const fightDocs = [0, 1, 2].map(() => ({
+    const fightDocs = [0, 1, 2, 3, 4].map(() => ({
       fighterAId: new mongoose.Types.ObjectId(a.fighterId),
       // Lawan sisipan E (bukan F/G): F dan G harus tetap 0 fight supaya
       // accept mereka di step 6 tidak terblokir DAILY_LIMIT_REACHED.

@@ -25,7 +25,7 @@ import { TitleHistory } from '../../../models/TitleHistory';
  * Alur: register 2 user → fighter (duplikat 409) → challenge (duplikat
  * 409) → accept salah 403 → accept 200 + config → submit cocok →
  * completed + Elo/record berubah → submit lagi 409 → submit
- * hasil diubah → disputed (ranking tidak berubah) → limit 3/hari →
+ * hasil diubah → disputed (ranking tidak berubah) → limit 5/hari →
  * race 10 kemenangan → holder + event race_10_win → lastFightAt
  * dimundurkan 7 hari → GET /api/title → gelar kosong +
  * event vacated_inactivity.
@@ -336,31 +336,34 @@ describe('Game flow integration (challenge → fight → result → gelar)', () 
     expect((await Fighter.findById(fighterAId).lean())?.rating).toBe(ratingA2);
     expect((await Fighter.findById(fighterBId).lean())?.rating).toBe(ratingB2);
 
-    // 9. Fight ke-3 (benar) → sudah 3 fight hari ini; accept ke-4 → 409 DAILY_LIMIT_REACHED.
+    // 9. Fight ke-3, ke-4, ke-5 (benar) → sudah 5 fight hari ini;
+    // accept ke-6 → 409 DAILY_LIMIT_REACHED.
     await playOneFight(cookieA!, cookieB!, fighterAId, fighterBId, false);
-    const ch4Res = await createChallenge(
+    await playOneFight(cookieA!, cookieB!, fighterAId, fighterBId, false);
+    await playOneFight(cookieA!, cookieB!, fighterAId, fighterBId, false);
+    const ch6Res = await createChallenge(
       req('/api/challenges', {
         method: 'POST',
         body: { challengedFighterId: fighterBId, map: 'gudang' },
         cookie: cookieA,
       }),
     );
-    expect(ch4Res.status).toBe(201);
-    const ch4Body = await json<ApiData<ChallengeOut>>(ch4Res);
-    const ch4Id = ch4Body.data.challenge.id;
-    const acc4 = await acceptChallenge(
-      req(`/api/challenges/${ch4Id}/accept`, { method: 'POST', cookie: cookieB }),
-      { params: Promise.resolve({ id: ch4Id }) },
+    expect(ch6Res.status).toBe(201);
+    const ch6Body = await json<ApiData<ChallengeOut>>(ch6Res);
+    const ch6Id = ch6Body.data.challenge.id;
+    const acc6 = await acceptChallenge(
+      req(`/api/challenges/${ch6Id}/accept`, { method: 'POST', cookie: cookieB }),
+      { params: Promise.resolve({ id: ch6Id }) },
     );
-    expect(acc4.status).toBe(409);
-    const acc4Body = await json<ApiData<unknown>>(acc4);
-    expect(acc4Body.error?.code).toBe('DAILY_LIMIT_REACHED');
-    // Bersihkan: tolak challenge ke-4.
-    const dec4 = await declineChallenge(
-      req(`/api/challenges/${ch4Id}/decline`, { method: 'POST', cookie: cookieB }),
-      { params: Promise.resolve({ id: ch4Id }) },
+    expect(acc6.status).toBe(409);
+    const acc6Body = await json<ApiData<unknown>>(acc6);
+    expect(acc6Body.error?.code).toBe('DAILY_LIMIT_REACHED');
+    // Bersihkan: tolak challenge ke-6.
+    const dec6 = await declineChallenge(
+      req(`/api/challenges/${ch6Id}/decline`, { method: 'POST', cookie: cookieB }),
+      { params: Promise.resolve({ id: ch6Id }) },
     );
-    expect(dec4.status).toBe(200);
+    expect(dec6.status).toBe(200);
 
     // 10. Race: mundurkan createdAt semua fight 2 hari (reset limit harian;
     // completedAt tetap — kemenangan race tetap dihitung), lalu main
