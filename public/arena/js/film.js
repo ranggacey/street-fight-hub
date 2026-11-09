@@ -436,7 +436,7 @@ function startStep(f, leg, toX, dur, s) {
 export function createSim() {
   return {
     R: newFighter('R'), B: newFighter('B'),
-    particles: [], impacts: [], stepLog: [],
+    particles: [], impacts: [], rings: [], stepLog: [],
     rt: { atk: new Map() },
     s: 0,
   };
@@ -446,9 +446,9 @@ export function createSim() {
 function simStep(st, sNext, onFrame) {
   const s = st.s;
   const h = sNext - s;
-  const { R, B, particles, impacts, rt, stepLog } = st;
-  stepFighter(R, B, s, h, particles, impacts, rt, stepLog);
-  stepFighter(B, R, s, h, particles, impacts, rt, stepLog);
+  const { R, B, particles, impacts, rings, rt, stepLog } = st;
+  stepFighter(R, B, s, h, particles, impacts, rings, rt, stepLog);
+  stepFighter(B, R, s, h, particles, impacts, rings, rt, stepLog);
   for (const atk of S.ATTACKS) {
     if (s < atk.t && sNext >= atk.t) triggerAttack(atk, R, B, atk.t, particles, impacts);
   }
@@ -561,7 +561,7 @@ function thrownPose(def, variant, k) {
   return lerpPoseFull(def.pose, mergePose(poseGuard(def.key), over), k);
 }
 
-function stepFighter(f, o, s, dt, particles, impacts, rt, stepLog) {
+function stepFighter(f, o, s, dt, particles, impacts, rings, rt, stepLog) {
   const prevMode = f.mode; // untuk deteksi transisi attack -> guard/walk/dll
   // Kecepatan badan menurut timeline engine (untuk durasi langkah + lean).
   // Diambil di awal langkah: posisi akhir langkah ini = timelinePos(s + dt).
@@ -641,6 +641,9 @@ function stepFighter(f, o, s, dt, particles, impacts, rt, stepLog) {
     if (f.grounded && Math.abs(f.bodyRot) > 1.25) {
       mode = 'down';
       spawnDust(particles, s, f.x - f.face * 60, GROUND, 16, 120, 0.8, 0.8, 6, 21);
+      // Ring tanah (VFX Langkah 4): elips datar membesar di lantai saat
+      // badan menghantam tanah — pasangan visual debu pendaratan.
+      rings.push({ t: s, x: f.x - f.face * 60, y: GROUND });
     }
   } else if (f.mode === 'down') {
     mode = 'down'; rate = 6; target = POSE.down;
@@ -1410,6 +1413,83 @@ export function kneeReport() {
   return { maxK: +maxK.toFixed(2), minK: +minK.toFixed(2), worstK, worstOff, badK, badOff, samples };
 }
 
+// ---------------- Efek KO / knockdown (Langkah 4) ----------------
+// Zoom KO: naik 0,8 dtk -> tahan 0,2 -> turun 1,0 dtk (total 2,0 dtk),
+// puncak 1,12x, lalu kembali 1,0 JAUH sebelum layar juri (KO_END) supaya
+// transisi tidak meloncat. TANPA slow-mo (pacing §17): KO dibaca lewat
+// zoom + flash + shockwave + shake, bukan waktu melambat.
+export function koZoomAt(tf) {
+  if (S.RESULT !== 'ko') return 1;
+  const start = S.INTRO_DUR + realTime(S.KO_T);
+  const age = tf - start;
+  if (age < 0 || age >= 2.0) return 1;
+  if (age < 0.8) return 1 + 0.12 * sstep(age / 0.8);
+  if (age < 1.0) return 1.12;
+  return 1 + 0.12 * (1 - sstep((age - 1.0) / 1.0));
+}
+
+// Shockwave KO: cincin membesar dari kepala pecundang selama 0,6 dtk
+// setelah KO (kilau + gelombang kejut, pasangan zoom). Fungsi MURNI dari
+// waktu nyata + titik kepala saat itu.
+export function koShockwaveAt(tf, x, y) {
+  if (S.RESULT !== 'ko') return null;
+  const start = S.INTRO_DUR + realTime(S.KO_T);
+  const age = tf - start;
+  if (age < 0 || age >= 0.6) return null;
+  const k = age / 0.6;
+  return { x, y, r: 20 + k * 140, alpha: 0.8 * (1 - k) };
+}
+
+// Ring tanah knockdown (bukan KO): elips datar di lantai, membesar 0,5 dtk.
+const GROUND_RING_DUR = 0.5;
+export function groundRingAt(s, rings) {
+  const out = [];
+  for (const rg of rings || []) {
+    const k = (s - rg.t) / GROUND_RING_DUR;
+    if (k < 0 || k > 1) continue;
+    const rx = 20 + k * 70;
+    out.push({ x: rg.x, y: rg.y, rx, ry: rx * 0.28, alpha: 0.5 * (1 - k) });
+  }
+  return out;
+}
+
+function drawGroundRings(c, s, rings) {
+  const act = groundRingAt(s, rings);
+  if (!act.length) return;
+  c.save();
+  for (const g of act) {
+    // Cincin putih bertepi tinta — terbaca di lantai terang (ring) maupun
+    // gelap (gudang/jalanan): outline gelap dulu, lalu putih di atasnya.
+    c.globalAlpha = g.alpha * 0.8;
+    c.strokeStyle = PALETTE.ink;
+    c.lineWidth = 6;
+    c.beginPath(); c.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); c.stroke();
+    c.globalAlpha = g.alpha;
+    c.strokeStyle = PALETTE.paper;
+    c.lineWidth = 3.5;
+    c.beginPath(); c.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); c.stroke();
+  }
+  c.restore();
+}
+
+function drawKOFX(c, tf, sim) {
+  if (S.RESULT !== 'ko') return;
+  const loser = S.WINNER === 'R' ? sim.B : sim.R;
+  const lj = computeJoints(loser);
+  const sw = koShockwaveAt(tf, lj.head.x, lj.head.y);
+  if (!sw) return;
+  c.save();
+  c.globalAlpha = sw.alpha;
+  c.strokeStyle = PALETTE.paper;
+  c.lineWidth = 5;
+  c.beginPath(); c.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2); c.stroke();
+  c.globalAlpha = sw.alpha * 0.7;
+  c.strokeStyle = PALETTE.yellow;
+  c.lineWidth = 2;
+  c.beginPath(); c.arc(sw.x, sw.y, sw.r * 0.8, 0, Math.PI * 2); c.stroke();
+  c.restore();
+}
+
 // ---------------- kamera (pusat pada (camX, camY), seperti NF4) ----------------
 // ---------------- Camera shake (trauma-based) ----------------
 // Riset 2026-11-09 (MOTION-LOG §32): Eiserloh, GDC 2016 — trauma 0..1,
@@ -1711,6 +1791,14 @@ export function render(c, tf) {
   const sim = getSim(s);
   const { R, B } = sim;
   const cam = cameraFor(R, B);
+  // Zoom KO (Langkah 4): kamera mendekat + bergeser ke pecundang selama
+  // 2 dtk setelah KO; HUD/komentator tidak ikut zoom (di luar save/restore).
+  const koZ = koZoomAt(tf);
+  if (koZ > 1) {
+    const loser = S.WINNER === 'R' ? B : R;
+    cam.x = lerp(cam.x, clamp(loser.x, 380, 900), ((koZ - 1) / 0.12) * 0.6);
+    cam.z *= koZ;
+  }
   c.save();
   c.translate(W / 2, H / 2);
   // Camera shake (§32): di ruang LAYAR (sebelum scale) supaya offset
@@ -1738,6 +1826,8 @@ export function render(c, tf) {
   drawParticles(c, s, sim.particles);
   drawImpacts(c, s, sim.impacts);
   drawSpeedLines(c, s, sim);
+  drawGroundRings(c, s, sim.rings);
+  drawKOFX(c, tf, sim);
   // Kilau hit-stop (Langkah 3): overlay putih di area pandang kamera
   // (koordinat dunia), di atas dunia tapi di bawah HUD.
   const hsFlash = hitStopFlashAt(tf);
