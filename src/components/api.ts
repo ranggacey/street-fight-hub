@@ -7,7 +7,10 @@ import type {
   FighterSummary,
   MatchItem,
   RoundKey,
+  Tournament,
+  TournamentStatus,
 } from "./types";
+import { roundNameForTarget, smallestPowerOfTwoAtLeast } from "@/lib/bracket";
 
 /* ------------------------------------------------------------------ */
 /* Fetch client (cookie sfh_token ikut otomatis, same-origin)          */
@@ -333,4 +336,110 @@ export const STYLE_COLORS: Record<string, string> = {
 
 export function styleColor(style?: string): string {
   return STYLE_COLORS[style ?? ""] ?? "#f5a623";
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin turnamen — tab, aksi per status, default ronde undi           */
+/* (Tugas 5: UX admin turnamen disederhanakan supaya admin awam tidak */
+/*  bingung — tiap tab hanya menampilkan daftar + aksi yang relevan.)  */
+/* ------------------------------------------------------------------ */
+
+export type AdminTournamentTab = "kelola" | "berlangsung" | "selesai";
+
+/** Daftar turnamen yang tampil di tiap tab admin. */
+export function filterAdminTournaments(
+  tournaments: Tournament[],
+  tab: AdminTournamentTab,
+): Tournament[] {
+  if (tab === "kelola") {
+    // Masih bisa dikelola: pendaftaran dibuka / ditutup, belum berjalan.
+    return tournaments.filter(
+      (t) => t.status === "upcoming" || t.status === "closed",
+    );
+  }
+  if (tab === "berlangsung") {
+    // Sudah ada / sedang berjalan (termasuk yang masih pendaftaran,
+    // supaya admin melihat antrean turnamen yang akan jalan).
+    return tournaments.filter(
+      (t) =>
+        t.status === "upcoming" ||
+        t.status === "closed" ||
+        t.status === "in_progress",
+    );
+  }
+  // Selesai: hanya riwayat, tanpa aksi pengubah apa pun.
+  return tournaments.filter(
+    (t) => t.status === "completed" || t.status === "cancelled",
+  );
+}
+
+export type AdminTournamentAction =
+  | "edit"
+  | "close"
+  | "cancel"
+  | "generate-bracket"
+  | "reshuffle"
+  | "draw-match"
+  | "draw-round"
+  | "view-bracket"
+  | "view-public";
+
+/**
+ * Aksi yang BOLEH tampil untuk satu status turnamen. Aturan intinya:
+ * tombol "undi" (per-match maupun per-ronde) dan "generate bracket" TIDAK
+ * PERNAH tampil di turnamen yang sudah selesai/dibatalkan.
+ */
+export function adminTournamentActions(
+  status: TournamentStatus,
+): AdminTournamentAction[] {
+  switch (status) {
+    case "upcoming":
+      return ["edit", "close", "cancel", "generate-bracket", "view-public"];
+    case "closed":
+      // Pendaftaran sudah ditutup — tidak ada lagi tombol tutup.
+      return ["edit", "cancel", "generate-bracket", "view-public"];
+    case "in_progress":
+      return [
+        "reshuffle",
+        "draw-match",
+        "draw-round",
+        "view-bracket",
+        "view-public",
+      ];
+    case "completed":
+    case "cancelled":
+      return ["view-bracket", "view-public"];
+  }
+}
+
+/**
+ * Ronde default untuk dropdown "Undi ronde": ronde PERTAMA yang masih
+ * punya match 'scheduled' (bukan bye), sesuai bracket yang sudah dibuat.
+ * Kalau bracket belum ada, tebak ronde pertama dari jumlah peserta
+ * efektif (pangkat 2 terkecil ≥ peserta — 4 peserta → SF, 7 → QF,
+ * 12 → R16, 20 → R32), BUKAN hardcode "R16". Fallback terakhir: "R16".
+ */
+export function defaultDrawRound(
+  tournament: Tournament,
+  matches: MatchItem[],
+): RoundKey {
+  for (const round of ROUND_ORDER) {
+    if (
+      matches.some(
+        (m) =>
+          m.round === round && m.status === "scheduled" && m.isBye !== true,
+      )
+    ) {
+      return round;
+    }
+  }
+  const n = Math.min(
+    32,
+    Math.max(4, tournament.participantCount ?? tournament.bracketSize ?? 32),
+  );
+  try {
+    return roundNameForTarget(smallestPowerOfTwoAtLeast(n))[0];
+  } catch {
+    return "R16";
+  }
 }

@@ -9,7 +9,9 @@ import { POST as createTournament } from '../../app/api/admin/tournaments/route'
 import { POST as joinTournament } from '../../app/api/tournaments/[slug]/join/route';
 import { POST as generateBracket } from '../../app/api/admin/tournaments/[id]/generate-bracket/route';
 import { POST as drawRound } from '../../app/api/admin/tournaments/[id]/draw-round/route';
+import { POST as drawMatch } from '../../app/api/admin/tournaments/[id]/draw-match/route';
 import { GET as getTournament } from '../../app/api/tournaments/[slug]/route';
+import { Match } from '../../models/Match';
 import { User } from '../../models/User';
 import { VideoTask } from '../../models/VideoTask';
 
@@ -238,5 +240,156 @@ describe('API integration (register → fighter → turnamen → bracket → dra
     expect(detailBody.data.tournament.status).toBe('completed');
     expect(detailBody.data.tournament.championId).toBeTruthy();
     expect(detailBody.data.participantCount).toBe(4);
+  });
+
+  it('draw-match: mulai pertarungan satu per satu (Tugas 5)', async () => {
+    if (skipIfNoDb()) return;
+
+    // Tanpa x-admin-path → 404 (path admin tidak bocor).
+    const noAdminPath = await drawMatch(
+      req('/api/admin/tournaments/x/draw-match', {
+        method: 'POST',
+        body: { matchId: 'x' },
+      }),
+      { params: Promise.resolve({ id: 'x' }) },
+    );
+    expect(noAdminPath.status).toBe(404);
+
+    // Setup: admin kedua + turnamen kedua (4 fighter).
+    const adminReg = await register(
+      req('/api/auth/register', {
+        method: 'POST',
+        body: { username: 'admin_test2', password: 'passwordkuat123' },
+      }),
+    );
+    expect(adminReg.status).toBe(201);
+    await User.updateOne({ username: 'admin_test2' }, { $set: { role: 'admin' } });
+    const adminLogin = await login(
+      req('/api/auth/login', {
+        method: 'POST',
+        body: { username: 'admin_test2', password: 'passwordkuat123' },
+      }),
+    );
+    expect(adminLogin.status).toBe(200);
+    const adminCookie = extractCookie(adminLogin);
+
+    const now = Date.now();
+    const tourRes = await createTournament(
+      req('/api/admin/tournaments', {
+        method: 'POST',
+        body: {
+          name: 'Turnamen Test 2',
+          bracketSize: 8,
+          regOpenAt: new Date(now - 1000).toISOString(),
+          regCloseAt: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          rules: 'Aturan test 2.',
+        },
+        cookie: adminCookie,
+        adminPath: true,
+      }),
+    );
+    expect(tourRes.status).toBe(201);
+    const tourBody = await json<{ data: { tournament: { slug: string; id: string } } }>(tourRes);
+    const slug: string = tourBody.data.tournament.slug;
+    const tournamentId: string = tourBody.data.tournament.id;
+    expect(slug).toBe('night-fight-championship-2');
+
+    for (let i = 5; i <= 8; i++) {
+      const reg = await register(
+        req('/api/auth/register', {
+          method: 'POST',
+          body: { username: `petarung${i}`, password: 'passwordkuat123' },
+        }),
+      );
+      expect(reg.status).toBe(201);
+      const cookie = extractCookie(reg);
+      const fighterRes = await createFighter(
+        req('/api/fighters', {
+          method: 'POST',
+          body: {
+            displayName: `Petarung ${i}`,
+            igUsername: `petarung${i}`,
+            style: 'boxing',
+            selfDescription: SELF_DESC,
+          },
+          cookie,
+        }),
+      );
+      expect(fighterRes.status).toBe(201);
+      const joinRes = await joinTournament(
+        req(`/api/tournaments/${slug}/join`, { method: 'POST', cookie }),
+        { params: Promise.resolve({ slug }) },
+      );
+      expect(joinRes.status).toBe(200);
+    }
+
+    const bracketRes = await generateBracket(
+      req(`/api/admin/tournaments/${tournamentId}/generate-bracket`, {
+        method: 'POST',
+        cookie: adminCookie,
+        adminPath: true,
+      }),
+      { params: Promise.resolve({ id: tournamentId }) },
+    );
+    expect(bracketRes.status).toBe(200);
+
+    const sfMatches = await Match.find({ tournamentId, round: 'SF' })
+      .sort({ createdAt: 1 })
+      .lean();
+    expect(sfMatches).toHaveLength(2);
+    const [sf1, sf2] = sfMatches;
+
+    const callDrawMatch = (matchId: string) =>
+      drawMatch(
+        req(`/api/admin/tournaments/${tournamentId}/draw-match`, {
+          method: 'POST',
+          body: { matchId },
+          cookie: adminCookie,
+          adminPath: true,
+        }),
+        { params: Promise.resolve({ id: tournamentId }) },
+      );
+
+    // 1. Mulai SF pertama SAJA: diputuskan, SF kedua tetap scheduled,
+    // turnamen tetap berjalan, 1 videoTask dibuat.
+    const first = await callDrawMatch(String(sf1._id));
+    expect(first.status).toBe(200);
+    const firstBody = await json<{
+      data: { method: string; winnerId: string; tournament: { status: string } };
+    }>(first);
+    expect(['KO', 'decision', 'draw']).toContain(firstBody.data.method);
+    expect(firstBody.data.winnerId).toBeTruthy();
+    expect(firstBody.data.tournament.status).toBe('in_progress');
+    expect(
+      await Match.countDocuments({ tournamentId, round: 'SF', status: 'scheduled' }),
+    ).toBe(1);
+    expect(await VideoTask.countDocuments({})).toBe(4); // 3 turnamen-1 + 1
+
+    // 2. Match yang sama diundi lagi → 400.
+    const again = await callDrawMatch(String(sf1._id));
+    expect(again.status).toBe(400);
+
+    // 3. MatchId tidak ada → 404.
+    const missing = await callDrawMatch(new mongoose.Types.ObjectId().toString());
+    expect(missing.status).toBe(404);
+
+    // 4. Mulai SF kedua: match Final terbentuk (scheduled).
+    const second = await callDrawMatch(String(sf2._id));
+    expect(second.status).toBe(200);
+    const finalMatches = await Match.find({ tournamentId, round: 'F' })
+      .sort({ createdAt: 1 })
+      .lean();
+    expect(finalMatches).toHaveLength(1);
+    expect(finalMatches[0].status).toBe('scheduled');
+
+    // 5. Mulai Final: turnamen selesai + juara ditentukan.
+    const final = await callDrawMatch(String(finalMatches[0]._id));
+    expect(final.status).toBe(200);
+    const finalBody = await json<{
+      data: { tournament: { status: string; championId: string | null } };
+    }>(final);
+    expect(finalBody.data.tournament.status).toBe('completed');
+    expect(finalBody.data.tournament.championId).toBeTruthy();
+    expect(await VideoTask.countDocuments({})).toBe(6); // 3 + 3
   });
 });
