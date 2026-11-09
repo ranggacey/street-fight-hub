@@ -75,15 +75,41 @@ export function createVoice(opts = {}) {
     sfx = s && s.ctx && s.master ? s : null;
   }
 
+  // Bundle VO: 682 klip dikemas jadi SATU JSON (audio/vo-bundle.json:
+  // id klip -> base64). File mp3 tidak bisa di-push langsung via GitHub
+  // API (create_or_update_file double-encode base64 -> file jadi teks),
+  // dan 682 file tidak praktis dipush satu per satu. Bundle di-fetch
+  // sekali (lazy, saat klip pertama diminta), lalu di-decode per klip.
+  // Isi suara TIDAK berubah — hanya cara pengemasannya.
+  let bundlePromise = null;
+  function getBundle() {
+    if (!bundlePromise) {
+      bundlePromise = (async () => {
+        try {
+          const res = await fetch('audio/vo-bundle.json');
+          if (!res.ok) return null;
+          return await res.json();
+        } catch (e) {
+          if (typeof console !== 'undefined') console.warn('[voice] gagal muat bundle VO', e);
+          return null;
+        }
+      })();
+    }
+    return bundlePromise;
+  }
+
   async function loadClip(id) {
     if (buffers.has(id)) return buffers.get(id);
     const url = VO_CLIPS[id];
     if (!url || !sfx?.ctx || typeof fetch === 'undefined') return null;
     try {
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const buf = await res.arrayBuffer();
-      const dec = await sfx.ctx.decodeAudioData(buf);
+      const bundle = await getBundle();
+      const b64 = bundle && bundle[id];
+      if (!b64) return null;
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const dec = await sfx.ctx.decodeAudioData(bytes.buffer);
       buffers.set(id, dec);
       return dec;
     } catch (e) {
