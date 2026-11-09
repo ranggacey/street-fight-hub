@@ -1711,6 +1711,7 @@ export function render(c, tf) {
   }
   drawParticles(c, s, sim.particles);
   drawImpacts(c, s, sim.impacts);
+  drawSpeedLines(c, s, sim);
   c.restore();
   drawHealthBar(c, tf, sim);
   drawFacecam(c, tf, s);
@@ -2447,6 +2448,69 @@ function drawImpacts(c, s, impacts) {
       c.fillStyle = PALETTE.red;
       c.beginPath(); c.arc(v.x, v.y, 5 + v.power * 3, 0, Math.PI * 2); c.fill();
     }
+  }
+  c.restore();
+}
+
+// ---------------- Speed lines (Langkah 2, pacing CF2 §17) ----------------
+// Garis gerak di sepanjang lintasan serangan — 2–4 frame (STRIKE_TRAVEL
+// 0,06 dtk + ekor 0,03 dtk setelah kontak), untuk SEMUA serangan (bukan
+// feint/shadow). Garis tipis warna penyerang, alpha puncak 0,35, membuntuti
+// ujung anggota penyerang ke arah target: tidak menutupi wajah/nama/HUD
+// (garis di ruang dunia di antara kedua petarung, HUD digambar terpisah
+// setelah restore). Fungsi MURNI (dipakai test + drawSpeedLines).
+const SPEED_LINE_TAIL = 0.03;
+export function speedLinesAt(s, sim) {
+  const out = [];
+  if (!sim) return out;
+  for (const atk of S.ATTACKS) {
+    if (atk.kind === 'feint' || atk.outcome === 'shadow') continue;
+    const t0 = atk.t - STRIKE_TRAVEL, t1 = atk.t + SPEED_LINE_TAIL;
+    if (s < t0 || s > t1) continue;
+    const p = (s - t0) / (t1 - t0); // 0..1 sepanjang jendela garis
+    const att = atk.by === 'R' ? sim.R : sim.B;
+    const def = atk.by === 'R' ? sim.B : sim.R;
+    const limb = limbFor(atk.kind);
+    const jA = computeJoints(att);
+    const jD = computeJoints(def);
+    const tip = limb === 'armF' ? jA.handF : limb === 'armB' ? jA.handB : jA.footB;
+    const target = atk.target === 'head' ? jD.head : atk.target === 'body' ? jD.torso : jD.kneeF;
+    // Arah serang: pangkal (bahu/pinggul) -> target; garis sejajar arah ini.
+    const base = limb === 'legB' ? jA.hipB : limb === 'armF' ? jA.shF : jA.shB;
+    let dx = target.x - base.x, dy = target.y - base.y;
+    const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+    const px = -dy, py = dx; // tegak lurus arah serang
+    const tier = impactTier(atk.power);
+    const n = tier === 'heavy' ? 4 : tier === 'mid' ? 3 : 2;
+    const alpha = 0.5 * Math.sin(Math.PI * p);
+    const L = 30 + atk.power * 12;
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * 15;
+      const mx = tip.x + px * off - dx * (8 + i * 12);
+      const my = tip.y + py * off - dy * (8 + i * 12);
+      out.push({
+        x1: mx - dx * L / 2, y1: my - dy * L / 2,
+        x2: mx + dx * L / 2, y2: my + dy * L / 2,
+        alpha, width: tier === 'heavy' ? 3.5 : 3, color: att.color, kind: atk.kind,
+      });
+    }
+  }
+  return out;
+}
+
+function drawSpeedLines(c, s, sim) {
+  const lines = speedLinesAt(s, sim);
+  if (!lines.length) return;
+  c.save();
+  c.lineCap = 'round';
+  for (const ln of lines) {
+    c.globalAlpha = ln.alpha;
+    c.strokeStyle = ln.color;
+    c.lineWidth = ln.width;
+    c.beginPath();
+    c.moveTo(ln.x1, ln.y1);
+    c.lineTo(ln.x2, ln.y2);
+    c.stroke();
   }
   c.restore();
 }
