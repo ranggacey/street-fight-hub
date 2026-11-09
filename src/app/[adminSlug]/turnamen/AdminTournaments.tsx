@@ -289,6 +289,10 @@ export default function AdminTournaments({ slug }: { slug: string }) {
         brackets[t.slug] === undefined &&
         !bracketLoading[t.slug]
       ) {
+        // Muat bracket saat tab dibuka — loadBracket setState sinkron di
+        // awal (setBracketLoading), pola yang sama dengan fetch saat mount
+        // di tempat lain (lihat GameArena/TantanganClient).
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         void loadBracket(t.slug);
       }
     }
