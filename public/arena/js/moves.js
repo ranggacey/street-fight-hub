@@ -223,6 +223,9 @@ export const STYLE_ALIASES = {
   karate: 'karate', capoeira: 'capoeira',
   wushu: 'wushu', 'kung-fu': 'wushu', kungfu: 'wushu',
   tinju: 'tinju', muaythai: 'muaythai', taekwondo: 'taekwondo',
+  // Alias enum Hub (dikirim mentah oleh toEngineFighter) — 2026-11-09:
+  // tanpa baris ini muay-thai/boxing/wrestling jatuh ke 'brawler'.
+  'muay-thai': 'muaythai', boxing: 'tinju', wrestling: 'gulat',
   silat: 'silat', gulat: 'gulat', brawler: 'brawler',
 };
 

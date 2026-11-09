@@ -9,12 +9,14 @@ kontrak embed v1 (`EMBED-CONTRACT.md`).
 **disalin ulang 2026-11-08 (Agen F: perbaikan `buildPositions` — lihat bawah).**
 **Disalin ulang 2026-11-08 (damage x0,25 + rate 80/10/10 + knockdown 10% +
 clamp ring — lihat bawah).**
+**Disalin ulang 2026-11-09 (alias gaya Hub muay-thai/boxing/wrestling —
+lihat bawah).**
 **Checksum md5 saat penyalinan** (verifikasi dengan `md5sum`):
 
 | File | md5 |
 |---|---|
 | `fight.js` | `4b32072497a2fe712a8775ddc061c179` |
-| `moves.js` | `543cb984757d51d816579b4c1e1ce93f` |
+| `moves.js` | `2cb25133d47edc70823c9018cc522bf9` |
 | `techniques.js` | `62618f9a409048d60f82be4ef7c728d2` |
 | `damage.js` | `debb3b2ea36fbbe88cdd1ef8f9813533` |
 
@@ -115,6 +117,29 @@ score/koTime — TIDAK berubah; `buildPositions` murni posisi, tanpa rng):
   tali. Arena `film.js` juga men-clamp power visual finisher ke 2,2
   (bukan file engine — tidak disalin ke Hub; render Arena saja).
 - **Lotere, pacing CF2, aturan gelar/rating TIDAK berubah.**
+
+## Perubahan 2026-11-09 (alias gaya Hub — muay-thai/boxing/wrestling)
+
+- **Bug:** `STYLE_ALIASES` di `moves.js` tidak memuat enum Hub
+  `'muay-thai'`, `'boxing'`, `'wrestling'` — padahal `toEngineFighter`
+  mengirim style Hub mentah — jadi `normalizeStyle()` menjatuhkan
+  ketiganya ke `'brawler'`. Akibatnya petarung Muay Thai tarung pakai
+  jurus brawler (pukulan + overhand/haymaker, tanpa tendangan/lutut/
+  siku/clinch), petinju juga brawler (bukan pool tinju murni), dan
+  pegulat akan memukul (melanggar aturan gulat tanpa pukulan).
+- **Perbaikan:** tiga alias baru di `STYLE_ALIASES` —
+  `'muay-thai': 'muaythai'`, `boxing: 'tinju'`, `wrestling: 'gulat'` —
+  diterapkan identik di ketiga copy (`moves.js` Arena, Hub
+  `src/lib/fight-engine/moves.js`, Hub `public/arena/js/moves.js`;
+  md5 baru `2cb25133d47edc70823c9018cc522bf9`). `'street'`/`'other'` →
+  brawler tetap (disengaja, keputusan Fase 1).
+- **Dampak:** semua fight ke depan memakai pool gerakan yang benar per
+  gaya. Fight yang sudah selesai dan terverifikasi TIDAK dihitung ulang
+  (hasil tersimpan tidak berubah); replay fight lama bisa menampilkan
+  gerakan yang berbeda dari `keyMoments` tersimpan.
+- **Tes:** `src/lib/__tests__/style-aliases.test.ts` baru (alias +
+  `movesFor` per gaya); tes `PERILAKU TERDOKUMENTASI` di
+  `training-config.test.ts` diperbarui ke perilaku baru.
 
 ## Aturan
 

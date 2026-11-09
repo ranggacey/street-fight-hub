@@ -152,15 +152,13 @@ describe('style → engine mapping (normalizeStyle)', () => {
     expect(engineKeyForStyle('')).toBe('brawler');
   });
 
-  it('PERILAKU TERDOKUMENTASI (bukan harapan): Hub-enum tanpa alias di tabel jatuh ke brawler — sama seperti fight produksi', () => {
-    // EMBED-CONTRACT §5 menulis muay-thai → muaythai, tapi tabel
-    // STYLE_ALIASES di moves.js (vendored, md5-identik dengan Arena)
-    // tidak memuat alias ini — jadi engine memakai brawler. Training
-    // mereproduksi perilaku produksi persis; kalau alias diperbaiki,
-    // tes ini WAJIB ikut diperbarui.
-    expect(normalizeStyle('muay-thai')).toBe('brawler');
-    expect(normalizeStyle('boxing')).toBe('brawler');
-    expect(normalizeStyle('wrestling')).toBe('brawler');
+  it('alias Hub-enum 2026-11-09: muay-thai/boxing/wrestling dipetakan ke pool aslinya', () => {
+    // Dulu ketiga enum ini jatuh ke brawler (tidak ada di STYLE_ALIASES);
+    // sejak perbaikan alias 2026-11-09, engine memakai pool aslinya.
+    // 'street'/'other' tetap brawler — itu disengaja (keputusan Fase 1).
+    expect(normalizeStyle('muay-thai')).toBe('muaythai');
+    expect(normalizeStyle('boxing')).toBe('tinju');
+    expect(normalizeStyle('wrestling')).toBe('gulat');
     expect(normalizeStyle('street')).toBe('brawler');
     expect(normalizeStyle('other')).toBe('brawler');
   });
