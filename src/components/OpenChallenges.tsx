@@ -33,7 +33,6 @@ type OpenListResponse = {
 };
 
 type QuotaResponse = {
-  sentRemaining: number;
   fightsRemaining: number;
 };
 
@@ -54,7 +53,6 @@ export default function OpenChallenges() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [myFighter, setMyFighter] = useState<Fighter | null>(null);
   const [openList, setOpenList] = useState<OpenChallenge[]>([]);
-  const [sentRemaining, setSentRemaining] = useState(5);
   const [fightsRemaining, setFightsRemaining] = useState(3);
   const [phase, setPhase] = useState<"loading" | "ready">("loading");
   const [error, setError] = useState("");
@@ -87,7 +85,6 @@ export default function OpenChallenges() {
         );
       }
       if (quotaRes.ok) {
-        setSentRemaining(quotaRes.data.sentRemaining);
         setFightsRemaining(quotaRes.data.fightsRemaining);
       }
     }
@@ -208,9 +205,7 @@ export default function OpenChallenges() {
                 Tantang semua orang — bukan 1 fighter tertentu. Yang pertama
                 menanggapi yang gelud lawan{" "}
                 <strong className="text-paper">{myFighter.displayName}</strong>.
-                Sisa tantangan hari ini:{" "}
-                <strong className="text-paper">{sentRemaining}/5</strong> • Sisa
-                tarung:{" "}
+                Sisa tarung:{" "}
                 <strong className="text-paper">{fightsRemaining}/3</strong>.
               </p>
               <div>
@@ -253,19 +248,16 @@ export default function OpenChallenges() {
                 type="submit"
                 size="lg"
                 className="w-full"
-                // Nantang TIDAK butuh jatah tarung (perintah user 8 Nov):
-                // tantangan terbuka berlaku 3 hari, bisa diterima besok
-                // setelah jatah reset. Gate jatah tetap ada di ACCEPT.
-                disabled={formBusy || sentRemaining <= 0}
+                // Nantang TIDAK butuh jatah tarung (perintah user 8 Nov)
+                // dan TIDAK ADA batas tantangan/hari (perintah user
+                // 9 Nov): tantangan terbuka berlaku 3 hari, bisa
+                // diterima besok setelah jatah reset. Gate jatah tetap
+                // ada di ACCEPT.
+                disabled={formBusy}
               >
                 {formBusy ? "Membuat…" : "Buat Tantangan Terbuka"}
               </Button>
-              {sentRemaining <= 0 ? (
-                <p className="text-sm text-paper-mute">
-                  Jatah tantangan hari ini habis — coba lagi besok.
-                </p>
-              ) : null}
-              {fightsRemaining <= 0 && sentRemaining > 0 ? (
+              {fightsRemaining <= 0 ? (
                 <p className="text-sm text-paper-mute">
                   Jatah tarungmu habis hari ini — tantangan tetap bisa
                   dibuat, yang menerima bisa bertarung besok setelah jatah

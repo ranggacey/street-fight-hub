@@ -35,18 +35,27 @@ export function pageWindow(totalPages: number, current: number): (number | "…"
 type OpponentPickerProps = {
   /** Fighter lain (sudah terurut seperti dari API). */
   fighters: Fighter[];
-  /** id fighter yang sedang dipilih ("" = belum ada). */
-  selectedId: string;
-  onSelect: (id: string) => void;
+  /** id fighter yang sedang dipilih ("" = belum ada). Opsional di mode multi. */
+  selectedId?: string;
+  onSelect?: (id: string) => void;
   /** Halaman awal — hanya untuk tes (render statis tidak bisa klik). */
   initialPage?: number;
+  /** Mode tantang-banyak-orang: pilih beberapa lawan sekaligus. */
+  multi?: boolean;
+  /** id fighter yang sedang dipilih dalam mode multi. */
+  selectedIds?: string[];
+  /** Toggle satu lawan dalam mode multi. */
+  onToggle?: (id: string) => void;
 };
 
 export default function OpponentPicker({
   fighters,
-  selectedId,
+  selectedId = "",
   onSelect,
   initialPage = 1,
+  multi = false,
+  selectedIds = [],
+  onToggle,
 }: OpponentPickerProps) {
   const [page, setPage] = useState(initialPage);
   const totalPages = Math.max(1, Math.ceil(fighters.length / OPPONENTS_PER_PAGE));
@@ -61,6 +70,22 @@ export default function OpponentPicker({
     ? Math.floor(fighters.findIndex((f) => getId(f) === selectedId) / OPPONENTS_PER_PAGE) + 1
     : 0;
 
+  // Mode multi: pilihan = himpunan id; chip menampilkan semua yang
+  // terpilih (nama + halaman pertama yang memuat satu di antaranya).
+  const multiSelected = multi
+    ? fighters.filter((f) => selectedIds.includes(getId(f)))
+    : [];
+  const multiSelectedOnPage = pageFighters.some((f) =>
+    selectedIds.includes(getId(f)),
+  );
+  const firstMultiPage =
+    multiSelected.length > 0
+      ? Math.floor(
+          fighters.findIndex((f) => getId(f) === getId(multiSelected[0])) /
+            OPPONENTS_PER_PAGE,
+        ) + 1
+      : 0;
+
   if (fighters.length === 0) {
     return (
       <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-paper-dim">
@@ -71,7 +96,33 @@ export default function OpponentPicker({
 
   return (
     <div>
-      {selected && !selectedOnPage ? (
+      {multi && multiSelected.length > 0 && !multiSelectedOnPage ? (
+        <p className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-brand/50 bg-amber-brand/10 px-3 py-2 text-sm text-paper">
+          <span className="min-w-0">
+            {multiSelected.length} lawan dipilih:{" "}
+            <strong className="font-display uppercase tracking-wide">
+              {multiSelected.map((f) => f.displayName).join(", ")}
+            </strong>{" "}
+            <span className="text-paper-dim">(halaman {firstMultiPage})</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(firstMultiPage)}
+            className="min-h-[44px] shrink-0 rounded-lg px-3 font-semibold text-amber-brand hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-brand/60"
+          >
+            Lihat
+          </button>
+        </p>
+      ) : null}
+      {multi && multiSelected.length > 0 && multiSelectedOnPage ? (
+        <p className="mb-2 rounded-xl border border-amber-brand/50 bg-amber-brand/10 px-3 py-2 text-sm text-paper">
+          {multiSelected.length} lawan dipilih:{" "}
+          <strong className="font-display uppercase tracking-wide">
+            {multiSelected.map((f) => f.displayName).join(", ")}
+          </strong>
+        </p>
+      ) : null}
+      {!multi && selected && !selectedOnPage ? (
         <p className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-brand/50 bg-amber-brand/10 px-3 py-2 text-sm text-paper">
           <span className="min-w-0">
             Lawan terpilih:{" "}
@@ -90,10 +141,16 @@ export default function OpponentPicker({
         </p>
       ) : null}
 
-      <div role="radiogroup" aria-label="Pilih lawan" className="space-y-2">
+      <div
+        role={multi ? "group" : "radiogroup"}
+        aria-label={multi ? "Pilih lawan (boleh banyak)" : "Pilih lawan"}
+        className="space-y-2"
+      >
         {pageFighters.map((f) => {
           const id = getId(f);
-          const isSelected = selectedId === id;
+          const isSelected = multi
+            ? selectedIds.includes(id)
+            : selectedId === id;
           const body =
             f.colors?.body && f.colors.body !== "none"
               ? f.colors.body
@@ -109,11 +166,13 @@ export default function OpponentPicker({
               }`}
             >
               <input
-                type="radio"
-                name="target"
+                type={multi ? "checkbox" : "radio"}
+                name={multi ? "targets" : "target"}
                 value={id}
                 checked={isSelected}
-                onChange={() => onSelect(id)}
+                onChange={() =>
+                  multi ? onToggle?.(id) : onSelect?.(id)
+                }
                 className="sr-only"
               />
               <span

@@ -36,8 +36,8 @@ type Ctx = { params: Promise<{ id: string }> };
  *
  * Limit harian: cek 3 fight/hari (WIB) untuk KEDUA fighter — penantang
  * dan yang menerima — sama seperti alur terima tantangan langsung.
- * Jatah 5 tantangan/hari si penantang sudah dicek saat tantangan
- * terbuka dibuat; di sini tidak dicek lagi (menerima bukan mengirim).
+ * Tantangan UNLIMITED (tidak ada jatah tantangan/hari); di sini tidak
+ * dicek lagi (menerima bukan mengirim).
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   try {

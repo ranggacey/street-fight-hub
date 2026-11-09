@@ -379,6 +379,46 @@ export interface ChallengeInput {
   map: ArenaMap;
 }
 
+/** Batas lawan sekali kirim bulk — pelindung spam, bukan jatah harian. */
+export const MAX_BULK_OPPONENTS = 20;
+
+export interface BulkChallengeInput {
+  opponentIds: string[];
+  message: string | null;
+  map: ArenaMap;
+}
+
+/**
+ * Validasi body POST /api/challenges/bulk: daftar id lawan (1–20,
+ * didedup, masing-masing ObjectId valid) + map + pesan (aturan sama
+ * dengan tantangan langsung).
+ */
+export function validateBulkChallengeBody(body: Record<string, unknown>): BulkChallengeInput {
+  const raw = body.opponentIds;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw badRequest('Pilih minimal 1 lawan untuk ditantang');
+  }
+  if (raw.length > MAX_BULK_OPPONENTS) {
+    throw badRequest(`Maksimal ${MAX_BULK_OPPONENTS} lawan sekali kirim`);
+  }
+  const opponentIds = [...new Set(raw.map((v) => validateObjectId(v, 'Fighter yang ditantang')))];
+  let message: string | null = null;
+  if (body.message !== undefined && body.message !== null) {
+    if (typeof body.message !== 'string') throw badRequest('Pesan tantangan harus berupa string');
+    message = body.message.trim();
+    if (message.length > 140) throw badRequest('Pesan tantangan maksimal 140 karakter');
+    if (message === '') message = null;
+  }
+  let map: ArenaMap = 'ring';
+  if (body.map !== undefined && body.map !== null) {
+    if (typeof body.map !== 'string' || !(ARENA_MAPS as readonly string[]).includes(body.map)) {
+      throw badRequest(`Map tidak valid: ${String(body.map)}`);
+    }
+    map = body.map as ArenaMap;
+  }
+  return { opponentIds, message, map };
+}
+
 export function validateChallengeBody(body: Record<string, unknown>): ChallengeInput {
   const challengedFighterId = validateObjectId(
     body.challengedFighterId,

@@ -20,7 +20,8 @@ import { GameFight } from '../../../models/GameFight';
  * → GET /api/challenges/open publik menampilkan 1 → terima sendiri 400
  * → terima langsung (endpoint direct) 409 CHALLENGE_NOT_DIRECT →
  * B terima 200 + config + GameFight → C terima lagi 409 (sudah diterima)
- * → limit 5 tantangan/hari (buat + kedaluwarsakan 5x, ke-6 409) →
+ * → tantangan UNLIMITED (perintah user 9 Nov 2026): buat +
+ * kedaluwarsakan 5x, yang ke-6 tetap 201 (bukan 409) →
  * limit 3 fight/hari si penerima (3 fight disisipkan langsung, terima 409).
  */
 
@@ -92,7 +93,6 @@ const SELF_DESC =
 
 interface OpenOut {
   challenge: { id: string; kind: string; challengedFighterId: string | null };
-  sentToday: number;
 }
 interface OpenListOut {
   challenges: { id: string; kind: string }[];
@@ -213,8 +213,9 @@ describe('Tantangan terbuka (open challenge)', () => {
     const lateBody = await json<ApiData<unknown>>(lateAccept);
     expect(lateBody.error?.code).toBe('CHALLENGE_NOT_PENDING');
 
-    // 8. Limit 5 tantangan/hari si pembuat: buat + kedaluwarsakan 5x
-    // (A sudah kirim 1 hari ini), lalu yang ke-6 ditolak 409.
+    // 8. Tantangan UNLIMITED (perintah user 9 Nov 2026): buat +
+    // kedaluwarsakan 5x (D sudah kirim 5 hari ini), lalu yang ke-6
+    // tetap dibuat (201) — dulu 409 CHALLENGE_LIMIT_REACHED.
     // Pakai user baru supaya hitungan bersih.
     const d = await makeUserFighter('open_d', 'Open D', 'open_d', 'boxing');
     for (let i = 0; i < 5; i++) {
@@ -244,9 +245,9 @@ describe('Tantangan terbuka (open challenge)', () => {
         cookie: d.cookie,
       }),
     );
-    expect(sixth.status).toBe(409);
-    const sixthBody = await json<ApiData<unknown>>(sixth);
-    expect(sixthBody.error?.code).toBe('CHALLENGE_LIMIT_REACHED');
+    expect(sixth.status).toBe(201);
+    const sixthBody = await json<ApiData<OpenOut>>(sixth);
+    expect(sixthBody.data.challenge.kind).toBe('open');
 
     // 9. Limit 3 fight/hari si penerima: sisipkan 3 fight hari ini
     // untuk C, lalu C menerima open baru dari A → 409 DAILY_LIMIT_REACHED.

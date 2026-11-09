@@ -2,11 +2,7 @@ import type { NextRequest } from 'next/server';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { expireStaleChallenges } from '@/lib/game/challenges';
-import {
-  countChallengesSentToday,
-  DAILY_CHALLENGE_LIMIT,
-  DAILY_FIGHT_LIMIT,
-} from '@/lib/game/daily-limit';
+import { DAILY_FIGHT_LIMIT } from '@/lib/game/daily-limit';
 import {
   badRequest,
   conflict,
@@ -59,9 +55,9 @@ function parseOpenChallengeBody(body: Record<string, unknown>): {
 
 /**
  * POST /api/challenges/open — buat tantangan TERBUKA (auth).
- * Satu open aktif per fighter; dihitung ke jatah 5 tantangan/hari yang
- * sama dengan tantangan langsung (countChallengesSentToday memangku
- * keduanya karena menghitung per challengerFighterId).
+ * Satu open aktif per fighter. Tantangan UNLIMITED (perintah user
+ * 9 Nov 2026): tidak ada batas tantangan/hari; jatah tarung 3/hari
+ * tetap dicek saat accept.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -87,14 +83,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const sentToday = await countChallengesSentToday(mine._id.toString());
-    if (sentToday >= DAILY_CHALLENGE_LIMIT) {
-      throw conflict(
-        'Maksimal 5 tantangan per hari — coba lagi besok',
-        'CHALLENGE_LIMIT_REACHED',
-      );
-    }
-
     const now = new Date();
     const challenge = await Challenge.create({
       challengerFighterId: mine._id,
@@ -112,8 +100,6 @@ export async function POST(req: NextRequest) {
     return ok(
       {
         challenge: serializeChallenge(populated),
-        sentToday: sentToday + 1,
-        sentRemaining: DAILY_CHALLENGE_LIMIT - sentToday - 1,
       },
       201,
     );
@@ -141,7 +127,6 @@ export async function GET() {
     return ok({
       challenges: serialize(challenges),
       fightsRemaining: DAILY_FIGHT_LIMIT,
-      challengeLimit: DAILY_CHALLENGE_LIMIT,
     });
   } catch (err) {
     return handleError(err);

@@ -1,13 +1,9 @@
 import type { NextRequest } from 'next/server';
+import { Types } from 'mongoose';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { expireStaleChallenges } from '@/lib/game/challenges';
-import {
-  countChallengesSentToday,
-  countFightsToday,
-  DAILY_CHALLENGE_LIMIT,
-  DAILY_FIGHT_LIMIT,
-} from '@/lib/game/daily-limit';
+import { countFightsToday, DAILY_FIGHT_LIMIT } from '@/lib/game/daily-limit';
 import { notifyFighterOwner } from '@/lib/game/notify';
 import {
   badRequest,
@@ -23,7 +19,13 @@ import { validateChallengeBody } from '@/lib/validation';
 import { Challenge } from '@/models/Challenge';
 import { Fighter } from '@/models/Fighter';
 
-const CHALLENGEABLE_STATUSES = ['pending', 'accepted', 'declined', 'expired'] as const;
+const CHALLENGEABLE_STATUSES = [
+  'pending',
+  'accepted',
+  'declined',
+  'expired',
+  'cancelled',
+] as const;
 
 async function myFighter(sessionUserId: string) {
   return Fighter.findOne({ userId: sessionUserId, status: 'active' });
@@ -68,13 +70,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const sentToday = await countChallengesSentToday(mine._id.toString());
-    if (sentToday >= DAILY_CHALLENGE_LIMIT) {
-      throw conflict(
-        'Maksimal 5 tantangan per hari — coba lagi besok',
-        'CHALLENGE_LIMIT_REACHED',
-      );
-    }
+    // Tantangan UNLIMITED (perintah user 9 Nov 2026): tidak ada batas
+    // tantangan/hari. Jatah tarung 3/hari tetap dicek saat accept.
 
     const now = new Date();
     const challenge = await Challenge.create({
@@ -94,8 +91,6 @@ export async function POST(req: NextRequest) {
     return ok(
       {
         challenge: serializeChallenge(populated),
-        sentToday: sentToday + 1,
-        sentRemaining: DAILY_CHALLENGE_LIMIT - sentToday - 1,
       },
       201,
     );
@@ -119,8 +114,7 @@ export async function GET(req: NextRequest) {
     if (!mine) {
       return ok({
         challenges: [],
-        sentToday: 0,
-        sentRemaining: DAILY_CHALLENGE_LIMIT,
+        batches: {},
         fightsRemaining: DAILY_FIGHT_LIMIT,
         hasFighter: false,
       });
@@ -152,12 +146,58 @@ export async function GET(req: NextRequest) {
       .limit(50)
       .lean();
 
-    const sentToday = await countChallengesSentToday(mine._id.toString());
     const fightsToday = await countFightsToday(mine._id.toString());
+
+    // Ringkasan batch tantang-banyak-orang untuk challenge yang tampil:
+    // total + hitungan per status, supaya UI bisa menulis "menunggu X
+    // dari N lawan" / "sudah diterima". Agregasi dihitung dari SEMUA
+    // challenge satu batch (bukan hanya yang masuk limit 50 daftar).
+    const batchIds = [
+      ...new Set(
+        challenges
+          .map((c) => c.batchId?.toString())
+          .filter((b): b is string => Boolean(b)),
+      ),
+    ];
+    const batches: Record<
+      string,
+      {
+        total: number;
+        pending: number;
+        accepted: number;
+        declined: number;
+        expired: number;
+        cancelled: number;
+      }
+    > = {};
+    if (batchIds.length > 0) {
+      const rows = await Challenge.aggregate<{
+        _id: { batchId: unknown; status: string };
+        count: number;
+      }>([
+        { $match: { batchId: { $in: batchIds.map((b) => new Types.ObjectId(b)) } } },
+        { $group: { _id: { batchId: '$batchId', status: '$status' }, count: { $sum: 1 } } },
+      ]);
+      for (const row of rows) {
+        const key = String(row._id.batchId);
+        const entry = (batches[key] ??= {
+          total: 0,
+          pending: 0,
+          accepted: 0,
+          declined: 0,
+          expired: 0,
+          cancelled: 0,
+        });
+        entry.total += row.count;
+        if (row._id.status in entry) {
+          entry[row._id.status as keyof typeof entry] += row.count;
+        }
+      }
+    }
+
     return ok({
       challenges: serialize(challenges),
-      sentToday,
-      sentRemaining: Math.max(0, DAILY_CHALLENGE_LIMIT - sentToday),
+      batches,
       fightsRemaining: Math.max(0, DAILY_FIGHT_LIMIT - fightsToday),
       hasFighter: true,
     });

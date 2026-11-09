@@ -212,7 +212,7 @@ export interface TitleHistoryItem {
 /* Game (Fase 1)                                                       */
 /* ------------------------------------------------------------------ */
 
-export type ChallengeStatus = "pending" | "accepted" | "declined" | "expired";
+export type ChallengeStatus = "pending" | "accepted" | "declined" | "expired" | "cancelled";
 
 export interface Challenge {
   id?: string;
@@ -226,6 +226,11 @@ export interface Challenge {
   respondedAt?: string | null;
   expiresAt?: string;
   createdAt?: string;
+  /** Batch tantang-banyak-orang: challenge satu kirim berbagi batchId. */
+  batchId?: string | null;
+  /** Alasan pembatalan otomatis batch (hanya saat status 'cancelled'). */
+  cancelReason?: string | null;
+  kind?: string;
 }
 
 export type GameFightStatus = "pending" | "playing" | "completed" | "disputed";

@@ -14,6 +14,7 @@ export const CHALLENGE_POPUP_TYPES = [
   'challenge_received',
   'challenge_accepted',
   'challenge_declined',
+  'challenge_cancelled',
 ] as const;
 
 export type ChallengePopupType = (typeof CHALLENGE_POPUP_TYPES)[number];
@@ -83,6 +84,12 @@ export function formatChallengeNotification(
       return {
         title: 'Tantangan ditolak',
         body: `${challenged} menolak tantanganmu. Cari lawan lain di arena.`,
+        href,
+      };
+    case 'challenge_cancelled':
+      return {
+        title: 'Tantangan batal',
+        body: `Tantangan dari ${challenger} batal otomatis — sudah ada lawan lain yang menerima duluan.`,
         href,
       };
     default:

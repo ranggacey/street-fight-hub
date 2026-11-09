@@ -3,6 +3,10 @@ import mongoose, { Schema } from 'mongoose';
 // Tantangan 1v1 antar fighter (Fase 1 integrasi game).
 // Satu tantangan aktif per pasangan; kedaluwarsa 3 hari (dicek lazy saat dibaca).
 //
+// TANTANGAN TIDAK ADA BATAS HARIAN (perintah user 9 Nov 2026): berapa
+// pun tantangan boleh dikirim per hari; yang dibatasi hanya jatah
+// tarung 3/hari (dicek saat accept, bukan saat kirim).
+//
 // DUA JENIS TANTANGAN (field `kind`):
 // - 'direct' (default): tantangan ke 1 fighter tertentu —
 //   `challengedFighterId` wajib diisi, hanya fighter itu yang bisa
@@ -11,12 +15,13 @@ import mongoose, { Schema } from 'mongoose';
 //   null saat dibuat, diisi OTOMATIS dengan fighter yang PERTAMA
 //   menerima lewat /api/challenges/[id]/accept-open. Yang menerima
 //   belakangan ditolak (status sudah bukan 'pending').
-//   Alasan `kind` + null, bukan koleksi terpisah: satu skema, satu
-//   hitungan limit harian (countChallengesSentToday / countFightsToday
-//   memangku keduanya), dan satu alur kedaluwarsa lazy yang sama.
-//   `challengedFighterId` dibuat tidak required supaya dokumen 'open'
-//   valid sebelum ada yang menerima; route direct tetap memvalidasi
-//   keberadaannya (validateChallengeBody).
+//
+// TANTANG BANYAK ORANG (field `batchId`, perintah user 9 Nov 2026):
+// satu kirim ke N lawan = N Challenge direct dengan batchId yang sama.
+// Saat SATU challenge dalam batch di-accept, sibling pending lain
+// dalam batch yang sama OTOMATIS dibatalkan (status 'cancelled' +
+// cancelReason). Status 'cancelled' HANYA dipakai untuk pembatalan
+// otomatis ini — penolakan manual tetap 'declined'.
 
 const challengeSchema = new Schema(
   {
@@ -29,9 +34,13 @@ const challengeSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'declined', 'expired'],
+      enum: ['pending', 'accepted', 'declined', 'expired', 'cancelled'],
       default: 'pending',
     },
+    /** Alasan pembatalan otomatis batch (hanya saat status 'cancelled'). */
+    cancelReason: { type: String, maxlength: 140, default: null },
+    /** Batch tantang-banyak-orang: Challenge dalam satu kirim berbagi batchId. */
+    batchId: { type: Schema.Types.ObjectId, default: null },
     gameFightId: { type: Schema.Types.ObjectId, ref: 'GameFight', default: null },
     map: {
       type: String,
@@ -54,6 +63,8 @@ challengeSchema.index({ challengerFighterId: 1, kind: 1, status: 1 });
 // tanpa index keduanya COLLSCAN / pindai semua tantangan penantang.
 challengeSchema.index({ status: 1, expiresAt: 1 });
 challengeSchema.index({ challengerFighterId: 1, createdAt: -1 });
+// Batch tantang-banyak-orang: cari sibling pending satu batch.
+challengeSchema.index({ batchId: 1, status: 1 });
 
 export const Challenge =
   mongoose.models.Challenge || mongoose.model('Challenge', challengeSchema);

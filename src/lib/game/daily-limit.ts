@@ -3,10 +3,12 @@
  * Reset tengah malam WIB, dihitung server-side dari `createdAt`.
  */
 import { GameFight } from '../../models/GameFight';
-import { Challenge } from '../../models/Challenge';
 
 export const DAILY_FIGHT_LIMIT = 3;
-export const DAILY_CHALLENGE_LIMIT = 5;
+
+// Tantangan TIDAK ADA batas harian (perintah user 9 Nov 2026): berapa
+// pun tantangan boleh dikirim per hari. Yang dibatasi hanya jatah
+// tarung 3/hari (dicek saat accept, bukan saat kirim).
 
 export interface DayWindow {
   start: Date;
@@ -33,18 +35,6 @@ export async function countFightsToday(
   return GameFight.countDocuments({
     createdAt: { $gte: start, $lt: end },
     $or: [{ fighterAId: fighterId }, { fighterBId: fighterId }],
-  });
-}
-
-/** Berapa tantangan yang dikirim fighter ini hari ini (WIB)? */
-export async function countChallengesSentToday(
-  fighterId: string,
-  now: Date = new Date(),
-): Promise<number> {
-  const { start, end } = wibDayWindow(now);
-  return Challenge.countDocuments({
-    createdAt: { $gte: start, $lt: end },
-    challengerFighterId: fighterId,
   });
 }
 

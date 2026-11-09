@@ -222,3 +222,70 @@ describe('OpponentPicker pilihan bertahan pindah halaman', () => {
     expect(html).not.toContain('Lawan terpilih');
   });
 });
+
+describe('OpponentPicker mode multi-select (tantang banyak orang)', () => {
+  it('mode multi: checkbox (bukan radio), chip "N lawan dipilih"', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(13)}
+        multi
+        selectedIds={['fighter-02', 'fighter-05']}
+        onToggle={() => {}}
+      />,
+    );
+    // Tidak ada radio sama sekali di mode multi.
+    expect(html).not.toContain('type="radio"');
+    expect(html).toContain('type="checkbox"');
+    // Tepat 2 checkbox checked.
+    expect(html.match(/checked=""/g)?.length).toBe(2);
+    expect(html).toContain('2 lawan dipilih');
+    expect(html).toContain('Lawan 02');
+    expect(html).toContain('Lawan 05');
+  });
+
+  it('pilihan multi di halaman lain: chip menampilkan nama + halaman', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(13)}
+        multi
+        selectedIds={['fighter-08', 'fighter-09']}
+        onToggle={() => {}}
+        initialPage={1}
+      />,
+    );
+    expect(html).toContain('2 lawan dipilih');
+    expect(html).toContain('Lawan 08');
+    expect(html).toContain('Lawan 09');
+    expect(html).toContain('(halaman 2)');
+    expect(html).toContain('Lihat');
+    // Baris Lawan 08/09 tidak ada di halaman 1 (hanya di chip).
+    expect(html).not.toContain('value="fighter-08"');
+    expect(html).not.toContain('value="fighter-09"');
+  });
+
+  it('mode multi tanpa pilihan: tidak ada chip', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(13)}
+        multi
+        selectedIds={[]}
+        onToggle={() => {}}
+      />,
+    );
+    expect(html).not.toContain('lawan dipilih');
+    expect(html).toContain('type="checkbox"');
+  });
+
+  it('mode single tidak kena pengaruh multi: radio + tanpa chip "lawan dipilih"', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(13)}
+        selectedId="fighter-02"
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain('type="radio"');
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toContain('lawan dipilih');
+  });
+});
