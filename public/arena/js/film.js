@@ -324,6 +324,21 @@ function spawnDust(particles, t0, x, y, n, spd, up, life, size, seedSalt) {
   }
 }
 
+// Percikan terang saat kontak (VFX Langkah 1): ledakan radial singkat di
+// titik kontak, hidup 0,25 dtk, mengecil + memudar — beda dari debu (naik
+// pelan, membesar, warna tanah). Deterministik (rng berseed) seperti debu.
+function spawnSparks(particles, t0, x, y, n, power, seedSalt) {
+  const r = rng(Math.floor(t0 * 1000) * 131 + seedSalt);
+  for (let i = 0; i < n; i++) {
+    const a = r() * Math.PI * 2;
+    const v = (140 + power * 120) * (0.5 + r() * 0.7);
+    particles.push({
+      t0, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40,
+      life: 0.25 * (0.7 + r() * 0.6), size: 3 + r() * 2, spark: true,
+    });
+  }
+}
+
 // Sistem aksesoris (katalog + normalizeGear + gambar per bagian) tinggal
 // di ./accessories.js — dipindah 2026-11-08 supaya file ini muat di batas
 // argumen upload Vercel (125.000 byte, lihat scripts/deploy.mjs).
@@ -1114,8 +1129,11 @@ function triggerAttack(atk, R, B, t, particles, impacts) {
     : jD.kneeF;
   if (atk.outcome === 'hit') {
     const cx = center.x - dir * 6, cy = center.y;
-    impacts.push({ t, x: cx, y: cy, power: vp });
+    impacts.push({ t, x: cx, y: cy, power: vp, kind: 'hit' });
     spawnDust(particles, t, cx, cy + 30, Math.round(6 + vp * 8), 90 + vp * 110, 1.0, 0.5, 5, 51);
+    // Percikan terang hanya untuk pukulan/tendangan mid+ (tier, lihat
+    // impactTier): light tetap debu saja supaya hierarki terbaca.
+    if (vp >= 1.15) spawnSparks(particles, t, cx, cy, Math.round(4 + (vp - 1.15) * 10), vp, 52);
     if (def.mode === 'down' || def.mode === 'falling') return;
     def.vx += vp * 220 * dir;
     if (atk.kind === 'uppercut' || atk.kind === 'finisher' || kindKey(atk.kind) === 'headkick' || atk.power >= 1.3) {
@@ -1129,7 +1147,7 @@ function triggerAttack(atk, R, B, t, particles, impacts) {
     }
   } else if (atk.outcome === 'block' || atk.outcome === 'parry') {
     const bx = center.x - dir * 26, by = center.y;
-    impacts.push({ t, x: bx, y: by, power: atk.power * 0.45 });
+    impacts.push({ t, x: bx, y: by, power: atk.power * 0.45, kind: atk.outcome });
     spawnDust(particles, t, bx, by + 20, 4, 60, 0.8, 0.4, 4, 53);
     def.vx += atk.power * 70 * dir;
     att.vx -= atk.power * 50 * dir;
@@ -2341,6 +2359,13 @@ function drawParticles(c, s, particles) {
     if (k < 0 || k > 1) continue;
     const px = p.x + p.vx * (s - p.t0);
     const py = p.y + p.vy * (s - p.t0) + 0.5 * GRAV * 0.25 * (s - p.t0) * (s - p.t0);
+    if (p.spark) {
+      // Percikan kontak: kuning-putih terang, mengecil + memudar cepat.
+      c.globalAlpha = 0.9 * (1 - k);
+      c.fillStyle = '#FFE98A';
+      c.beginPath(); c.arc(px, py, Math.max(0.5, p.size * (1 - k * 0.5)), 0, Math.PI * 2); c.fill();
+      continue;
+    }
     c.globalAlpha = 0.55 * (1 - k);
     c.fillStyle = PALETTE.dust;
     c.beginPath(); c.arc(px, py, p.size * (1 + k), 0, Math.PI * 2); c.fill();
@@ -2348,23 +2373,80 @@ function drawParticles(c, s, particles) {
   c.restore();
 }
 
+// ---------------- Impact VFX (Langkah 1) ----------------
+// Tier power VISUAL (vp sudah di-clamp 2,2 di triggerAttack): light =
+// jab/teep/shove, mid = cross/hook/kick biasa, heavy = headkick/finisher/KO.
+// Dipakai flash/ring/partikel + shake (Langkah 3) + zoom KO (Langkah 4)
+// supaya SATU skala power di semua efek.
+export function impactTier(power) {
+  if (power >= 1.4) return 'heavy';
+  if (power >= 1.15) return 'mid';
+  return 'light';
+}
+
+const IMPACT_DUR = { hit: 0.25, block: 0.18, parry: 0.18 };
+
+// Visual impact AKTIF pada detik sim s — fungsi MURNI (dipakai test +
+// drawImpacts), tanpa canvas. Hit = ring membesar + flash core terang +
+// sinar; block/parry = ring kecil redup abu-abu, tanpa flash, sinar 4.
+// Ring/flash TIDAK menutupi petarung: radius maks ~50 px di titik kontak
+// (kepala ~30 px, badan ~90 px) dan alpha meluruh ke 0 dalam 0,25 dtk.
+export function impactVisualAt(s, impacts) {
+  const out = [];
+  for (const im of impacts || []) {
+    const kind = im.kind || 'hit';
+    const dur = IMPACT_DUR[kind] || IMPACT_DUR.hit;
+    const k = (s - im.t) / dur;
+    if (k < 0 || k > 1) continue;
+    const tier = impactTier(im.power);
+    const isHit = kind === 'hit';
+    out.push({
+      x: im.x, y: im.y, power: im.power, kind, tier, k, dur,
+      ringR: isHit ? (14 + im.power * 14) * (0.4 + k * 1.2) : (9 + im.power * 8) * (0.6 + k * 0.9),
+      ringW: isHit ? (tier === 'heavy' ? 6 : tier === 'mid' ? 4.5 : 3) : 2.5,
+      flashR: isHit ? (11 + im.power * 9) * (1 - k * 0.65) : 0,
+      rayR: isHit ? (12 + im.power * 16) * (1 + k * 0.5) : (10 + im.power * 10) * (1 + k * 0.4),
+      rays: isHit ? (tier === 'heavy' ? 12 : 8) : 4,
+      alpha: (isHit ? 0.95 : 0.5) * (1 - k),
+    });
+  }
+  return out;
+}
+
 function drawImpacts(c, s, impacts) {
   c.save();
-  for (const im of impacts) {
-    const k = (s - im.t) / 0.25;
-    if (k < 0 || k > 1) continue;
-    const r = (10 + im.power * 14) * (1 + k * 0.6);
-    c.globalAlpha = 0.9 * (1 - k);
-    c.strokeStyle = PALETTE.paper; c.lineWidth = 4;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+  for (const v of impactVisualAt(s, impacts)) {
+    const isHit = v.kind === 'hit';
+    // Ring membesar (di belakang sinar + flash).
+    c.globalAlpha = v.alpha;
+    c.strokeStyle = isHit ? PALETTE.paper : PALETTE.gray;
+    c.lineWidth = v.ringW;
+    c.beginPath(); c.arc(v.x, v.y, v.ringR, 0, Math.PI * 2); c.stroke();
+    // Ring luar kuning hanya untuk heavy (KO/finisher/headkick).
+    if (isHit && v.tier === 'heavy') {
+      c.globalAlpha = v.alpha * 0.7;
+      c.strokeStyle = PALETTE.yellow; c.lineWidth = 2;
+      c.beginPath(); c.arc(v.x, v.y, v.ringR * 1.3, 0, Math.PI * 2); c.stroke();
+    }
+    // Sinar kontak.
+    c.globalAlpha = v.alpha;
+    c.strokeStyle = isHit ? PALETTE.paper : PALETTE.gray;
+    c.lineWidth = isHit ? 4 : 2.5;
+    for (let i = 0; i < v.rays; i++) {
+      const a = (i / v.rays) * Math.PI * 2;
       c.beginPath();
-      c.moveTo(im.x + Math.cos(a) * r * 0.4, im.y + Math.sin(a) * r * 0.4);
-      c.lineTo(im.x + Math.cos(a) * r, im.y + Math.sin(a) * r);
+      c.moveTo(v.x + Math.cos(a) * v.rayR * 0.4, v.y + Math.sin(a) * v.rayR * 0.4);
+      c.lineTo(v.x + Math.cos(a) * v.rayR, v.y + Math.sin(a) * v.rayR);
       c.stroke();
     }
-    c.fillStyle = PALETTE.red;
-    c.beginPath(); c.arc(im.x, im.y, 5 + im.power * 3, 0, Math.PI * 2); c.fill();
+    if (isHit) {
+      // Flash core putih-kuning + titik merah (kontinuitas visual lama).
+      c.globalAlpha = v.alpha;
+      c.fillStyle = '#FFF3C4';
+      c.beginPath(); c.arc(v.x, v.y, v.flashR, 0, Math.PI * 2); c.fill();
+      c.fillStyle = PALETTE.red;
+      c.beginPath(); c.arc(v.x, v.y, 5 + v.power * 3, 0, Math.PI * 2); c.fill();
+    }
   }
   c.restore();
 }
