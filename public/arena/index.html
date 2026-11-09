@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Stickman Fight Arena — Mesin Tarung Otomatis</title>
+<meta name="description" content="Bangun petarungmu, pilih bela dirinya, lalu tonton mereka tarung otomatis. Mesin animasi stickman dengan pacing CF2 dan prinsip ChatGPT.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wordmark">
+    <span class="wordmark-stick">STICKMAN</span>
+    <span class="wordmark-fight">FIGHT ARENA</span>
+  </div>
+  <p class="tagline">Bangun petarung. Pilih bela diri. Tarung otomatis.</p>
+</header>
+
+<main class="layout">
+  <!-- ============ ARENA ============ -->
+  <section class="arena-col" aria-label="Arena pertarungan">
+    <div class="arena-frame">
+      <canvas id="arena" width="720" height="1280"></canvas>
+      <div class="arena-state" id="arenaState">Siap tarung</div>
+    </div>
+
+    <!-- Komentator: teks play-by-play, mulutnya animasi di dalam canvas -->
+    <div class="pbp" aria-live="polite">
+      <span class="pbp-who" id="pbpWho">Komentator</span>
+      <span class="pbp-text" id="pbpText">Pilih petarungmu di bawah, lalu tekan TARUNG.</span>
+    </div>
+
+    <!-- Pemilih arena/map -->
+    <div class="map-picker" role="group" aria-label="Pilih arena">
+      <h2 class="map-picker-title">Arena</h2>
+      <div class="map-grid" id="mapGrid"></div>
+    </div>
+
+    <!-- Kontrol utama -->
+    <div class="controls">
+      <button id="btnFight" class="btn btn-fight" type="button">Tarung</button>
+      <button id="btnRematch" class="btn btn-ghost" type="button" disabled>Ulang</button>
+      <button id="btnExport" class="btn btn-ghost" type="button" disabled>Export Video</button>
+    </div>
+    <div class="fight-settings">
+      <label class="field">
+        <span>Seed</span>
+        <input id="inpSeed" type="text" inputmode="numeric" value="" placeholder="acak">
+      </label>
+      <button id="btnSeed" class="btn btn-small" type="button">Acak seed</button>
+    </div>
+    <p class="seed-note" id="seedNote">Seed menentukan hasil undian. Seed yang sama = fight yang sama persis.</p>
+    <p class="export-status" id="exportStatus" hidden></p>
+  </section>
+
+  <!-- ============ BUILDER ============ -->
+  <section class="builder-col" aria-label="Builder petarung">
+    <h2 class="section-title">Petarung</h2>
+    <div class="fighters">
+      <article class="fighter-panel" id="panelLeft">
+        <div class="fighter-head">
+          <span class="corner-tag corner-red">Kiri</span>
+          <select class="preset-select" id="presetLeft" aria-label="Preset petarung kiri"></select>
+        </div>
+        <canvas class="preview" id="previewLeft" width="240" height="240" aria-label="Preview petarung kiri"></canvas>
+        <div class="builder-fields" data-side="left"></div>
+      </article>
+
+      <div class="vs-badge" aria-hidden="true">VS</div>
+
+      <article class="fighter-panel" id="panelRight">
+        <div class="fighter-head">
+          <span class="corner-tag corner-blue">Kanan</span>
+          <select class="preset-select" id="presetRight" aria-label="Preset petarung kanan"></select>
+        </div>
+        <canvas class="preview" id="previewRight" width="240" height="240" aria-label="Preview petarung kanan"></canvas>
+        <div class="builder-fields" data-side="right"></div>
+      </article>
+    </div>
+
+    <h2 class="section-title">Gerakan tiap bela diri</h2>
+    <div class="moves-grid">
+      <div class="moves-box" id="movesLeft"></div>
+      <div class="moves-box" id="movesRight"></div>
+    </div>
+
+    <p class="footnote">Petarung tersimpan otomatis di perangkat ini. Arena, penonton, dan komentator dibuat sekali lalu dipakai ulang di setiap fight.</p>
+  </section>
+</main>
+
+<footer class="footer">
+  <p>Stickman Fight Arena — mesin tarung otomatis. Pacing CF2, prinsip animasi ChatGPT. Hasil undian ditentukan sebelum koreografi.</p>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

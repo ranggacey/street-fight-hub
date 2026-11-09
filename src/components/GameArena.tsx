@@ -16,16 +16,15 @@ import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
 import StatChip from "@/components/StatChip";
 
-const ARENA_URL =
-  process.env.NEXT_PUBLIC_ARENA_URL ??
-  "https://stickman-fight-arena-zeta.vercel.app";
-const ARENA_ORIGIN = (() => {
-  try {
-    return new URL(ARENA_URL).origin;
-  } catch {
-    return "https://stickman-fight-arena-zeta.vercel.app";
-  }
-})();
+// Arena kini disajikan SAME-ORIGIN oleh Hub sendiri (public/arena/,
+// di-embed dari /arena/index.html) — bukan lagi dari domain Vercel Arena
+// terpisah. Project Vercel lama (stickman-fight-arena-zeta) masih ada
+// tapi TIDAK dipakai lagi oleh Hub. Origin postMessage = origin Hub
+// sendiri; EMBED_ALLOWED_ORIGINS di arena (js/app.js) sudah memuat
+// origin produksi Hub + localhost:3000.
+const ARENA_URL = "/arena/index.html";
+const ARENA_ORIGIN =
+  typeof window !== "undefined" ? window.location.origin : "";
 
 type FightDetail = {
   fight: GameFight;
