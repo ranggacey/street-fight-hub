@@ -233,10 +233,16 @@ Tanpa `opts` sama sekali, fight yang dihasilkan **identik** dengan pemanggilan l
 
 ```js
 const EMBED_ALLOWED_ORIGINS = [
-  'https://streetfight.ranggafigo.com',  // Hub produksi
+  'https://streetfight.ranggafigo.com',  // Hub produksi (domain custom)
+  'https://street-fight-hub.vercel.app', // Hub produksi (domain Vercel)
   'http://localhost:3000',               // Hub dev
 ];
 ```
+
+> 2026-11-10: domain Vercel ditambahkan — halaman game yang dibuka lewat
+> `street-fight-hub.vercel.app` sebelumnya ditolak diam-diam oleh
+> `onEmbedMessage`, sehingga Arena jatuh ke layar setup standalone (pilih
+> petarung Kiri/Kanan + seed) dan tombol TARUNG tidak bisa dipakai.
 
 - **Masuk (iframe):** `onEmbedMessage` mengabaikan semua `message` yang `event.origin`-nya tidak ada di daftar. Hanya `type: 'sfa-config'` diproses.
 - **Keluar (iframe → parent):** `sfa-result` dikirim dengan `postMessage(payload, embed.parentOrigin)` — origin yang tercatat dari pesan `sfa-config` yang diterima (selalu salah satu dari daftar). `sfa-ready` memakai targetOrigin `'*'` (tidak membawa data).

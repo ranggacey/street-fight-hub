@@ -669,7 +669,11 @@ $('btnExport').addEventListener('click', () => exportVideo());
 // gestur klik berada di origin iframe → TTS klip + AudioContext diizinkan),
 // lalu mengirim sfa-result saat fight selesai.
 // Origin yang diizinkan (dua arah): Hub produksi + localhost dev.
-const EMBED_ALLOWED_ORIGINS = ['https://streetfight.ranggafigo.com', 'http://localhost:3000'];
+// 2026-11-10: tambah domain Vercel Hub — halaman game yang dibuka lewat
+// street-fight-hub.vercel.app sebelumnya ditolak diam-diam oleh
+// onEmbedMessage, sehingga Arena jatuh ke layar setup standalone (pilih
+// petarung Kiri/Kanan + seed) dan tombol TARUNG tidak bisa dipakai.
+const EMBED_ALLOWED_ORIGINS = ['https://streetfight.ranggafigo.com', 'https://street-fight-hub.vercel.app', 'http://localhost:3000'];
 const embed = {
   active: false,
   fightId: null,
