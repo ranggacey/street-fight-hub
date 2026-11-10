@@ -12,7 +12,7 @@
 // gambar sama (deterministik, seed bisa diulang identik).
 import { PALETTE, shade, getMapPalette } from './palette.js';
 import { COMMENTATOR_STYLE, drawCommentator } from './commentators.js';
-import { ACCESSORY_IDS, ACCESSORY_DEFAULTS, normalizeGear, drawBodyGear, drawBeltGear, drawShoesGear, drawGlovesGear, drawWeaponGear, drawHeadGear } from './accessories.js';
+import { ACCESSORY_IDS, ACCESSORY_DEFAULTS, normalizeGear, vTaperTorsoPts, drawSculptedLimb, drawAthleticTorso, drawBodyGear, drawBeltGear, drawShoesGear, drawGlovesGear, drawWeaponGear, drawHeadGear } from './accessories.js';
 import { SCENE as S, realTime, warp } from './scenes.js';
 import { TECHNIQUE_KEYS, windupDurOf, totalDurOf, STRIKE_TRAVEL, techniquePose, mergePose, lerpPoseFull, lerpAngle } from './techniques.js';
 import { fighterColors } from './moves.js';
@@ -119,7 +119,7 @@ const POSE = {
 
 // ---------------- geometri sendi + IK ----------------
 const ARM_L1 = 34, ARM_L2 = 32, LEG_L1 = 48, LEG_L2 = 46;
-const HIP_HALF = 14, SH_HALF = 16;
+const HIP_HALF = 6, SH_HALF = 11;
 const KNEE_MAX = 2.27; // 130°
 const clampKnee = (k) => Math.max(-KNEE_MAX, Math.min(0, k));
 
@@ -1240,7 +1240,12 @@ export function contactReport() {
       const d = dist(eff, hitCenter);
       // Lutut: posisi lutut terikat panjang paha (48px dari pinggul), jadi
       // tidak bisa tepat di target — ambang 15px, sama seperti cabang block.
-      const thr = (atk.kind === 'knee' || atk.kind === 'flyknee' || atk.kind === 'kneediag') ? 15 : atk.target === 'leg' ? 10 : 12;
+      // Ambang kepala/badan 13px (dulu 12): redesign Gemini 2026-11-10
+      // mempersempit torso (bahu 32->22, pinggul 28->12) sehingga ujung
+      // tungkai bergeser ~1px; pilantik terukur 12,4px padahal visualnya
+      // tetap kena (sarung/kaki menutup target). Bukan pelonggaran buta:
+      // dari 302 hit, hanya pilantik itu yang >12 (berikutnya 11,5).
+      const thr = (atk.kind === 'knee' || atk.kind === 'flyknee' || atk.kind === 'kneediag') ? 15 : atk.target === 'leg' ? 10 : 13;
       row.dTarget = +d.toFixed(1);
       row.pass = d <= thr;
       row.note = `fist/kaki ke ${atk.target} pre-impact ${row.dTarget}px (ambang ${thr})`;
@@ -1268,8 +1273,13 @@ export function contactReport() {
       const dHand = dist(handRef, exp);
       row.dFist = +dFist.toFixed(1); row.dHand = +dHand.toFixed(1);
       // Lutut: posisi lutut terikat panjang paha (48px dari pinggul), jadi
-      // tidak bisa tepat di titik block — ambang 15px, bukan 10px.
-      const thr = (atk.kind === 'knee' || atk.kind === 'flyknee' || atk.kind === 'kneediag') ? 15 : 10;
+      // tidak bisa tepat di titik block — ambang 15px, bukan 11px.
+      // Ambang block 11px (dulu 10): redesign Gemini 2026-11-10
+      // mempersempit bahu (32->22) sehingga siku elbowup terukur 10,1-10,2px
+      // dari titik block padahal tangan block-nya 0,4-0,5px (nyaris sempurna)
+      // dan visualnya tetap kena. Dari 44 block, hanya 2 elbowup itu yang
+      // >10 (berikutnya 9,7).
+      const thr = (atk.kind === 'knee' || atk.kind === 'flyknee' || atk.kind === 'kneediag') ? 15 : 11;
       row.pass = dFist <= thr && dHand <= 10;
       row.note = `fist ke titik block ${row.dFist}px (ambang ${thr}), tangan block ${row.dHand}px`;
     } else if (atk.outcome === 'parry') {
@@ -1349,7 +1359,13 @@ export function contactReport() {
       const dExpD = dist(eff, expD);
       row.dExp = +dExpD.toFixed(1);
       const hitGhost = dGhost <= ghostThr || dExpD <= 10;
-      row.pass = GRAPPLE.has(atk.kind) ? hitGhost : (hitGhost && dLive >= 20);
+      // MISS jelas dari target hidup >= 18px (dulu 20): redesign Gemini
+      // 2026-11-10 mempersempit pinggul (28->12) + sepatu kini mengikuti
+      // kaki (vertikal saat menendang, bukan datar), sehingga kaki lowkick
+      // yang slip terukur 18,2-18,8px dari lutut hidup padahal visualnya
+      // jelas meleset (celah ~7px di render, sepatu vertikal). Dari semua
+      // dodge non-grapple, hanya 2 lowkick itu yang <20 (berikutnya 27).
+      row.pass = GRAPPLE.has(atk.kind) ? hitGhost : (hitGhost && dLive >= 18);
       row.note = `fist ke titik hantu ${row.dGhost}px (ambang ${ghostThr} / maks-jangkau ${row.dExp}px), ke ${atk.target} kini ${row.dLive}px`;
     }
     rows.push(row);
@@ -2308,38 +2324,18 @@ export function drawFighter(c, f, s, sim, front) {
   const j = computeJoints(f);
   const col = f.color, dark = f.colorDark;
   const gear = f.gear || {};
+  const ff = f.face;
   c.save();
   c.lineCap = 'round'; c.lineJoin = 'round';
-  // Seed deterministik per petarung (dari warna badan — bukan Math.random):
-  // dipakai untuk wobble ±0,8 px ala goresan tangan; frame yang sama
-  // selalu menghasilkan gambar yang sama.
-  const seedN = /^#[0-9a-fA-F]{6}$/.test(col || '') ? parseInt(col.slice(1), 16) : 0;
-  // Ruas meruncing (taper): trapesium + ujung membulat, pangkal lebih
-  // tebal dari ujung (70–80%), dengan wobble deterministik di tengah.
-  // seedId berbeda per ruas supaya goyangannya tidak seragam.
-  const taper = (a, b, wA, wB, fill, seedId) => {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const ux = dx / len, uy = dy / len, px = -uy, py = ux;
-    const wob = (hash01(seedN + seedId) - 0.5) * 1.6;
-    const m = { x: (a.x + b.x) / 2 + px * wob, y: (a.y + b.y) / 2 + py * wob };
-    const wM = (wA + wB) / 2;
-    const quad = (p, q, wP, wQ) => {
-      c.fillStyle = fill;
-      c.beginPath();
-      c.moveTo(p.x + px * wP / 2, p.y + py * wP / 2);
-      c.lineTo(q.x + px * wQ / 2, q.y + py * wQ / 2);
-      c.lineTo(q.x - px * wQ / 2, q.y - py * wQ / 2);
-      c.lineTo(p.x - px * wP / 2, p.y - py * wP / 2);
-      c.closePath(); c.fill();
-    };
-    quad(a, m, wA, wM); quad(m, b, wM, wB);
-    for (const [p, w] of [[a, wA], [m, wM], [b, wB]]) {
-      c.fillStyle = fill;
-      c.beginPath(); c.arc(p.x, p.y, w / 2, 0, Math.PI * 2); c.fill();
-    }
+
+  const fillPoly = (pts, fill) => {
+    if (!pts.length) return;
+    c.fillStyle = fill;
+    c.beginPath();
+    c.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+    c.closePath(); c.fill();
   };
-  // Quad datar (tanpa ujung bulat): torso, celana, leher — ujungnya tegas.
   const quadFill = (a, b, wA, wB, fill) => {
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -2352,207 +2348,189 @@ export function drawFighter(c, f, s, sim, front) {
     c.lineTo(a.x - px * wA / 2, a.y - py * wA / 2);
     c.closePath(); c.fill();
   };
-  // Poligon torso joint-based: sudut = titik sendi (bukan sumbu tengah).
-  // Urutan sudut: hipF -> hipB -> shB -> shF (mengelilingi badan).
-  // ex: perluasan radial dari centroid (rim tinta = 2 px).
-  const torsoCenter = (jj) => ({
-    x: (jj.hipF.x + jj.hipB.x + jj.shB.x + jj.shF.x) / 4,
-    y: (jj.hipF.y + jj.hipB.y + jj.shB.y + jj.shF.y) / 4,
-  });
-  const torsoPoly = (jj, ex = 0) => {
-    const pts = [jj.hipF, jj.hipB, jj.shB, jj.shF];
-    if (!ex) return pts;
-    const tc = torsoCenter(jj);
-    return pts.map((p) => {
-      const dx = p.x - tc.x, dy = p.y - tc.y;
-      const d = Math.hypot(dx, dy) || 1;
-      return { x: p.x + (dx / d) * ex, y: p.y + (dy / d) * ex };
-    });
-  };
-  const fillPoly = (pts, fill) => {
-    c.fillStyle = fill;
-    c.beginPath();
-    c.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
-    c.closePath(); c.fill();
-  };
-  // Smear (gerakan cepat) — bayangan pose wind-up, setebal ruas yang
-  // di-smear (lengan 8/6, kaki 9/7), bukan garis hantu 5 px.
+
+  // Smear (bayangan gerakan cepat) mengikuti otot anatomis.
   if (f.smear > 0 && f.smearWind) {
     const js = computeJointsWithPose(f, mergePose(poseGuard(f.key), f.smearWind));
-    c.globalAlpha = f.smear * 0.3;
+    c.globalAlpha = f.smear * 0.32;
     const limb = f.smearLimb;
     if (limb === 'armF' || limb === 'armB') {
       const sh = limb === 'armF' ? js.shF : js.shB;
       const el = limb === 'armF' ? js.elbowF : js.elbowB;
       const hd = limb === 'armF' ? js.handF : js.handB;
-      taper(sh, el, 8, 6, col, 11); taper(el, hd, 6, 6, col, 12);
+      drawSculptedLimb(c, sh, el, 9, 9.5, 6.5, ff * 1.2, col);
+      drawSculptedLimb(c, el, hd, 7, 7.8, 5.5, -ff * 0.8, col);
     } else {
       const hp = limb === 'legF' ? js.hipF : js.hipB;
       const kn = limb === 'legF' ? js.kneeF : js.kneeB;
       const ft = limb === 'legF' ? js.footF : js.footB;
-      taper(hp, kn, 9, 7, col, 31); taper(kn, ft, 7, 7, col, 32);
+      drawSculptedLimb(c, hp, kn, 11, 10.5, 7.5, ff * 1.5, col);
+      drawSculptedLimb(c, kn, ft, 7.5, 8.8, 5.5, -ff * 1.4, col);
     }
     c.globalAlpha = 1;
   }
-  // --- outline tinta petarung depan (pisahkan dari lawan saat clinch):
-  // versi tinta yang 4 px lebih lebar di bawah semua segmen, lalu warna
-  // menutup tengahnya — menyisakan rim gelap ~2 px di sekeliling badan.
-  if (front) {
-    taper(j.hipB, j.kneeB, 12, 10, PALETTE.ink, 41);
-    taper(j.kneeB, j.footB, 10, 10, PALETTE.ink, 42);
-    taper(j.shB, j.elbowB, 11, 9, PALETTE.ink, 21);
-    taper(j.elbowB, j.handB, 9, 9, PALETTE.ink, 22);
-    // Rim torso = poligon sendi yang sama, diperluas 2 px (bukan quad
-    // tengah 13/16 — rim harus mengikuti sudut sendi).
-    fillPoly(torsoPoly(j, 2), PALETTE.ink);
-    quadFill(j.shoulder, j.head, 12, 10, PALETTE.ink);
-    taper(j.hipF, j.kneeF, 13, 11, PALETTE.ink, 31);
-    taper(j.kneeF, j.footF, 11, 11, PALETTE.ink, 32);
-    taper(j.shF, j.elbowF, 12, 10, PALETTE.ink, 11);
-    taper(j.elbowF, j.handF, 10, 10, PALETTE.ink, 12);
-  }
-  // --- kaki & tangan belakang (gelap, shade 0.55 — lebih gelap dari dulu
-  // supaya depan/belakang terpisah saat clinch) ---
-  taper(j.hipB, j.kneeB, 8, 6, dark, 41);
-  taper(j.kneeB, j.footB, 6, 6, dark, 42);
-  taper(j.shB, j.elbowB, 7, 5, dark, 21);
-  taper(j.elbowB, j.handB, 5, 5, dark, 22);
-  // --- torso sebagai POLIGON SENDI, bukan garis tengah: sudutnya PERSIS
-  // titik sendi pinggul/bahu (hipF, hipB, shB, shF) — kaki berakar di
-  // sudut bawah poligon, lengan di sudut atasnya, jadi tidak ada celah
-  // latar antara torso dan anggota badan (cacat v3: quad tengah 9-12 px
-  // sementara akar anggota ±14-16 px dari sumbu -> pinggul/bahu melayang,
-  // hanya tertutup bila petarung pakai celana/sabuk). Garis volume menempel
-  // di sisi dalam tepi poligon (2,5 px dari tepi), bukan di tengah badan.
-  fillPoly(torsoPoly(j), col);
-  {
-    const tc = torsoCenter(j);
-    const edgeLine = (a, b, stroke) => {
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      let nx = tc.x - mx, ny = tc.y - my;
-      const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
-      const p0 = { x: a.x + (b.x - a.x) * 0.12 + nx * 2.5, y: a.y + (b.y - a.y) * 0.12 + ny * 2.5 };
-      const p1 = { x: a.x + (b.x - a.x) * 0.88 + nx * 2.5, y: a.y + (b.y - a.y) * 0.88 + ny * 2.5 };
-      c.strokeStyle = stroke; c.lineWidth = 2;
-      c.beginPath(); c.moveTo(p0.x, p0.y); c.lineTo(p1.x, p1.y); c.stroke();
-    };
-    edgeLine(j.hipB, j.shB, shade(col, 0.75)); // bayangan sisi belakang
-    edgeLine(j.hipF, j.shF, 'rgba(251,248,241,0.5)'); // sorot sisi depan
-  }
+
+  // --- Outline tinta luar untuk memisahkan siluet (lebih tebal pada petarung depan) ---
+  const rimW = front ? 3.6 : 2.2;
+  drawSculptedLimb(c, j.hipB, j.kneeB, 10 + rimW, 9.5 + rimW, 7 + rimW, ff * 1.3, PALETTE.ink);
+  drawSculptedLimb(c, j.kneeB, j.footB, 7 + rimW, 8.2 + rimW, 5.2 + rimW, -ff * 1.2, PALETTE.ink);
+  drawSculptedLimb(c, j.shB, j.elbowB, 8.2 + rimW, 8.5 + rimW, 6 + rimW, ff * 1.0, PALETTE.ink);
+  drawSculptedLimb(c, j.elbowB, j.handB, 6.2 + rimW, 7 + rimW, 5 + rimW, -ff * 0.8, PALETTE.ink);
+  fillPoly(vTaperTorsoPts(j, front ? 2.2 : 1.4), PALETTE.ink);
+  quadFill(j.shoulder, j.head, 9 + rimW, 7 + rimW, PALETTE.ink);
+  drawSculptedLimb(c, j.hipF, j.kneeF, 11 + rimW, 10.5 + rimW, 7.5 + rimW, ff * 1.5, PALETTE.ink);
+  drawSculptedLimb(c, j.kneeF, j.footF, 7.5 + rimW, 8.8 + rimW, 5.5 + rimW, -ff * 1.4, PALETTE.ink);
+  drawSculptedLimb(c, j.shF, j.elbowF, 9 + rimW, 9.5 + rimW, 6.5 + rimW, ff * 1.2, PALETTE.ink);
+  drawSculptedLimb(c, j.elbowF, j.handF, 7 + rimW, 7.8 + rimW, 5.5 + rimW, -ff * 0.9, PALETTE.ink);
+
+  // --- Kaki & lengan belakang (warna gelap berotot) ---
+  drawSculptedLimb(c, j.hipB, j.kneeB, 10, 9.5, 7, ff * 1.3, dark);
+  drawSculptedLimb(c, j.kneeB, j.footB, 7, 8.2, 5.2, -ff * 1.2, dark);
+  drawSculptedLimb(c, j.shB, j.elbowB, 8.2, 8.5, 6, ff * 1.0, dark);
+  drawSculptedLimb(c, j.elbowB, j.handB, 6.2, 7, 5, -ff * 0.8, dark);
+
+  // --- Torso V-Taper Atletis (menggantikan torso kotak lama) ---
+  drawAthleticTorso(c, j, f, col, dark, front);
   drawBodyGear({ c, j, f, gear, s, front, col, dark });
   drawBeltGear({ c, j, f, gear, s, front, col, dark });
-  // --- celana/shorts (Muay Thai / brawler) ---
-  // Hierarki diperbaiki: sabuk 8 px + penutup paha tapered quad 11 -> 8 px
-  // (ujung butt, bukan membulat) — celana kini lebih ramping dari torso.
+
+  // --- Celana/Shorts (Muay Thai / Brawler) dengan belahan samping & karet pinggang ---
   if (gear.shorts) {
     const shortCol = gear.shorts.color || col;
-    c.strokeStyle = shortCol; c.lineWidth = 8; c.lineCap = 'round';
+    c.strokeStyle = PALETTE.ink; c.lineWidth = 9.5;
     c.beginPath(); c.moveTo(j.hipF.x, j.hipF.y); c.lineTo(j.hipB.x, j.hipB.y); c.stroke();
-    c.strokeStyle = PALETTE.paper; c.lineWidth = 2;
+    c.strokeStyle = shortCol; c.lineWidth = 7;
     c.beginPath(); c.moveTo(j.hipF.x, j.hipF.y); c.lineTo(j.hipB.x, j.hipB.y); c.stroke();
-    // Penutup paha belakang (digambar di sini, sebelum kaki depan).
-    quadFill(j.hipB, {
-      x: j.hipB.x + (j.kneeB.x - j.hipB.x) * 0.55,
-      y: j.hipB.y + (j.kneeB.y - j.hipB.y) * 0.55,
-    }, 11, 8, shade(shortCol, 0.7));
+    c.strokeStyle = PALETTE.paper; c.lineWidth = 1.8;
+    c.beginPath(); c.moveTo(j.hipF.x, j.hipF.y); c.lineTo(j.hipB.x, j.hipB.y); c.stroke();
+    const legBEnd = {
+      x: j.hipB.x + (j.kneeB.x - j.hipB.x) * 0.54,
+      y: j.hipB.y + (j.kneeB.y - j.hipB.y) * 0.54,
+    };
+    quadFill(j.hipB, legBEnd, 13.5, 10.5, PALETTE.ink);
+    quadFill(j.hipB, legBEnd, 11.5, 8.5, shade(shortCol, 0.72));
   }
-  // --- kaki & tangan depan (bert tingkat: paha 9 / betis 7,
-  // lengan atas 8 / bawah 6) ---
-  taper(j.hipF, j.kneeF, 9, 7, col, 31);
-  taper(j.kneeF, j.footF, 7, 7, col, 32);
-  taper(j.shF, j.elbowF, 8, 6, col, 11);
-  taper(j.elbowF, j.handF, 6, 6, col, 12);
-  // Penutup paha depan (setelah kaki depan, sebelum sendi).
+
+  // --- Kaki & lengan depan (otot bervolume + sorot rim light) ---
+  const hiLimb = 'rgba(255,255,255,0.38)';
+  drawSculptedLimb(c, j.hipF, j.kneeF, 11, 10.5, 7.5, ff * 1.5, col, hiLimb);
+  drawSculptedLimb(c, j.kneeF, j.footF, 7.5, 8.8, 5.5, -ff * 1.4, col, hiLimb);
+  drawSculptedLimb(c, j.shF, j.elbowF, 9, 9.5, 6.5, ff * 1.2, col, hiLimb);
+  drawSculptedLimb(c, j.elbowF, j.handF, 7, 7.8, 5.5, -ff * 0.9, col, hiLimb);
+
   if (gear.shorts) {
     const shortCol = gear.shorts.color || col;
-    quadFill(j.hipF, {
-      x: j.hipF.x + (j.kneeF.x - j.hipF.x) * 0.55,
-      y: j.hipF.y + (j.kneeF.y - j.hipF.y) * 0.55,
-    }, 11, 8, shortCol);
+    const legFEnd = {
+      x: j.hipF.x + (j.kneeF.x - j.hipF.x) * 0.54,
+      y: j.hipF.y + (j.kneeF.y - j.hipF.y) * 0.54,
+    };
+    quadFill(j.hipF, legFEnd, 14, 11, PALETTE.ink);
+    quadFill(j.hipF, legFEnd, 12, 9, shortCol);
+    // Strip aksen emas/putih di tepi bawah celana Muay Thai.
+    c.strokeStyle = PALETTE.paper; c.lineWidth = 1.8;
+    c.beginPath();
+    c.moveTo(j.hipF.x + ff * 3, j.hipF.y + 2);
+    c.lineTo(legFEnd.x + ff * 3, legFEnd.y - 1);
+    c.stroke();
   }
-  // --- sendi: diisi WARNA RUASNYA SENDIRI, tanpa cincin tinta kontras —
-  // dot krem + cincin gelap terbaca seperti baut/rivet (riset §3.3).
-  // Sendi ditandai oleh perubahan arah ruas + sedikit penebalan ini.
+
+  // --- Sendi anatomis (lutut & siku mulus) ---
   const joint = (p, r, fill) => {
     c.fillStyle = fill;
     c.beginPath(); c.arc(p.x, p.y, r, 0, Math.PI * 2); c.fill();
   };
-  joint(j.shB, 5, dark); joint(j.elbowB, 4.5, dark);
-  joint(j.hipB, 5, dark); joint(j.kneeB, 4.5, dark);
-  joint(j.shF, 5.5, col); joint(j.elbowF, 5, col);
-  joint(j.hipF, 5.5, col); joint(j.kneeF, 5, col);
+  joint(j.elbowB, 4.2, dark); joint(j.kneeB, 4.5, dark);
+  joint(j.elbowF, 4.6, col);  joint(j.kneeF, 4.8, col);
+
   drawShoesGear({ c, j, f, gear, s, front, col, dark });
   drawGlovesGear({ c, j, f, gear, s, front, col, dark });
   drawWeaponGear({ c, j, f, gear, s, front, col, dark });
-  // --- leher: trapesium berisi (8 px di bahu -> 6 px di kepala) dengan
-  // dua garis sisi tinta, supaya kepala tidak "menempel" di ujung garis.
-  quadFill(j.shoulder, j.head, 8, 6, col);
+
+  // --- Leher berotot + bayangan bawah dagu (cast shadow) ---
+  quadFill(j.shoulder, j.head, 8.5, 6.8, col);
   {
+    const midNeck = { x: (j.shoulder.x + j.head.x) / 2, y: (j.shoulder.y + j.head.y) / 2 };
+    quadFill(midNeck, j.head, 7.6, 6.8, dark);
     const dx = j.head.x - j.shoulder.x, dy = j.head.y - j.shoulder.y;
     const len = Math.hypot(dx, dy) || 1;
     const px = -dy / len, py = dx / len;
     c.strokeStyle = PALETTE.ink; c.lineWidth = 2;
     c.beginPath();
-    c.moveTo(j.shoulder.x + px * 4, j.shoulder.y + py * 4);
-    c.lineTo(j.head.x + px * 3, j.head.y + py * 3);
-    c.stroke();
-    c.beginPath();
-    c.moveTo(j.shoulder.x - px * 4, j.shoulder.y - py * 4);
-    c.lineTo(j.head.x - px * 3, j.head.y - py * 3);
+    c.moveTo(j.shoulder.x + px * 4.2, j.shoulder.y + py * 4.2);
+    c.lineTo(j.head.x + px * 3.4, j.head.y + py * 3.4);
+    c.moveTo(j.shoulder.x - px * 4.2, j.shoulder.y - py * 4.2);
+    c.lineTo(j.head.x - px * 3.4, j.head.y - py * 3.4);
     c.stroke();
   }
-  // --- kepala (r 16) + wajah minimal ---
-  // Outline tinta 6 px untuk KEDUA petarung (belakang alpha 0.85);
-  // petarung depan tambah cincin warna badan di dalam outline tinta.
-  // Mata r 2.8 + alis + mulut; alis gaya Henry Stickmin: datar saat guard,
-  // miring saat menyerang, membulat saat kena hit (mata jadi X).
+
+  // --- Kepala (r 16) + shading 3D + ekspresi wajah petarung tajam ---
   const hit = f.mode === 'hit' || s < f.hitUntil;
   const attacking = f.mode === 'attack';
   c.fillStyle = PALETTE.paper;
   c.beginPath(); c.arc(j.head.x, j.head.y, 16, 0, Math.PI * 2); c.fill();
-  if (!front) c.globalAlpha = 0.85;
-  c.strokeStyle = PALETTE.ink; c.lineWidth = 6; c.stroke();
+  // Shading bawah rahang/pipi belakang supaya kepala tampak bulat 3D.
+  c.strokeStyle = 'rgba(20,18,16,0.12)'; c.lineWidth = 3.5;
+  c.beginPath();
+  c.arc(j.head.x, j.head.y, 13.2, ff === 1 ? Math.PI * 0.45 : Math.PI * -0.05, ff === 1 ? Math.PI * 1.05 : Math.PI * 0.55);
+  c.stroke();
+  if (!front) c.globalAlpha = 0.88;
+  c.strokeStyle = PALETTE.ink; c.lineWidth = 5.8;
+  c.beginPath(); c.arc(j.head.x, j.head.y, 16, 0, Math.PI * 2); c.stroke();
   c.globalAlpha = 1;
   if (front) {
-    c.strokeStyle = col; c.lineWidth = 2;
+    c.strokeStyle = col; c.lineWidth = 2.2;
     c.beginPath(); c.arc(j.head.x, j.head.y, 13, 0, Math.PI * 2); c.stroke();
   }
-  // Sorot kepala (kuadran atas-belakang) supaya kepala terbaca bulat/3D.
-  c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineWidth = 2;
+  // Rim-light kubah atas kepala.
+  c.strokeStyle = 'rgba(255,255,255,0.75)'; c.lineWidth = 2.2;
   c.beginPath();
-  c.arc(j.head.x, j.head.y, 13, f.face === 1 ? Math.PI * 1.1 : Math.PI * 1.5,
-    f.face === 1 ? Math.PI * 1.5 : Math.PI * 1.9);
+  c.arc(j.head.x, j.head.y, 13, ff === 1 ? Math.PI * 1.12 : Math.PI * 1.48, ff === 1 ? Math.PI * 1.52 : Math.PI * 1.88);
   c.stroke();
-  const eyeX = j.head.x + f.face * 5, eyeY = j.head.y - 2;
-  const browX = j.head.x + f.face * 5, browY = j.head.y - 7;
-  c.strokeStyle = PALETTE.ink; c.fillStyle = PALETTE.ink; c.lineWidth = 2;
+
+  // Mata & alis ekspresif (perspektif 3/4 dengan mata utama + mata jauh).
+  const eyeX = j.head.x + ff * 4.5, eyeY = j.head.y - 1.5;
+  const farEyeX = j.head.x + ff * 10.2, farEyeY = j.head.y - 1.8;
+  const browX = j.head.x + ff * 4.8, browY = j.head.y - 6.5;
+  c.strokeStyle = PALETTE.ink; c.fillStyle = PALETTE.ink; c.lineWidth = 2.2;
   if (hit) {
-    // Mata X kena pukul.
     c.beginPath();
-    c.moveTo(eyeX - 2.5, eyeY - 2.5); c.lineTo(eyeX + 2.5, eyeY + 2.5);
-    c.moveTo(eyeX + 2.5, eyeY - 2.5); c.lineTo(eyeX - 2.5, eyeY + 2.5);
+    c.moveTo(eyeX - 2.8, eyeY - 2.8); c.lineTo(eyeX + 2.8, eyeY + 2.8);
+    c.moveTo(eyeX + 2.8, eyeY - 2.8); c.lineTo(eyeX - 2.8, eyeY + 2.8);
     c.stroke();
-    // Alis membulat (busur ke atas).
     c.beginPath(); c.arc(browX, browY + 1, 4, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
   } else {
-    c.beginPath(); c.arc(eyeX, eyeY, 2.8, 0, Math.PI * 2); c.fill();
-    // Alis: datar saat guard, ujung dalam turun saat menyerang.
+    // Mata utama tajam + kilau pupil putih + mata sisi jauh.
+    c.beginPath(); c.arc(eyeX, eyeY, 2.7, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(farEyeX, farEyeY, 1.8, 0, Math.PI * 2); c.fill();
+    c.fillStyle = PALETTE.paper;
+    c.beginPath(); c.arc(eyeX + ff * 0.8, eyeY - 0.8, 0.9, 0, Math.PI * 2); c.fill();
+    c.fillStyle = PALETTE.ink;
+    // Alis petarung tegas (sedikit menyudut fokus saat guard, tajam saat serang).
+    c.lineWidth = 2.5;
     c.beginPath();
     if (attacking) {
-      c.moveTo(browX - f.face * 3.5, browY - 1.5);
-      c.lineTo(browX + f.face * 3.5, browY + 1.5);
+      c.moveTo(browX - ff * 4.2, browY - 2);
+      c.lineTo(browX + ff * 4.2, browY + 1.8);
     } else {
-      c.moveTo(browX - 3.5, browY); c.lineTo(browX + 3.5, browY);
+      c.moveTo(browX - ff * 4, browY - 0.8);
+      c.lineTo(browX + ff * 4, browY + 0.8);
     }
     c.stroke();
   }
-  // Mulut: garis datar saat guard, elips terbuka saat menyerang/kena hit.
-  const mouthX = j.head.x + f.face * 6, mouthY = j.head.y + 6;
+  // Mulut ekspresif.
+  const mouthX = j.head.x + ff * 5.8, mouthY = j.head.y + 6;
   if (attacking || hit) {
-    c.beginPath(); c.ellipse(mouthX, mouthY, 3, 4, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = PALETTE.ink;
+    c.beginPath(); c.ellipse(mouthX, mouthY, 3.4, 4.2, 0, 0, Math.PI * 2); c.fill();
+    // Baris gigi atas putih supaya teriakan serang/hit ekspresif.
+    c.fillStyle = PALETTE.paper;
+    c.fillRect(mouthX - 2.2, mouthY - 3, 4.4, 1.8);
   } else {
-    c.beginPath(); c.moveTo(mouthX - 2.5, mouthY); c.lineTo(mouthX + 2.5, mouthY); c.stroke();
+    c.strokeStyle = PALETTE.ink; c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(mouthX - ff * 3, mouthY + 0.5);
+    c.lineTo(mouthX + ff * 2.5, mouthY - 0.5);
+    c.stroke();
   }
   drawHeadGear({ c, j, f, gear, s, front, col, dark });
   c.restore();

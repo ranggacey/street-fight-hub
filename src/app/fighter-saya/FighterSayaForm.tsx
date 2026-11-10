@@ -703,8 +703,15 @@ export default function FighterSayaForm() {
 
         {phase === "manage" && fighter && !editing ? (
           <GlassCard strong>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="mx-auto w-full max-w-[220px] shrink-0 sm:mx-0">
+                <FighterPreview
+                  colors={colors}
+                  accessories={accessories}
+                  name={fighter.displayName}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
                 <div
                   className="h-2 w-full rounded-full"
                   style={{ backgroundColor: styleColor(fighter.style) }}
