@@ -14,7 +14,7 @@ import { PALETTE, shade, getMapPalette } from './palette.js';
 import { COMMENTATOR_STYLE, drawCommentator } from './commentators.js';
 import { ACCESSORY_IDS, ACCESSORY_DEFAULTS, normalizeGear, vTaperTorsoPts, drawSculptedLimb, drawAthleticTorso, drawBodyGear, drawBeltGear, drawShoesGear, drawGlovesGear, drawWeaponGear, drawHeadGear } from './accessories.js';
 import { SCENE as S, realTime, warp } from './scenes.js';
-import { TECHNIQUE_KEYS, windupDurOf, totalDurOf, STRIKE_TRAVEL, techniquePose, mergePose, lerpPoseFull, lerpAngle } from './techniques.js';
+import { TECHNIQUE_KEYS, windupDurOf, totalDurOf, STRIKE_TRAVEL, techniquePose, mergePose, lerpPoseFull, lerpAngle, wrapDelta, normAng } from './techniques.js';
 import { fighterColors } from './moves.js';
 import { buildPositions, positionAt, RING_X_MIN, RING_X_MAX } from './fight.js';
 
@@ -34,6 +34,33 @@ const LEG_RETURN_DUR = 0.2;
 // Thomas & Johnston (squash = serap benturan, sebanding kecepatan jatuh).
 const LAND_SQUASH_DUR = 0.15;
 const LAND_SQUASH_AMP = 0.25;
+
+// Lag ekor ikat kepala (secondary motion / drag, riset 2026-11-10,
+// MOTION-LOG §34): ekor longgar tertinggal 1-2 frame dari gerak kepala
+// (frame-shifting Seymour — kunci sekunder digeser 1-2 frame dari
+// driver-nya). Sudut ekor mengejar arah gerak kepala dengan rate
+// eksponensial per frame; di bawah ambang kecepatan, ekor kembali ke
+// sudut istirahat (menggantung ke belakang-bawah). Ekor panjang (14 px,
+// lebih longgar) rate 0,35 (~2-3 frame lag); ekor pendek (9 px) rate 0,5
+// (lag lebih kecil — makin longgar makin jauh tertinggal, D'Source).
+// Panjang ekor TETAP (tidak meregang) — hanya sudutnya yang tertinggal,
+// jadi ujung ekor tidak pernah teleport. RENDER-ONLY: sim/pose/pacing
+// CF2 §17 tidak disentuh; state deterministik (murni fungsi frame
+// sebelumnya, tanpa Math.random).
+const TAIL_LEN = 14, TAIL_LEN_S = 9;
+const TAIL_RATE = 0.35, TAIL_RATE_S = 0.5;
+const TAIL_STREAM_MIN = 6; // px/frame — di bawah ini kepala dianggap diam
+const TAIL_VEL_RATE = 0.4; // EMA kecepatan kepala: target arah ekor dari
+// kecepatan yang DIHALUSKAN, bukan kecepatan mentah per frame — kecepatan
+// mentah berbalik arah tiap frame (pose/IK/langkah) sehingga target
+// melompat ~180 derajat dan ekor mencambuk 60+ derajat/frame (terukur
+// v1: 106/899 frame ayunan > 30 derajat/frame).
+const TAIL_MAX_SWING = 0.42; // rad/frame (~24 derajat) — batas ayunan sudut
+// ekor per frame: tanpa batas, target yang berbalik 180 derajat (kepala
+// kena hit lalu balik) membuat ekor mencambuk 0,35*180 = 63 derajat dalam
+// 1 frame (terukur v2: maks 62 derajat/frame, EMA saja tidak cukup).
+// Ekor kain 14 px tidak bisa berayun lebih cepat dari ini; batas ini
+// membuat ujung ekor bergerak maks ~6 px/frame dari ayunan saja.
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -366,6 +393,11 @@ function newFighter(key) {
     rampStep: 0, // langkah ramp-in serangan berjalan (1 = frame pertama, 2 = frame kedua berat)
     reactStep: 0, // langkah ramp-in masuk react/hit (1 = frame pertama, 2 = frame kedua)
     lunge: 0, // hentakan serang (px ke arah lawan, 0..27) — lihat stepFighter
+    tailAng: null, // sudut ekor panjang ikat kepala (lag/drag §34) — null = belum init (pakai sudut istirahat)
+    tailAngS: null, // sudut ekor pendek ikat kepala (lag/drag §34)
+    tailHeadPrev: null, // posisi kepala frame sebelumnya (kecepatan kepala = driver lag ekor)
+    tailVel: null, // kecepatan kepala DIHALUSKAN (EMA) — driver arah ekor (§34 v2)
+    prevJoints: null, // sendi frame sebelumnya — snapshot awal stepFighter, untuk ghost travel §35 (render-only)
   };
 }
 
@@ -562,6 +594,12 @@ function thrownPose(def, variant, k) {
 }
 
 function stepFighter(f, o, s, dt, particles, impacts, rings, rt, stepLog) {
+  // Snapshot sendi frame sebelumnya SEBELUM mutasi apa pun — dipakai
+  // travelGhost (§35, render-only): titik tengah frame lalu ↔ kini.
+  // Diambil di awal langkah: sama dengan state yang digambar frame lalu
+  // (onFrame jalan di akhir simStep; trigger jalan di dalam simStep yang
+  // sama, sebelum onFrame — jadi snapshot ini = state frame lalu persis).
+  f.prevJoints = computeJoints(f);
   const prevMode = f.mode; // untuk deteksi transisi attack -> guard/walk/dll
   // Kecepatan badan menurut timeline engine (untuk durasi langkah + lean).
   // Diambil di awal langkah: posisi akhir langkah ini = timelinePos(s + dt).
@@ -1101,6 +1139,44 @@ function stepFighter(f, o, s, dt, particles, impacts, rings, rt, stepLog) {
     // sampai 27px ke arah lawan saat impact — lihat cabang attack.
     f.x = (f.key === 'R' ? tl.xR : tl.xB) + f.face * (f.lunge || 0);
     f.vx = tlVx;
+  }
+
+  // --- LAG EKOR IKAT KEPALA (secondary motion / drag, MOTION-LOG §34) ---
+  // Ekor longgar tertinggal dari gerak kepala: sudut ekor mengejar arah
+  // gerak kepala (ekor "ditinggal" di belakang, berlawanan arah gerak),
+  // lalu menyusul + kembali ke sudut istirahat saat kepala berhenti —
+  // "nothing stops all at once". Driver = kecepatan kepala frame ini
+  // (px/frame); di bawah ambang, target = sudut istirahat. Update di
+  // akhir stepFighter supaya posisi kepala sudah final (timeline +
+  // lunge). RENDER-ONLY: dibaca drawHeadGear (accessories.js); tanpa
+  // state (preview builder) gambar memakai sudut istirahat persis.
+  {
+    const j = computeJoints(f);
+    const rest = Math.atan2(6, -TAIL_LEN * f.face); // ekor panjang: (-14*face, +6)
+    const restS = Math.atan2(6, -TAIL_LEN_S * f.face); // ekor pendek: (-9*face, +6)
+    if (f.tailAng === null || f.tailAng === undefined || !f.tailHeadPrev) {
+      f.tailAng = rest; f.tailAngS = restS;
+      f.tailHeadPrev = { x: j.head.x, y: j.head.y };
+      f.tailVel = { x: 0, y: 0 };
+    } else {
+      const hvx = j.head.x - f.tailHeadPrev.x, hvy = j.head.y - f.tailHeadPrev.y;
+      // Haluskan kecepatan kepala (EMA 0,4) SEBELUM jadi target arah —
+      // kecepatan mentah berbalik tiap frame dan membuat target melompat
+      // ~180 derajat (ekor mencambuk, v1 terukur 62 derajat/frame).
+      f.tailVel = { x: lerp(f.tailVel.x, hvx, TAIL_VEL_RATE), y: lerp(f.tailVel.y, hvy, TAIL_VEL_RATE) };
+      const spd = Math.hypot(f.tailVel.x, f.tailVel.y);
+      // Kepala bergerak cepat -> ekor mengalir berlawanan arah gerak;
+      // kepala (nyaris) diam -> ekor kembali menggantung ke belakang.
+      const target = spd > TAIL_STREAM_MIN ? Math.atan2(-f.tailVel.y, -f.tailVel.x) : rest;
+      const targetS = spd > TAIL_STREAM_MIN ? Math.atan2(-f.tailVel.y, -f.tailVel.x) : restS;
+      // Ayunan sudut dibatasi (slew limit): target yang berbalik ~180
+      // derajat (kepala kena hit lalu balik) tidak boleh dicapai dalam
+      // 1 frame — ekor mengejar paling cepat TAIL_MAX_SWING/frame.
+      const swing = (cur, tgt, rate) => normAng(cur + clamp(wrapDelta(tgt - cur) * rate, -TAIL_MAX_SWING, TAIL_MAX_SWING));
+      f.tailAng = swing(f.tailAng, target, TAIL_RATE);
+      f.tailAngS = swing(f.tailAngS, targetS, TAIL_RATE_S);
+      f.tailHeadPrev = { x: j.head.x, y: j.head.y };
+    }
   }
 }
 
@@ -2200,13 +2276,30 @@ function drawArena(c, s, sim, tf) {
   // Dinding kertas.
   c.fillStyle = P.wall;
   c.fillRect(200, 100, 1000, 800);
-  // Banner merah di dinding.
+  // Banner merah di dinding — DIJEPIT (clamp) supaya tidak pernah masuk
+  // zona HUD (2026-11-10, item 8): banner digambar di dalam transform
+  // kamera, jadi saat zoom membesar ia naik ke layar dan menutupi nama
+  // petarung di HUD (terukur: zoom 1,20-1,41 banner y layar -46..40,
+  // menutupi nama "Nopan" di y 10-26). Jepit posisi dunia banner supaya
+  // ujung atasnya di layar tidak pernah di atas batas bawah HUD (nama
+  // 10-26 + bar 34-58 + timer 88-122 + margin goyang kamera 5px = 135):
+  // duniaY >= cam.y + (135 - H/2) / z. Zoom efektif = zoom kamera x zoom
+  // KO (maks 1,12) supaya jepit tetap benar selama 2 dtk setelah KO.
+  // Kalau zoom kecil, banner tetap di posisi desain (y 235); kalau zoom
+  // besar, banner meluncur ke bawah dinding (di belakang penonton, yang
+  // digambar sesudahnya) — tidak pernah menyentuh HUD. Gameplay tidak
+  // berubah: hanya posisi gambar banner.
+  const camB = cameraFor(sim.R, sim.B);
+  let zB = camB.z;
+  const kzB = koZoomAt(tf);
+  if (kzB > 1) zB *= kzB;
+  const bannerY = Math.max(235, camB.y + (135 - H / 2) / zB);
   c.fillStyle = P.red;
-  c.fillRect(360, 235, 560, 64);
+  c.fillRect(360, bannerY, 560, 64);
   c.fillStyle = PALETTE.paper;
   c.font = '700 44px "Teko", "Anton", "Arial Black", sans-serif';
   c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText('STREET FIGHT ARENA', 640, 268);
+  c.fillText('STREET FIGHT ARENA', 640, bannerY + 33);
   c.textBaseline = 'alphabetic';
   // Penonton (3 baris).
   drawCrowd(c, s, tf);
@@ -2319,6 +2412,38 @@ function drawShadow(c, f) {
 }
 
 
+// Smear ghost 1 frame — travel tercepat (§35, riset smear 2026-11-09).
+// Saat ujung anggota penyerang meloncat > GHOST_JUMP_PX dalam 1 frame
+// (> 1500 px/dtk @30fps — chamber headkick 50 px, strike travel 71 px,
+// return headkick sampai 96 px di sekuens uji), gambar anggota itu sekali
+// lagi di titik tengah frame sebelumnya ↔ kini, alpha rendah, 1 frame
+// saja ("on ones"). RENDER-ONLY: sim/pose/pacing CF2 tidak berubah;
+// smear wind-up lama (f.smear) tetap jalan berdampingan.
+// Ujung anggota = tangan (pukulan/siku) atau kaki (tendangan/lutut);
+// chamber/strike/return semua tercakup karena pemicunya lompatan, bukan fase.
+export const GHOST_JUMP_PX = 50;
+export const GHOST_ALPHA = 0.25;
+export function travelGhost(f, j, s) {
+  if (!f.prevJoints || f.mode !== 'attack') return null;
+  const atk = atkFor(s, f.key);
+  if (!atk || atk.kind === 'feint' || atk.kind === 'ginga') return null;
+  const limb = limbFor(atk.kind);
+  const end = limb === 'armF' ? 'handF' : limb === 'armB' ? 'handB'
+    : limb === 'legF' ? 'footF' : 'footB';
+  const jump = Math.hypot(j[end].x - f.prevJoints[end].x, j[end].y - f.prevJoints[end].y);
+  if (jump <= GHOST_JUMP_PX) return null;
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const p = f.prevJoints;
+  if (limb === 'armF' || limb === 'armB') {
+    const sh = limb === 'armF' ? 'shF' : 'shB';
+    const el = limb === 'armF' ? 'elbowF' : 'elbowB';
+    return { limb, jump, a: mid(p[sh], j[sh]), m: mid(p[el], j[el]), b: mid(p[end], j[end]) };
+  }
+  const hp = limb === 'legF' ? 'hipF' : 'hipB';
+  const kn = limb === 'legF' ? 'kneeF' : 'kneeB';
+  return { limb, jump, a: mid(p[hp], j[hp]), m: mid(p[kn], j[kn]), b: mid(p[end], j[end]) };
+}
+
 // Diekspor untuk smoke test render aksesoris (tests/run.mjs §20).
 export function drawFighter(c, f, s, sim, front) {
   const j = computeJoints(f);
@@ -2366,6 +2491,23 @@ export function drawFighter(c, f, s, sim, front) {
       const ft = limb === 'legF' ? js.footF : js.footB;
       drawSculptedLimb(c, hp, kn, 11, 10.5, 7.5, ff * 1.5, col);
       drawSculptedLimb(c, kn, ft, 7.5, 8.8, 5.5, -ff * 1.4, col);
+    }
+    c.globalAlpha = 1;
+  }
+
+  // Ghost travel 1 frame (§35): anggota penyerang yang meloncat > 50 px
+  // digambar sekali lagi di titik tengah frame sebelumnya ↔ kini —
+  // jembatan visual di atas celah antar frame (chamber/strike/return).
+  // Lebar ruas mengikuti smear (otot sculpted ala redesign Gemini).
+  const ghost = travelGhost(f, j, s);
+  if (ghost) {
+    c.globalAlpha = GHOST_ALPHA;
+    if (ghost.limb === 'armF' || ghost.limb === 'armB') {
+      drawSculptedLimb(c, ghost.a, ghost.m, 9, 9.5, 6.5, ff * 1.2, col);
+      drawSculptedLimb(c, ghost.m, ghost.b, 7, 7.8, 5.5, -ff * 0.8, col);
+    } else {
+      drawSculptedLimb(c, ghost.a, ghost.m, 11, 10.5, 7.5, ff * 1.5, col);
+      drawSculptedLimb(c, ghost.m, ghost.b, 7.5, 8.8, 5.5, -ff * 1.4, col);
     }
     c.globalAlpha = 1;
   }

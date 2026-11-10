@@ -886,25 +886,43 @@ export function drawHeadGear(ctx) {
 
   if (hv === 'headband') {
     const wave = Math.sin(s * 6.5) * 4.5;
+    // Ekor ikat kepala — LAG/DRAG (§34): arah ekor dari state f.tailAng /
+    // f.tailAngS (dihitung stepFighter, tertinggal 1-2 frame dari gerak
+    // kepala); tanpa state (preview builder) = sudut istirahat -> gambar
+    // lama persis. Bentuk Gemini dipertahankan: tiap ruas ekor diputar
+    // sebesar selisih sudut state vs sudut istirahat di sekitar simpul.
+    const restA = Math.atan2(6, -14 * ff);
+    const restAS = Math.atan2(6, -9 * ff);
+    const dL = (typeof f.tailAng === 'number' ? f.tailAng : restA) - restA;
+    const dS = (typeof f.tailAngS === 'number' ? f.tailAngS : restAS) - restAS;
+    const rot = (dx, dy, d) => {
+      const co = Math.cos(d), si = Math.sin(d);
+      return { x: dx * co - dy * si, y: dx * si + dy * co };
+    };
+    const kLx = hx - ff * 14, kLy = hy - 5; // simpul ekor panjang
+    const kSx = hx - ff * 14, kSy = hy - 2; // simpul ekor pendek
+    const mL = rot(-ff * 10, 3 + wave * 0.5, dL); // tengah ekor panjang
+    const tL = rot(-ff * 20, 8 + wave, dL); // ujung ekor panjang
+    const tS = rot(-ff * 14, 12 + wave * 0.8, dS); // ujung ekor pendek
     c.lineCap = 'round';
     c.strokeStyle = PALETTE.ink; c.lineWidth = 7.5;
     c.beginPath();
-    c.moveTo(hx - ff * 14, hy - 5);
-    c.lineTo(hx - ff * 24, hy - 2 + wave * 0.5);
-    c.lineTo(hx - ff * 34, hy + 3 + wave);
-    c.moveTo(hx - ff * 14, hy - 2);
-    c.lineTo(hx - ff * 28, hy + 10 + wave * 0.8);
+    c.moveTo(kLx, kLy);
+    c.lineTo(kLx + mL.x, kLy + mL.y);
+    c.lineTo(kLx + tL.x, kLy + tL.y);
+    c.moveTo(kSx, kSy);
+    c.lineTo(kSx + tS.x, kSy + tS.y);
     c.stroke();
     c.strokeStyle = hcol; c.lineWidth = 4.5;
     c.beginPath();
-    c.moveTo(hx - ff * 14, hy - 5);
-    c.lineTo(hx - ff * 24, hy - 2 + wave * 0.5);
-    c.lineTo(hx - ff * 34, hy + 3 + wave);
+    c.moveTo(kLx, kLy);
+    c.lineTo(kLx + mL.x, kLy + mL.y);
+    c.lineTo(kLx + tL.x, kLy + tL.y);
     c.stroke();
     c.strokeStyle = hdark; c.lineWidth = 4;
     c.beginPath();
-    c.moveTo(hx - ff * 14, hy - 2);
-    c.lineTo(hx - ff * 28, hy + 10 + wave * 0.8);
+    c.moveTo(kSx, kSy);
+    c.lineTo(kSx + tS.x, kSy + tS.y);
     c.stroke();
     c.strokeStyle = PALETTE.ink; c.lineWidth = 9.5;
     c.beginPath(); c.arc(hx, hy, 16, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
@@ -916,6 +934,21 @@ export function drawHeadGear(ctx) {
     c.beginPath(); c.arc(hx - ff * 15, hy - 4, 4.2, 0, Math.PI * 2); c.fill(); c.stroke();
   } else if (hv === 'bandana') {
     const tail = Math.sin(s * 6) * 3.5;
+    // Ekor bandana — LAG/DRAG (§36, mekanisme §34): seperti ikat kepala,
+    // tiap ekor diputar sebesar simpangan sudut state dari sudut
+    // istirahatnya (tailAng - atan2(6,-14*face) untuk ekor 1, tailAngS -
+    // atan2(6,-9*face) untuk ekor 2); tanpa state (preview builder) =
+    // sudut istirahat -> gambar Gemini lama persis. Bentuk Gemini
+    // dipertahankan (2 ruas lurus + outline tinta).
+    const restHB = Math.atan2(6, -14 * ff), restHBS = Math.atan2(6, -9 * ff);
+    const dB1 = (typeof f.tailAng === 'number' ? f.tailAng : restHB) - restHB;
+    const dB2 = (typeof f.tailAngS === 'number' ? f.tailAngS : restHBS) - restHBS;
+    const rotB = (dx, dy, d) => {
+      const co = Math.cos(d), si = Math.sin(d);
+      return { x: dx * co - dy * si, y: dx * si + dy * co };
+    };
+    const tB1 = rotB(-ff * 12, 7 + tail, dB1); // ujung ekor 1 (relatif simpul)
+    const tB2 = rotB(-ff * 10, 10 + tail, dB2); // ujung ekor 2 (relatif simpul)
     c.fillStyle = hcol; c.strokeStyle = PALETTE.ink; c.lineWidth = 2.5;
     c.beginPath(); c.arc(hx, hy - 1, 16.5, Math.PI * 0.98, Math.PI * 2.02); c.closePath();
     c.fill(); c.stroke();
@@ -925,13 +958,13 @@ export function drawHeadGear(ctx) {
     c.beginPath(); c.arc(hx - ff * 15, hy - 2, 5, 0, Math.PI * 2); c.fill(); c.stroke();
     c.strokeStyle = PALETTE.ink; c.lineWidth = 6;
     c.beginPath();
-    c.moveTo(hx - ff * 16, hy); c.lineTo(hx - ff * 28, hy + 7 + tail);
-    c.moveTo(hx - ff * 15, hy + 3); c.lineTo(hx - ff * 25, hy + 13 + tail);
+    c.moveTo(hx - ff * 16, hy); c.lineTo(hx - ff * 16 + tB1.x, hy + tB1.y);
+    c.moveTo(hx - ff * 15, hy + 3); c.lineTo(hx - ff * 15 + tB2.x, hy + 3 + tB2.y);
     c.stroke();
     c.strokeStyle = hcol; c.lineWidth = 3.5;
     c.beginPath();
-    c.moveTo(hx - ff * 16, hy); c.lineTo(hx - ff * 28, hy + 7 + tail);
-    c.moveTo(hx - ff * 15, hy + 3); c.lineTo(hx - ff * 25, hy + 13 + tail);
+    c.moveTo(hx - ff * 16, hy); c.lineTo(hx - ff * 16 + tB1.x, hy + tB1.y);
+    c.moveTo(hx - ff * 15, hy + 3); c.lineTo(hx - ff * 15 + tB2.x, hy + 3 + tB2.y);
     c.stroke();
   } else if (hv === 'cap') {
     c.fillStyle = hcol; c.strokeStyle = PALETTE.ink; c.lineWidth = 2.5;
