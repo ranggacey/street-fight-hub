@@ -86,8 +86,9 @@ Dipakai admin Hub (tombol "Ekspor Video" di riwayat pertandingan). Perilaku:
 
 1. Status arena berubah jadi: *"Mode ekspor video: tekan Tarung — rekaman mulai otomatis, video terunduh saat fight selesai."*
 2. Saat tombol **Tarung** diklik, `startFight()` memanggil `startRecording()` otomatis (MediaRecorder: canvas 30fps + audio SFX; status "Merekam fight… tunggu sampai selesai."). **Tanpa `autoRecord`, klik Tarung TIDAK merekam** — permainan normal tidak terganggu.
-3. Saat fight selesai, `endFight()` menghentikan recorder → `finishRecording()` merakit webm (`stickman-fight-{seed}.webm`) dan mengunduh otomatis.
+3. Saat fight selesai, `endFight()` menghentikan recorder → `finishRecording()` merakit webm (`stickman-fight-{seed}.webm`), mencoba unduh otomatis, DAN menampilkan link unduh manual "⬇ Unduh video" di status (unduhan otomatis sering diblokir browser karena dipicu tanpa gestur pengguna).
 4. Batasan: ekspor berjalan **real-time di browser (~60 detik per video)**, satu per satu. Tidak ada render server (Vercel serverless tidak bisa render video latar). Rekaman butuh klik Tarung di iframe (gestur di origin iframe) supaya audio komentator/SFX ikut terekam; tanpa gestur itu AudioContext tersuspensi dan video jadi bisu.
+5. **Iframe parent WAJIB menyertakan `allow-downloads` di atribut `sandbox`** (`GameArena.tsx`, `TrainingArena.tsx`) — tanpa itu SEMUA unduhan dari iframe diblokir (insiden 10 Nov 2026: video tidak pernah sampai ke perangkat walau status menulis "Video tersimpan").
 
 Kirim `sfa-config` ulang kapan saja (mis. challenge baru) — state embed ditimpa, fight lama tidak otomatis jalan.
 

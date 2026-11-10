@@ -592,7 +592,8 @@ function endFight() {
 // (2) auto-record mode embed (admin Hub ekspor video) — startFight()
 //     memanggil ini otomatis saat fight mulai kalau embed.autoRecord.
 // Download webm terjadi saat recorder berhenti (akhir fight) lewat
-// finishRecording — jadi kedua jalur sama-sama mengunduh otomatis.
+// finishRecording: unduhan otomatis dicoba, plus link unduh manual yang
+// bisa diketuk (unduhan otomatis sering diblokir browser).
 function startRecording() {
   if (recording) return recording;
   const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
@@ -611,20 +612,40 @@ function startRecording() {
   return recording;
 }
 
-// Berhenti merekam -> rakit webm -> unduh otomatis. Dipanggil lewat
-// onstop recorder (endFight menghentikan recorder saat fight selesai).
+// Berhenti merekam -> rakit webm -> unduh otomatis + tampilkan link unduh
+// manual. Dipanggil lewat onstop recorder (endFight menghentikan recorder
+// saat fight selesai). Link manual WAJIB ada: unduhan otomatis (a.click()
+// tanpa gestur pengguna) sering diblokir browser, dan sebelum perbaikan ini
+// iframe Hub tidak mengizinkan unduhan sama sekali (sandbox tanpa
+// allow-downloads) — halaman tetap menulis "Video tersimpan" padahal tidak
+// ada file yang sampai. Ketukan pengguna pada link SELALU diizinkan.
 function finishRecording(rec, chunks) {
   const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' });
   const name = `stickman-fight-${fight ? fight.seed : 'demo'}.webm`;
+  const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+  // Bebaskan URL export sebelumnya supaya blob lama tidak menahan memori.
+  if (window.__fightApp.lastExport && window.__fightApp.lastExport.url) {
+    try { URL.revokeObjectURL(window.__fightApp.lastExport.url); } catch (e) { /* abaikan */ }
+  }
   const url = URL.createObjectURL(blob);
+  const status = $('exportStatus');
+  status.hidden = false;
+  status.textContent = '';
+  const label = document.createElement('span');
+  label.textContent = `Video siap: ${name} (${sizeMB} MB). `;
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.textContent = '⬇ Unduh video';
+  link.className = 'btn btn-small export-download-link';
+  status.append(label, document.createElement('br'), link);
+  // Tetap coba unduh otomatis (di desktop biasanya langsung jalan).
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  $('exportStatus').hidden = false;
-  $('exportStatus').textContent = `Video tersimpan: ${name} (${(blob.size / 1024 / 1024).toFixed(1)} MB).`;
   window.__fightApp.lastExport = { url, name, size: blob.size, type: blob.type };
   return { url, name, size: blob.size };
 }

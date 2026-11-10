@@ -296,6 +296,7 @@ button, input, select { font: inherit; color: inherit; }
   margin: 10px 0 0;
 }
 .export-status { font-weight: 800; color: var(--gold); }
+.export-status .export-download-link { margin-top: 8px; text-decoration: none; }
 
 /* ---------- Builder ---------- */
 .section-title {

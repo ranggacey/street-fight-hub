@@ -617,7 +617,7 @@ export default function TrainingArena() {
                   height={1280}
                   className="block aspect-[9/16] w-full"
                   allow="autoplay"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-downloads"
                 />
               </div>
               <p className="mt-2 text-center text-xs leading-relaxed text-paper-mute">
