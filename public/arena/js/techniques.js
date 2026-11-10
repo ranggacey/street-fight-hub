@@ -800,14 +800,18 @@ export function lerpPoseFull(a, b, k) {
 }
 // Delta sudut terpendek (∈ [-π, π]) + normalisasi ke [-π, π].
 // Normalisasi menjaga lerp(..., k=1) == target persis (pose win memakai k=1).
+// DIEKSPOR (2026-11-10): film.js §34 (lag ekor ikat kepala) mengimpor
+// keduanya; tanpa export, module graph Arena gagal link
+// ("does not provide an export named 'normAng'"), app.js tidak jalan sama
+// sekali, dan halaman game 1v1 stuck di layar setup (Kiri/Kanan + seed).
 const TAU = Math.PI * 2;
-function wrapDelta(d) {
+export function wrapDelta(d) {
   d %= TAU;
   if (d > Math.PI) d -= TAU;
   else if (d < -Math.PI) d += TAU;
   return d;
 }
-function normAng(a) {
+export function normAng(a) {
   a %= TAU;
   if (a > Math.PI) a -= TAU;
   else if (a < -Math.PI) a += TAU;
