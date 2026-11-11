@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import BackToHome from "@/components/BackToHome";
+import MovePreviewSection from "@/components/MovePreviewSection";
 import TrainingArena from "@/components/TrainingArena";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function TestingTrainingPage() {
     <div className="space-y-4">
       <BackToHome />
       <TrainingArena />
+      <MovePreviewSection />
     </div>
   );
 }

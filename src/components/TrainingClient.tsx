@@ -18,6 +18,8 @@ import {
 } from '@/lib/game/training-rules';
 import { GAMEPLAN_TEMPO_LABELS, STAT_KEYS, STAT_LABELS, type StatKey } from '@/lib/game/stat-effects';
 import { clientApi } from '@/components/api';
+import DeckBuilder from '@/components/DeckBuilder';
+import MovePreview from '@/components/MovePreview';
 
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -39,7 +41,7 @@ interface DeckData {
   cards: string[];
   signature: string | null;
   style: string;
-  availableKinds: { kind: string; label: string; style: string; styleLabel: string }[];
+  availableKinds: { kind: string; label: string; style: string; styleLabel: string; note?: string }[];
   signatureOptions: { kind: string; label: string }[];
 }
 
@@ -69,6 +71,15 @@ export default function TrainingClient() {
   const [debug, setDebug] = useState<FrameDebug | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [invalidFlash, setInvalidFlash] = useState(0);
+  // Rasio aspek video kamera yang sebenarnya (lebar/tinggi). Dipakai agar
+  // container preview mengikuti aspek video apa adanya — dengan begitu
+  // video (object-cover) tidak ter-crop dan skeleton canvas tetap sejajar
+  // dengan gambar. Default 3/4 (portrait) sebelum kamera menyala.
+  const [videoAspect, setVideoAspect] = useState<number | null>(null);
+  // Cermin videoAspect sebagai ref (bukan state) supaya changeMode() yang
+  // membuat mesin baru bisa memasang aspek ke mesin push-up tanpa menunggu
+  // render berikutnya. Gate plank depan butuh aspek ini (klausul bahu).
+  const videoAspectRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<TrainingStatus | null>(null);
   const [statusError, setStatusError] = useState('');
@@ -180,10 +191,15 @@ export default function TrainingClient() {
   const changeMode = useCallback((next: Mode) => {
     setMode(next);
     machineRef.current = next === 'pushup' ? new PushupMachine() : new SquatMachine();
+    // Mesin baru kehilangan aspek video — pasang lagi supaya gate plank
+    // depan (klausul bahu, butuh aspek) tetap bekerja setelah ganti mode.
+    if (next === 'pushup' && videoAspectRef.current !== null) {
+      (machineRef.current as PushupMachine).setVideoAspect(videoAspectRef.current);
+    }
     setPhase('—');
     setFeedback(
       next === 'pushup'
-        ? 'Mode push-up — kamera dari samping'
+        ? 'Mode push-up — kamera dari depan atau samping, badan penuh masuk frame'
         : 'Mode squat — badan penuh masuk frame',
     );
   }, []);
@@ -291,29 +307,60 @@ export default function TrainingClient() {
     }
     setCamState('requesting');
     setCamError('');
+    // Kamera PORTRAIT sesuai HP (dulu landscape 1280x720 — preview jadi
+    // strip kecil dan torso plank terbaca salah). Minta 720x1280; kalau
+    // perangkat menolak constraint itu, mundur ke facingMode saja.
+    const portraitConstraints = {
+      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+      audio: false,
+    };
+    const fallbackConstraints = { video: { facingMode: 'user' }, audio: false };
+    let stream: MediaStream;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      stream = await navigator.mediaDevices.getUserMedia(portraitConstraints);
+    } catch (err) {
+      const name = err instanceof Error ? err.name : '';
+      if (name === 'OverconstrainedError' || name === 'NotFoundError') {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        } catch (err2) {
+          const name2 = err2 instanceof Error ? err2.name : '';
+          setCamState('error');
+          setCamError(`Kamera gagal dibuka (${name2 || 'error tidak dikenal'}). Coba tutup aplikasi lain yang memakai kamera.`);
+          return;
+        }
+      } else if (name === 'NotAllowedError' || name === 'SecurityError') {
+        setCamState('denied');
+        setCamError('Izin kamera ditolak. Izinkan kamera di pengaturan browser, lalu tekan mulai lagi.');
+        return;
+      } else {
+        setCamState('error');
+        setCamError(`Kamera gagal dibuka (${name || 'error tidak dikenal'}). Coba tutup aplikasi lain yang memakai kamera.`);
+        return;
+      }
+    }
+    try {
       const video = videoRef.current;
       if (!video) return;
       video.srcObject = stream;
       await video.play();
+      // Ikuti aspek video yang benar-benar didapat (mis. 9:16 portrait)
+      // supaya container + canvas sejajar dengan gambar, dan pasang aspek
+      // ke mesin push-up (gate plank depan butuh aspek ini).
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        const aspect = video.videoWidth / video.videoHeight;
+        setVideoAspect(aspect);
+        videoAspectRef.current = aspect;
+        if (machineRef.current instanceof PushupMachine) {
+          machineRef.current.setVideoAspect(aspect);
+        }
+      }
       setCamState('on');
       setRunning(true);
     } catch (err) {
       const name = err instanceof Error ? err.name : '';
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setCamState('denied');
-        setCamError('Izin kamera ditolak. Izinkan kamera di pengaturan browser, lalu tekan mulai lagi.');
-      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-        setCamState('error');
-        setCamError('Kamera tidak ditemukan di perangkat ini.');
-      } else {
-        setCamState('error');
-        setCamError(`Kamera gagal dibuka (${name || 'error tidak dikenal'}). Coba tutup aplikasi lain yang memakai kamera.`);
-      }
+      setCamState('error');
+      setCamError(`Kamera gagal dibuka (${name || 'error tidak dikenal'}). Coba tutup aplikasi lain yang memakai kamera.`);
     }
   }
 
@@ -449,7 +496,10 @@ export default function TrainingClient() {
       </div>
 
       <section className="glass overflow-hidden">
-        <div className="relative aspect-video w-full bg-ink-950">
+        <div
+          className="relative w-full bg-ink-950"
+          style={{ aspectRatio: videoAspect ? String(videoAspect) : '3 / 4' }}
+        >
           <video
             ref={videoRef}
             playsInline
@@ -477,7 +527,7 @@ export default function TrainingClient() {
               <p className="max-w-sm text-sm leading-relaxed text-paper-dim">
                 {camState === 'denied' || camState === 'error' || camState === 'unsupported'
                   ? camError
-                  : 'Izinkan kamera, lalu posisikan badan penuh di dalam frame. Push-up paling akurat dari samping.'}
+                  : 'Izinkan kamera, lalu posisikan badan penuh di dalam frame. Kamera portrait — HP tegak, badan penuh masuk frame dari kepala sampai kaki.'}
               </p>
               {modelState === 'loading' && <p className="text-sm text-amber-brand">Memuat model deteksi pose…</p>}
               {modelState === 'error' && (
@@ -613,61 +663,19 @@ export default function TrainingClient() {
         </ul>
       </section>
 
-      <section className="glass p-4">
-        <h2 className="font-display text-lg font-semibold uppercase tracking-wide text-paper">Deck jurus</h2>
-        <p className="mt-0.5 text-sm text-paper-dim">
-          Maks 6 kartu dari gaya apa pun — kartu dipakai 2x lebih sering di fight. Jurus khas
-          (signature) di luar deck, dipakai 1x/fight.
-        </p>
-        {deck && (
-          <>
-            <p className="mt-2 text-sm text-paper-dim">
-              Dipilih: <strong className="text-paper">{deckCards.length} / 6</strong>
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {deck.availableKinds.map((k) => {
-                const on = deckCards.includes(k.kind);
-                return (
-                  <button
-                    key={k.kind}
-                    type="button"
-                    onClick={() => toggleDeckCard(k.kind)}
-                    disabled={!on && deckCards.length >= 6}
-                    aria-pressed={on}
-                    className={`min-h-11 rounded-lg px-3 text-sm font-medium disabled:opacity-40 ${
-                      on ? 'bg-amber-brand text-[#1a1206]' : 'bg-ink-800 text-paper'
-                    }`}
-                  >
-                    {k.label} <span className="text-xs opacity-70">({k.styleLabel})</span>
-                  </button>
-                );
-              })}
-            </div>
-            <label className="mt-4 block text-sm text-paper-dim">
-              Jurus khas (signature, di luar deck)
-              <select
-                value={deckSignature ?? ''}
-                onChange={(e) => setDeckSignature(e.target.value || null)}
-                className="mt-1 block min-h-12 w-full rounded-xl border border-ink-700 bg-ink-800 px-3 text-paper"
-              >
-                <option value="">— Tanpa signature —</option>
-                {deck.signatureOptions.map((o) => (
-                  <option key={o.kind} value={o.kind}>{o.label}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={saveDeck}
-              disabled={savingDeck}
-              className="mt-3 min-h-12 w-full rounded-xl bg-amber-brand font-display text-lg font-semibold uppercase tracking-wide text-[#1a1206] disabled:opacity-40"
-            >
-              {savingDeck ? 'Menyimpan…' : 'Simpan deck'}
-            </button>
-            {deckMsg && <p className="mt-2 text-sm text-paper-dim">{deckMsg}</p>}
-          </>
+      <DeckBuilder
+        deck={deck}
+        deckCards={deckCards}
+        onToggleCard={toggleDeckCard}
+        deckSignature={deckSignature}
+        onSignatureChange={setDeckSignature}
+        onSave={saveDeck}
+        saving={savingDeck}
+        deckMsg={deckMsg}
+        renderPreview={(kind, opts) => (
+          <MovePreview kind={kind} mode={opts?.mode ?? 'tap'} showInfo={false} size="sm" />
         )}
-      </section>
+      />
 
       <section className="glass p-4 text-sm leading-relaxed text-paper-dim">
         <h2 className="font-display text-lg font-semibold uppercase tracking-wide text-paper">Gameplan</h2>
@@ -712,6 +720,10 @@ export default function TrainingClient() {
               <span className="text-right text-paper">{debug?.torsoAngleDeg === null || debug?.torsoAngleDeg === undefined ? '—' : `${debug.torsoAngleDeg.toFixed(0)}°`}</span>
               <span>Plank?</span>
               <span className="text-right text-paper">{debug ? (debug.plank ? 'ya' : 'bukan') : '—'}</span>
+              <span>Kaki/torso</span>
+              <span className="text-right text-paper">{debug?.legRatio === null || debug?.legRatio === undefined ? '—' : debug.legRatio.toFixed(2)}</span>
+              <span>Bahu/torso (px)</span>
+              <span className="text-right text-paper">{debug?.shoulderTorsoRatio === null || debug?.shoulderTorsoRatio === undefined ? '—' : debug.shoulderTorsoRatio.toFixed(2)}</span>
               <span>Siku min (rep ini)</span>
               <span className="text-right text-paper">{fmtAngle(debug?.minElbow ?? null)}</span>
               <span>Lutut min (rep ini)</span>
@@ -732,7 +744,7 @@ export default function TrainingClient() {
       <section className="glass p-4 text-sm leading-relaxed text-paper-dim">
         <h2 className="font-display text-lg font-semibold uppercase tracking-wide text-paper">Cara latihan</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5">
-          <li>Push-up: letakkan HP miring di lantai, kamera dari samping, badan penuh masuk frame.</li>
+          <li>HP tegak (portrait). Push-up: letakkan HP di lantai di depanmu menghadapmu, atau dari samping — keduanya didukung. Badan penuh masuk frame dari kepala sampai kaki; kalau bahu terpotong frame, mundurkan HP sedikit.</li>
           <li>Squat: HP tegak 1–2 meter di depan, badan penuh masuk frame dari kepala sampai kaki.</li>
           <li>Pencahayaan terang, latar belakang polos, pakai baju kontras dengan latar.</li>
           <li>Gerakan pelan dan penuh dulu — kalau deteksi sudah benar, baru coba cepat.</li>

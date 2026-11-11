@@ -26,9 +26,11 @@ export interface MoveKindOption {
   /** Gaya pertama yang memiliki kind ini (untuk label di UI). */
   style: string;
   styleLabel: string;
+  /** Catatan teknik singkat dari moves.js (satu baris, utk kartu deck). */
+  note?: string;
 }
 
-type StyleDef = { label: string; moves: { kind: string; label: string }[] };
+type StyleDef = { label: string; moves: { kind: string; label: string; note?: string }[] };
 
 /** Semua kind yang boleh jadi kartu deck (unik per kind, urut abjad kind). */
 export function allDeckKinds(): MoveKindOption[] {
@@ -46,6 +48,7 @@ export function allDeckKinds(): MoveKindOption[] {
           label: m.label || m.kind,
           style: styleKey,
           styleLabel: def.label || styleKey,
+          note: m.note,
         });
       }
     }
