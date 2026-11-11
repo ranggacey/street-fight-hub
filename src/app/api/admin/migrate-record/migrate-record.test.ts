@@ -8,6 +8,8 @@ import { GET as dryRun, POST as apply } from "./route";
 import { User } from "../../../../models/User";
 import { Fighter } from "../../../../models/Fighter";
 import { GameFight } from "../../../../models/GameFight";
+import { Match } from "../../../../models/Match";
+import { Tournament } from "../../../../models/Tournament";
 
 /**
  * Migrasi penyatuan rekor (admin): record lama + casualRecord lama -> record.
@@ -63,6 +65,8 @@ interface MigrateOut {
     storedRecord: { wins: number; losses: number; draws: number; kos: number };
     storedCasual: { wins: number; losses: number; draws: number; kos: number };
     recountFromGameFights: { wins: number; losses: number; draws: number; kos: number };
+    recountFromTournament: { wins: number; losses: number; draws: number; kos: number };
+    recountTotal: { wins: number; losses: number; draws: number; kos: number };
     casualMatchesRecount: boolean;
     mergedRecord: { wins: number; losses: number; draws: number; kos: number };
     alreadyMigrated: boolean;
@@ -123,6 +127,16 @@ describe("Admin migrasi rekor: kasual + turnamen -> satu record", () => {
     // casualRecord ditulis via driver mentah (collection) — skema baru
     // sudah tidak punya field ini, jadi Fighter.create (strict) akan
     // membuangnya; ini mensimulasikan data LAMA sebelum migrasi.
+    // Kemenangan turnamen A dicatat sebagai Match decided (A menang KO
+    // atas B) — persis seperti yang dilakukan draw.ts di produksi.
+    const tourney = await Tournament.create({
+      name: "Turnamen Uji Migrasi",
+      slug: "turnamen-uji-migrasi",
+      bracketSize: 8,
+      regOpenAt: new Date("2026-11-01T00:00:00Z"),
+      regCloseAt: new Date("2026-11-07T00:00:00Z"),
+      createdBy: userA._id,
+    });
     const fa = await Fighter.create({
       userId: userA._id,
       displayName: "A Migran",
@@ -130,13 +144,13 @@ describe("Admin migrasi rekor: kasual + turnamen -> satu record", () => {
       style: "boxing",
       selfDescription: SELF_DESC,
       rating: 1016,
-      record: { wins: 1, losses: 0, draws: 0, kos: 0 },
+      record: { wins: 1, losses: 0, draws: 0, kos: 1 },
     });
     await Fighter.collection.updateOne(
       { _id: fa._id },
       { $set: { casualRecord: { wins: 1, losses: 1, draws: 0, kos: 1 } } },
     );
-    // B: 0 turnamen + 1W-1L kasual.
+    // B: 1 kalah turnamen (dari Match decided di atas) + 1W-1L kasual.
     const fb = await Fighter.create({
       userId: userB._id,
       displayName: "B Migran",
@@ -144,12 +158,25 @@ describe("Admin migrasi rekor: kasual + turnamen -> satu record", () => {
       style: "wushu",
       selfDescription: SELF_DESC,
       rating: 984,
-      record: { wins: 0, losses: 0, draws: 0, kos: 0 },
+      record: { wins: 0, losses: 1, draws: 0, kos: 0 },
     });
     await Fighter.collection.updateOne(
       { _id: fb._id },
       { $set: { casualRecord: { wins: 1, losses: 1, draws: 0, kos: 0 } } },
     );
+    await Match.create({
+      tournamentId: tourney._id,
+      round: "QF",
+      fighterAId: fa._id,
+      fighterBId: fb._id,
+      winnerId: fa._id,
+      method: "KO",
+      score: { a: 70, b: 50 },
+      koTimeSec: 38,
+      drawSeed: 424242,
+      status: "decided",
+      decidedAt: new Date("2026-11-09T10:00:00Z"),
+    });
     // Fight 1: A menang KO atas B. Fight 2: B menang decision atas A.
     await GameFight.create({
       fighterAId: fa._id,
@@ -184,20 +211,28 @@ describe("Admin migrasi rekor: kasual + turnamen -> satu record", () => {
     const body = (await json<MigrateOut>(res)).data;
     expect(body.dryRun).toBe(true);
     expect(body.completedFights).toBe(2);
-    expect(body.decidedMatches).toBe(0);
+    expect(body.decidedMatches).toBe(1);
     expect(body.fighters).toHaveLength(2);
     const fa = body.fighters.find((f) => f.displayName === "A Migran")!;
     // Kasual tersimpan (1W-1L 1KO) == hitung ulang dari 2 GameFight.
     expect(fa.casualMatchesRecount).toBe(true);
     expect(fa.recountFromGameFights).toEqual({ wins: 1, losses: 1, draws: 0, kos: 1 });
-    // Gabungan: turnamen 1W + kasual 1W-1L 1KO = 2W-1L 1KO.
-    expect(fa.mergedRecord).toEqual({ wins: 2, losses: 1, draws: 0, kos: 1 });
+    // Hitung ulang turnamen: 1 menang KO dari Match decided.
+    expect(fa.recountFromTournament).toEqual({ wins: 1, losses: 0, draws: 0, kos: 1 });
+    // Gabungan kasual + turnamen == rekor gabungan (gate migrasi).
+    expect(fa.recountTotal).toEqual({ wins: 2, losses: 1, draws: 0, kos: 2 });
+    // Gabungan: turnamen 1W 1KO + kasual 1W-1L 1KO = 2W-1L 2KO.
+    expect(fa.mergedRecord).toEqual({ wins: 2, losses: 1, draws: 0, kos: 2 });
+    expect(fa.mergedRecord).toEqual(fa.recountTotal);
     const fb = body.fighters.find((f) => f.displayName === "B Migran")!;
-    expect(fb.mergedRecord).toEqual({ wins: 1, losses: 1, draws: 0, kos: 0 });
+    expect(fb.recountFromTournament).toEqual({ wins: 0, losses: 1, draws: 0, kos: 0 });
+    expect(fb.recountTotal).toEqual({ wins: 1, losses: 2, draws: 0, kos: 0 });
+    expect(fb.mergedRecord).toEqual({ wins: 1, losses: 2, draws: 0, kos: 0 });
+    expect(fb.mergedRecord).toEqual(fb.recountTotal);
     // Dry-run TIDAK menulis: rekor di DB masih lama (casualRecord dibaca
     // dari dokumen mentah — field lama tidak ada di skema baru).
     const faDb = (await Fighter.findOne({ displayName: "A Migran" }).lean()) as unknown as Record<string, unknown>;
-    expect(faDb?.record).toMatchObject({ wins: 1, losses: 0 });
+    expect(faDb?.record).toMatchObject({ wins: 1, losses: 0, kos: 1 });
     expect(faDb?.casualRecord).toMatchObject({ wins: 1, losses: 1 });
   });
 
@@ -210,10 +245,10 @@ describe("Admin migrasi rekor: kasual + turnamen -> satu record", () => {
     expect(body.applied).toBe(2);
     expect(body.skipped).toBe(0);
     const faDb = (await Fighter.findOne({ displayName: "A Migran" }).lean()) as unknown as Record<string, unknown>;
-    expect(faDb?.record).toMatchObject({ wins: 2, losses: 1, draws: 0, kos: 1 });
+    expect(faDb?.record).toMatchObject({ wins: 2, losses: 1, draws: 0, kos: 2 });
     expect(faDb?.casualRecord).toBeUndefined();
     const fbDb = (await Fighter.findOne({ displayName: "B Migran" }).lean()) as unknown as Record<string, unknown>;
-    expect(fbDb?.record).toMatchObject({ wins: 1, losses: 1, draws: 0, kos: 0 });
+    expect(fbDb?.record).toMatchObject({ wins: 1, losses: 2, draws: 0, kos: 0 });
     expect(fbDb?.casualRecord).toBeUndefined();
   });
 

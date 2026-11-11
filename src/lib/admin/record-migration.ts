@@ -11,8 +11,12 @@
  * Bukti, bukan asumsi: hitung ulang dari seluruh GameFight completed
  * (recountRecordForFighter) harus sama dengan casualRecord tersimpan —
  * kalau tidak sama, migrasi MELAPORKAN selisihnya (bukan menutupinya).
- * Match turnamen yang sudah decided dihitung terpisah (via record lama,
- * karena hanya draw.ts yang menulis record lama).
+ * Hitung ulang GABUNGAN (GameFight + Match turnamen decided/video_done)
+ * harus sama dengan rekor gabungan (record lama + casualRecord lama):
+ * GameFight saja tidak cukup karena `record` lama juga berisi hasil
+ * turnamen simulasi (lib/draw.ts) yang tidak punya dokumen GameFight.
+ * Match turnamen yang sudah diputuskan dihitung dari dokumen Match
+ * (winnerId + method), bukan dari `record` lama.
  */
 
 export interface RecordLike {
@@ -59,6 +63,19 @@ export interface CompletedFightForRecount {
 }
 
 /**
+ * Match turnamen yang sudah diputuskan (status decided / video_done).
+ * Bentuknya sama dengan GameFight untuk keperluan hitung ulang: siapa
+ * lawan siapa, siapa pemenang, dan metodenya. Bye tidak pernah masuk
+ * ke sini (decideMatch menolak bye, jadi statusnya tetap scheduled).
+ */
+export interface TournamentMatchForRecount {
+  fighterAId: string;
+  fighterBId: string | null;
+  winnerFighterId: string | null;
+  method: 'KO' | 'decision' | 'draw' | 'bye' | null;
+}
+
+/**
  * Hitung ulang rekor satu fighter dari seluruh GameFight completed.
  * Menang/kalah/seri + KO — sumber kebenaran untuk memverifikasi
  * casualRecord tersimpan sebelum digabung.
@@ -88,6 +105,38 @@ export function recountRecordForFighter(
   return rec;
 }
 
+/**
+ * Hitung ulang rekor satu fighter dari Match turnamen yang sudah
+ * diputuskan (status decided / video_done). Aturan sama seperti
+ * draw.ts: KO → pemenang wins+1 & kos+1, kalah losses+1; decision →
+ * wins+1 / losses+1; draw → keduanya draws+1. Match tanpa pemenang
+ * (bye / data rusak) dilewati.
+ */
+export function recountRecordFromTournamentMatches(
+  matches: TournamentMatchForRecount[],
+  fighterId: string,
+): RecordLike {
+  const rec: RecordLike = { wins: 0, losses: 0, draws: 0, kos: 0 };
+  for (const m of matches) {
+    if (!m.winnerFighterId || !m.method || m.method === 'bye') continue;
+    const isA = m.fighterAId === fighterId;
+    const isB = m.fighterBId !== null && m.fighterBId === fighterId;
+    if (!isA && !isB) continue;
+    if (m.method === 'draw') {
+      rec.draws += 1;
+      continue;
+    }
+    const won = m.winnerFighterId === fighterId;
+    if (won) {
+      rec.wins += 1;
+      if (m.method === 'KO') rec.kos += 1;
+    } else {
+      rec.losses += 1;
+    }
+  }
+  return rec;
+}
+
 /** Hasil rencana migrasi per fighter (dipakai GET dry-run + POST apply). */
 export interface RecordMigrationPlan {
   fighterId: string;
@@ -95,6 +144,15 @@ export interface RecordMigrationPlan {
   storedRecord: RecordLike;
   storedCasual: RecordLike;
   recountFromGameFights: RecordLike;
+  /** Hitung ulang dari Match turnamen yang sudah diputuskan. */
+  recountFromTournament: RecordLike;
+  /**
+   * Hitung ulang GABUNGAN (GameFight + turnamen) — inilah yang harus
+   * sama dengan mergedRecord. GameFight saja tidak cukup karena
+   * `record` lama juga berisi hasil turnamen simulasi (draw.ts) yang
+   * tidak punya dokumen GameFight.
+   */
+  recountTotal: RecordLike;
   /** casualRecord tersimpan == hitung ulang dari GameFight? */
   casualMatchesRecount: boolean;
   mergedRecord: RecordLike;
@@ -111,17 +169,21 @@ export function planRecordMigration(
     hasCasualRecord: boolean;
   }[],
   completedFights: CompletedFightForRecount[],
+  tournamentMatches: TournamentMatchForRecount[] = [],
 ): RecordMigrationPlan[] {
   return fighters.map((f) => {
     const storedRecord = normalizeRecord(f.record);
     const storedCasual = normalizeRecord(f.casualRecord);
     const recount = recountRecordForFighter(completedFights, f._id);
+    const recountTournament = recountRecordFromTournamentMatches(tournamentMatches, f._id);
     return {
       fighterId: f._id,
       displayName: f.displayName,
       storedRecord,
       storedCasual,
       recountFromGameFights: recount,
+      recountFromTournament: recountTournament,
+      recountTotal: addRecords(recount, recountTournament),
       casualMatchesRecount: recordsEqual(storedCasual, recount),
       mergedRecord: addRecords(storedRecord, storedCasual),
       alreadyMigrated: !f.hasCasualRecord,

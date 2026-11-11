@@ -18,8 +18,14 @@ import EmptyState from "@/components/EmptyState";
  * JANGAN hardcode slug/token di kode — pola itu memicu alert GitGuardian.
  *
  * Gate ketat (cek sebelum klik Terapkan): kolom Gabungan HARUS sama dengan
- * Hitung ulang untuk SEMUA fighter, dan angka gabungan HARUS cocok dengan
- * tabel harapan di bawah. Kalau ada satu angka saja beda, JANGAN terapkan.
+ * Hitung ulang GABUNGAN (kasual + turnamen) untuk SEMUA fighter, dan angka
+ * gabungan HARUS cocok dengan tabel harapan di bawah. Kalau ada satu angka
+ * saja beda, JANGAN terapkan.
+ *
+ * Catatan: Hitung ulang gabungan = GameFight completed + Match turnamen
+ * yang sudah diputuskan (decided/video_done). GameFight saja tidak cukup
+ * karena `record` lama juga berisi hasil turnamen simulasi (draw.ts) yang
+ * tidak punya dokumen GameFight.
  */
 
 interface MigrationFighterPlan {
@@ -28,6 +34,8 @@ interface MigrationFighterPlan {
   storedRecord: FighterRecord;
   storedCasual: FighterRecord;
   recountFromGameFights: FighterRecord;
+  recountFromTournament: FighterRecord;
+  recountTotal: FighterRecord;
   casualMatchesRecount: boolean;
   mergedRecord: FighterRecord;
   alreadyMigrated: boolean;
@@ -45,14 +53,20 @@ interface MigrationApplyResponse extends MigrationPlanResponse {
   skipped: number;
 }
 
-/** Tabel harapan hasil gabungan (2026-11-09, 6 fight, 0 turnamen decided). */
+/** Tabel harapan hasil gabungan (2026-11-11, 13 fight, 6 turnamen decided). */
 const EXPECTED = [
-  "Dayrot jagoan 4-1-0, 2 KO",
-  "Pitung 1-1-0, 1 KO",
-  "Jamal geng sebelah 0-2-0",
-  "STRIVOX 1-1-0",
-  "pemuda licik 0-1-0",
-  "Sijagoan Batak, Nope boy, zahran petarung 0-0-0",
+  "Dayrot jagoan 5-3-0, 2 KO",
+  "Sijagoan Batak 3-0-0, 2 KO",
+  "Nope boy 1-1-0, 1 KO",
+  "Jamal geng sebelah 2-4-0",
+  "STRIVOX 1-2-0",
+  "zahran petarung 1-0-0",
+  "Pitung 1-2-0, 1 KO",
+  "pemuda licik 3-3-0, 1 KO",
+  "Lang 0-1-0",
+  "the prince 2-2-0, 1 KO",
+  "esje 0-1-0",
+  "sisanya 0-0-0",
 ].join(" • ");
 
 function fmt(r: FighterRecord): string {
@@ -70,7 +84,7 @@ export default function AdminRecordMigration({ slug }: { slug: string }) {
     plan !== null &&
     plan.fighters.length > 0 &&
     plan.fighters.every((f) =>
-      recordsEqual(f.mergedRecord, f.recountFromGameFights),
+      recordsEqual(f.mergedRecord, f.recountTotal),
     );
 
   async function loadDryRun() {
@@ -122,14 +136,14 @@ export default function AdminRecordMigration({ slug }: { slug: string }) {
       </p>
       <p className="mt-2 text-sm leading-relaxed text-paper-dim">
         <span className="font-bold text-paper">Tabel harapan:</span> {EXPECTED}.
-        Total 6 fight, 0 match turnamen decided.
+        Total 13 fight, 6 match turnamen decided.
       </p>
       <p className="mt-2 text-xs leading-relaxed text-paper-mute">
         Tanda ✗ di kolom &ldquo;Kasual cocok?&rdquo; wajar untuk fighter yang
         sudah main SETELAH update penyatuan rekor — fight barunya sudah
-        tercatat di kolom Rekor, jadi hitung ulang (semua fight) lebih besar
-        dari kasual tersimpan. Yang penting: kolom Gabungan SAMA dengan Hitung
-        ulang untuk semua fighter.
+        tercatat di kolom Rekor, jadi hitung ulang kasual (semua fight) lebih
+        besar dari kasual tersimpan. Yang penting: kolom Gabungan SAMA dengan
+        Hitung ulang GABUNGAN (kasual + turnamen) untuk semua fighter.
       </p>
 
       {error ? (
@@ -165,7 +179,7 @@ export default function AdminRecordMigration({ slug }: { slug: string }) {
             Match turnamen decided:{" "}
             <strong className="text-paper">{plan.decidedMatches}</strong>
             {" • "}
-            Gabungan == Hitung ulang (semua fighter):{" "}
+            Gabungan == Hitung ulang gabungan (semua fighter):{" "}
             <strong className={allMergedMatchRecount ? "text-green-400" : "text-red-brand"}>
               {allMergedMatchRecount ? "YA" : "TIDAK — JANGAN TERAPKAN"}
             </strong>

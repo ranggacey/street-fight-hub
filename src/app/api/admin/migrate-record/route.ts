@@ -8,6 +8,7 @@ import { Match } from '@/models/Match';
 import {
   planRecordMigration,
   type CompletedFightForRecount,
+  type TournamentMatchForRecount,
 } from '@/lib/admin/record-migration';
 
 /**
@@ -33,7 +34,14 @@ async function buildPlan() {
   const fights = await GameFight.find({ status: 'completed' })
     .select('fighterAId fighterBId result')
     .lean();
-  const decidedMatches = await Match.countDocuments({ status: 'decided' });
+  // Match turnamen yang sudah diputuskan — termasuk yang videonya sudah
+  // di-upload (status video_done). Keduanya sudah diputuskan (punya
+  // winnerId + method) dan hasilnya TERCATAT di `record` lama via draw.ts,
+  // jadi HARUS ikut hitung ulang; kalau tidak, gate Gabungan == Hitung
+  // ulang tidak akan pernah lolos untuk fighter yang pernah main turnamen.
+  const decidedMatches = await Match.find({ status: { $in: ['decided', 'video_done'] } })
+    .select('fighterAId fighterBId winnerId method')
+    .lean();
 
   const completed: CompletedFightForRecount[] = fights.map((f) => ({
     fighterAId: f.fighterAId?.toString() ?? '',
@@ -45,6 +53,12 @@ async function buildPlan() {
         }
       : null,
   }));
+  const tournament: TournamentMatchForRecount[] = decidedMatches.map((m) => ({
+    fighterAId: m.fighterAId?.toString() ?? '',
+    fighterBId: m.fighterBId?.toString() ?? null,
+    winnerFighterId: m.winnerId?.toString() ?? null,
+    method: m.method ?? null,
+  }));
   const plan = planRecordMigration(
     fighters.map((f) => ({
       _id: f._id.toString(),
@@ -55,8 +69,9 @@ async function buildPlan() {
       hasCasualRecord: (f as { casualRecord?: unknown }).casualRecord !== undefined,
     })),
     completed,
+    tournament,
   );
-  return { plan, decidedMatches, completedFights: fights.length };
+  return { plan, decidedMatches: decidedMatches.length, completedFights: fights.length };
 }
 
 export async function GET(req: NextRequest) {
