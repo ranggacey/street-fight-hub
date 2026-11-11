@@ -2,10 +2,29 @@ import { describe, expect, it } from 'vitest';
 import {
   allDeckKinds,
   DECK_MAX_CARDS,
+  hasDeck,
   isDeckCardKind,
   validateDeckCards,
   validateDeckWithSignature,
 } from '../game/deck';
+
+describe('hasDeck', () => {
+  it('deck kosong = belum punya deck', () => {
+    expect(hasDeck([])).toBe(false);
+  });
+
+  it('satu kartu atau lebih = punya deck', () => {
+    expect(hasDeck(['jab'])).toBe(true);
+    expect(hasDeck(['jab', 'headkick'])).toBe(true);
+  });
+
+  it('null/undefined/bukan array = belum punya deck', () => {
+    expect(hasDeck(null)).toBe(false);
+    expect(hasDeck(undefined)).toBe(false);
+    expect(hasDeck('jab')).toBe(false);
+    expect(hasDeck({})).toBe(false);
+  });
+});
 
 describe('allDeckKinds', () => {
   it('tidak kosong, unik, tanpa finisher/feint/ginga/senjata', () => {

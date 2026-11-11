@@ -289,3 +289,49 @@ describe('OpponentPicker mode multi-select (tantang banyak orang)', () => {
     expect(html).not.toContain('lawan dipilih');
   });
 });
+
+describe('OpponentPicker tantang semua (mode multi)', () => {
+  it('mode multi: tombol "Tantang Semua (N fighter)" + "Batalkan Semua" tampil', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(13)}
+        multi
+        selectedIds={[]}
+        onToggle={() => {}}
+        onSelectAll={() => {}}
+        onClearAll={() => {}}
+      />,
+    );
+    expect(html).toContain('Tantang Semua (13 fighter)');
+    expect(html).toContain('Batalkan Semua');
+  });
+
+  it('mode multi: "Tantang Semua" nonaktif kalau semua sudah terpilih', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(3)}
+        multi
+        selectedIds={['fighter-01', 'fighter-02', 'fighter-03']}
+        onToggle={() => {}}
+        onSelectAll={() => {}}
+        onClearAll={() => {}}
+      />,
+    );
+    expect(html).toContain('Tantang Semua (3 fighter)');
+    // Tombol Tantang Semua disabled saat semua terpilih.
+    const idx = html.indexOf('Tantang Semua (3 fighter)');
+    expect(html.slice(Math.max(0, idx - 400), idx)).toContain('disabled');
+  });
+
+  it('mode single: tombol "Tantang Semua" TIDAK tampil', () => {
+    const html = renderToStaticMarkup(
+      <OpponentPicker
+        fighters={makeFighters(13)}
+        selectedId=""
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).not.toContain('Tantang Semua');
+    expect(html).not.toContain('Batalkan Semua');
+  });
+});

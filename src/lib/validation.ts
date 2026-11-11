@@ -404,7 +404,7 @@ export interface ChallengeInput {
 }
 
 /** Batas lawan sekali kirim bulk — pelindung spam, bukan jatah harian. */
-export const MAX_BULK_OPPONENTS = 20;
+export const MAX_BULK_OPPONENTS = 50;
 
 export interface BulkChallengeInput {
   opponentIds: string[];

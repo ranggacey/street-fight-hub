@@ -17,6 +17,21 @@ import { STYLES, WEAPON_MOVES } from '../fight-engine/moves.js';
 
 export const DECK_MAX_CARDS = 6;
 
+/**
+ * Apakah fighter "punya deck"? Definisi gate tarung (/tantangan):
+ * deck = kartu, jadi cards.length > 0. Signature saja (tanpa kartu)
+ * TIDAK dihitung punya deck — kartu yang dipakai engine 2x lebih
+ * sering di fight, signature hanya 1x/fight dan berada di luar deck.
+ *
+ * Nilai non-array (null/undefined) = tidak punya deck. Pemanggil di
+ * client (TantanganClient) memperlakukan fetch deck yang GAGAL sebagai
+ * fail-open (dianggap punya deck) supaya gate tidak memblokir saat
+ * jaringan bermasalah — gate ini hanya UX, server tidak menegakkannya.
+ */
+export function hasDeck(cards: unknown): boolean {
+  return Array.isArray(cards) && cards.length > 0;
+}
+
 /** Kind yang tidak pernah boleh masuk deck (alasan di header file). */
 export const DECK_EXCLUDED_KINDS = new Set(['finisher', 'feint', 'ginga']);
 

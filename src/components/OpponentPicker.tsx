@@ -46,6 +46,10 @@ type OpponentPickerProps = {
   selectedIds?: string[];
   /** Toggle satu lawan dalam mode multi. */
   onToggle?: (id: string) => void;
+  /** Mode multi: pilih SEMUA lawan sekaligus ("Tantang Semua"). */
+  onSelectAll?: (ids: string[]) => void;
+  /** Mode multi: batalkan semua pilihan ("Batalkan Semua"). */
+  onClearAll?: () => void;
 };
 
 export default function OpponentPicker({
@@ -56,6 +60,8 @@ export default function OpponentPicker({
   multi = false,
   selectedIds = [],
   onToggle,
+  onSelectAll,
+  onClearAll,
 }: OpponentPickerProps) {
   const [page, setPage] = useState(initialPage);
   const totalPages = Math.max(1, Math.ceil(fighters.length / OPPONENTS_PER_PAGE));
@@ -139,6 +145,29 @@ export default function OpponentPicker({
             Lihat
           </button>
         </p>
+      ) : null}
+
+      {/* Mode multi: tombol Tantang Semua / Batalkan Semua — pilih
+          semua lawan sekaligus tanpa mengetuk satu per satu. */}
+      {multi ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onSelectAll?.(fighters.map((f) => getId(f)))}
+            disabled={selectedIds.length >= fighters.length}
+            className="min-h-[44px] flex-1 rounded-xl bg-amber-brand px-4 text-sm font-bold text-[#1a1206] transition-colors duration-150 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Tantang Semua ({fighters.length} fighter)
+          </button>
+          <button
+            type="button"
+            onClick={() => onClearAll?.()}
+            disabled={selectedIds.length === 0}
+            className="min-h-[44px] rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-bold text-paper transition-colors duration-150 hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Batalkan Semua
+          </button>
+        </div>
       ) : null}
 
       <div

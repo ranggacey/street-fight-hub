@@ -1,14 +1,17 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { targetLabel } from '@/lib/game/move-meta';
+import { getMoveMeta, isFinisherMove, targetLabel } from '@/lib/game/move-meta';
+import { styleColor } from '@/components/api';
 
 /**
  * DeckBuilder — seluruh bagian "Deck jurus" di /latihan.
  *
- * Menggantikan deretan tombol kecil flex-wrap di TrainingClient: tiap jurus
- * kini KARTU (grid 2 kolom di HP portrait, 3 kolom di layar lebih lebar),
- * dikelompokkan per gaya, dengan area preview gerakan di tiap kartu.
+ * Kartu jurus bergaya kartu karakter TCG: area art 4/3 di atas (animasi
+ * MovePreview), pita nama di bawah art, badge stat DMG / target / STA,
+ * border warna gaya (styleColor) dan frame emas untuk finisher +
+ * signature. Angka kartu dari getMoveMeta (katalog engine), STA =
+ * power x 6 (biaya stamina dasar engine).
  *
  * Aturan bisnis TIDAK diubah di sini — komponen ini murni presentasional:
  * maks 6 kartu, tanpa duplikat, signature di luar deck dan 1x/fight, dan
@@ -85,6 +88,11 @@ export interface DeckBuilderProps {
 
 const DEFAULT_MAX_CARDS = 6;
 
+/** Angka kartu ala Indonesia: bulat tampil bulat, desimal 1 angka (2,5). */
+function fmtNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+}
+
 function groupKindsByStyle(kinds: DeckKindOption[], fighterStyle: string) {
   const groups = new Map<string, { style: string; styleLabel: string; kinds: DeckKindOption[] }>();
   for (const k of kinds) {
@@ -141,7 +149,7 @@ export default function DeckBuilder({
     : null;
 
   return (
-    <section className="glass p-4" aria-labelledby="deck-heading">
+    <section id="deck" className="glass p-4" aria-labelledby="deck-heading">
       <h2 id="deck-heading" className="font-display text-lg font-semibold uppercase tracking-wide text-paper">
         Deck jurus
       </h2>
@@ -278,16 +286,26 @@ export default function DeckBuilder({
                   const selected = selectedSet.has(k.kind);
                   const order = selected ? deckCards.indexOf(k.kind) + 1 : null;
                   const disabled = !selected && isFull;
+                  // Angka kartu dari katalog engine (move-meta.ts), bukan
+                  // karangan: dmg + target dari STYLES, STA = power x 6
+                  // (biaya stamina dasar, lihat fight.js: power*6*rate).
+                  const meta = getMoveMeta(k.kind);
+                  const accent = styleColor(k.style);
+                  const gold = isFinisherMove(k.kind);
+                  const borderColor = selected ? '#EAB308' : gold ? '#FDE047' : accent;
                   return (
                     <article
                       key={k.kind}
-                      className={`relative flex flex-col overflow-hidden rounded-xl border-2 shadow-md shadow-black/40 transition-all duration-200 ${
+                      style={{ borderColor }}
+                      className={`relative flex flex-col overflow-hidden rounded-2xl border-2 bg-ink-800 shadow-md shadow-black/40 transition-all duration-200 ${
                         selected
-                          ? 'border-amber-brand bg-amber-brand/10 shadow-lg shadow-amber-brand/10 ring-1 ring-amber-brand/40'
+                          ? 'shadow-lg shadow-amber-brand/20 ring-2 ring-amber-brand/50'
                           : disabled
-                            ? 'border-transparent bg-ink-800'
-                            : 'border-transparent bg-ink-800 hover:-translate-y-0.5 hover:border-amber-brand/40 hover:shadow-lg'
-                      } ${disabled ? 'opacity-40' : ''}`}
+                            ? 'opacity-40'
+                            : gold
+                              ? 'shadow-lg shadow-yellow-400/10 ring-1 ring-yellow-300/50 hover:-translate-y-0.5'
+                              : 'hover:-translate-y-0.5 hover:shadow-lg'
+                      }`}
                     >
                       {/* Badge terpilih + nomor urut — status harus terlihat sekilas */}
                       {selected && (
@@ -299,10 +317,13 @@ export default function DeckBuilder({
                         </span>
                       )}
 
-                      {/* Area preview — <div>, BUKAN tombol: ketuk preview =
-                          mainkan animasi DI TEMPAT (MovePreview mode tap).
+                      {/* Area art kartu TCG — rasio 4/3 (sama dengan kanvas
+                          MovePreview) + frame dalam + gradient gelap,
+                          supaya terasa seperti kotak art kartu koleksi.
+                          <div>, BUKAN tombol: ketuk preview = mainkan
+                          animasi DI TEMPAT (MovePreview mode tap).
                           Panel besar dibuka tombol ⤢ terpisah di pojok. */}
-                      <div className="relative aspect-video w-full overflow-hidden border-b border-ink-700 bg-gradient-to-b from-ink-800 to-ink-950">
+                      <div className="relative m-2 mb-0 aspect-[4/3] overflow-hidden rounded-lg bg-gradient-to-b from-ink-700 via-ink-800 to-ink-950 ring-1 ring-white/15">
                         {renderPreview ? (
                           renderPreview(k.kind, { mode: 'tap' })
                         ) : (
@@ -320,6 +341,10 @@ export default function DeckBuilder({
                             </span>
                           </button>
                         )}
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent"
+                        />
                         <button
                           type="button"
                           onClick={() => setExpandedKind(k.kind)}
@@ -344,25 +369,43 @@ export default function DeckBuilder({
                               ? `${k.label} — deck sudah penuh (${maxCards}/${maxCards})`
                               : `Pilih ${k.label} ke deck`
                         }
-                        className="flex min-h-11 flex-1 flex-col items-start gap-1 p-3 text-left"
+                        className="flex min-h-11 flex-1 flex-col items-stretch pb-3 text-left"
                       >
-                        <span className="font-display text-lg font-semibold uppercase leading-tight tracking-wide text-paper">
-                          {k.label}
+                        {/* Pita nama ala TCG: band gelap + aksen gaya di kiri */}
+                        <span
+                          className="mx-2 mt-2 block rounded-lg border-l-4 bg-ink-950/70 px-2.5 py-1.5 ring-1 ring-white/10"
+                          style={{ borderLeftColor: borderColor }}
+                        >
+                          <span className="block font-display text-lg font-semibold uppercase leading-tight tracking-wide text-paper">
+                            {k.label}
+                          </span>
+                          <span className="block text-[11px] font-medium text-paper-dim">
+                            {k.styleLabel}
+                            {gold ? ' • ★ Finisher' : meta.isSpecial ? ' • ★ Spesial' : ''}
+                          </span>
                         </span>
-                        <span className="rounded-md bg-ink-700 px-1.5 py-0.5 text-[11px] font-medium text-paper-dim">
-                          {k.styleLabel}
-                        </span>
-                        {(k.dmg !== undefined || k.target) && (
-                          <span className="text-[11px] font-medium text-paper-dim">
-                            {k.dmg !== undefined && k.dmg > 0 ? (
-                              <span className="font-semibold text-amber-brand">DMG {k.dmg}</span>
+                        {/* Badge stat — hanya yang ada datanya di katalog */}
+                        {meta.found && (meta.dmg > 0 || meta.target || meta.power > 0) && (
+                          <span className="mt-1.5 flex flex-wrap gap-1 px-2">
+                            {meta.dmg > 0 && (
+                              <span className="rounded-md bg-amber-brand/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-brand">
+                                DMG {fmtNum(meta.dmg)}
+                              </span>
+                            )}
+                            {meta.target ? (
+                              <span className="rounded-md bg-ink-700 px-1.5 py-0.5 text-[11px] font-medium text-paper-dim">
+                                🎯 {targetLabel(meta.target)}
+                              </span>
                             ) : null}
-                            {k.dmg !== undefined && k.dmg > 0 && k.target ? ' • ' : ''}
-                            {k.target ? `Target: ${targetLabel(k.target)}` : ''}
+                            {meta.power > 0 && (
+                              <span className="rounded-md bg-ink-700 px-1.5 py-0.5 text-[11px] font-medium text-paper-dim">
+                                STA {fmtNum(meta.power * 6)}
+                              </span>
+                            )}
                           </span>
                         )}
                         {k.note && (
-                          <span className="line-clamp-2 text-xs leading-relaxed text-paper-dim">
+                          <span className="mt-1.5 line-clamp-2 px-2 text-xs leading-relaxed text-paper-dim">
                             {k.note}
                           </span>
                         )}
@@ -387,7 +430,7 @@ export default function DeckBuilder({
                 type="button"
                 onClick={() => onSignatureChange(null)}
                 aria-pressed={deckSignature === null}
-                className={`flex min-h-11 flex-col items-start justify-center gap-0.5 rounded-xl border-2 p-2.5 text-left shadow-md shadow-black/40 transition-all duration-200 ${
+                className={`flex min-h-11 flex-col items-start justify-center gap-0.5 rounded-2xl border-2 p-2.5 text-left shadow-md shadow-black/40 transition-all duration-200 ${
                   deckSignature === null
                     ? 'border-amber-brand bg-amber-brand/10 shadow-lg shadow-amber-brand/10 ring-1 ring-amber-brand/40'
                     : 'border-transparent bg-ink-800 hover:border-amber-brand/40'
@@ -401,13 +444,18 @@ export default function DeckBuilder({
               {deck.signatureOptions.map((o) => {
                 const inDeck = selectedSet.has(o.kind);
                 const selected = deckSignature === o.kind;
+                // Kartu signature = kartu TCG berframe emas (bukan border
+                // gaya): angka stat sama sumbernya dengan kartu deck.
+                const sigMeta = getMoveMeta(o.kind);
+                const sigBorder = selected ? '#EAB308' : '#FDE047';
                 return (
                   <div
                     key={o.kind}
-                    className={`relative flex flex-col overflow-hidden rounded-xl border-2 shadow-md shadow-black/40 transition-all duration-200 ${
+                    style={{ borderColor: sigBorder }}
+                    className={`relative flex flex-col overflow-hidden rounded-2xl border-2 bg-ink-800 shadow-md shadow-black/40 transition-all duration-200 ${
                       selected
-                        ? 'border-amber-brand bg-amber-brand/10 shadow-lg shadow-amber-brand/10 ring-1 ring-amber-brand/40'
-                        : 'border-transparent bg-ink-800 hover:border-amber-brand/40'
+                        ? 'shadow-lg shadow-amber-brand/20 ring-2 ring-amber-brand/50'
+                        : 'shadow-lg shadow-yellow-400/10 ring-1 ring-yellow-300/50 hover:-translate-y-0.5'
                     } ${inDeck && !selected ? 'opacity-40' : ''}`}
                   >
                     {selected && (
@@ -427,13 +475,37 @@ export default function DeckBuilder({
                             ? `Batal pilih signature ${o.label}`
                             : `Pilih ${o.label} sebagai signature`
                       }
-                      className="flex min-h-11 flex-1 flex-col items-start justify-center gap-0.5 p-2.5 text-left"
+                      className="flex min-h-11 flex-1 flex-col items-stretch pb-2.5 text-left"
                     >
-                      <span className="font-display text-base font-semibold uppercase leading-tight text-paper">
-                        {o.label}
+                      <span className="mx-2 mt-2 block rounded-lg border-l-4 border-yellow-300 bg-ink-950/70 px-2.5 py-1.5 ring-1 ring-white/10">
+                        <span className="block font-display text-base font-semibold uppercase leading-tight tracking-wide text-paper">
+                          {o.label}
+                        </span>
+                        <span className="block text-[11px] font-medium text-paper-dim">
+                          ★ Jurus khas • 1x/fight
+                        </span>
                       </span>
-                      <span className="text-xs text-paper-dim">
-                        {inDeck ? 'Sudah di deck — pilih jurus lain' : '1x/fight · di luar deck'}
+                      {sigMeta.found && (sigMeta.dmg > 0 || sigMeta.target || sigMeta.power > 0) && (
+                        <span className="mt-1.5 flex flex-wrap gap-1 px-2">
+                          {sigMeta.dmg > 0 && (
+                            <span className="rounded-md bg-amber-brand/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-brand">
+                              DMG {fmtNum(sigMeta.dmg)}
+                            </span>
+                          )}
+                          {sigMeta.target ? (
+                            <span className="rounded-md bg-ink-700 px-1.5 py-0.5 text-[11px] font-medium text-paper-dim">
+                              🎯 {targetLabel(sigMeta.target)}
+                            </span>
+                          ) : null}
+                          {sigMeta.power > 0 && (
+                            <span className="rounded-md bg-ink-700 px-1.5 py-0.5 text-[11px] font-medium text-paper-dim">
+                              STA {fmtNum(sigMeta.power * 6)}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      <span className="mt-1.5 px-2 text-xs text-paper-dim">
+                        {inDeck ? 'Sudah di deck — pilih jurus lain' : 'Di luar deck'}
                       </span>
                     </button>
                     <button

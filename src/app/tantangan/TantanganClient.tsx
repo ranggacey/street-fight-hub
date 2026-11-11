@@ -22,6 +22,8 @@ import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
 import ArenaPicker from "@/components/ArenaPicker";
 import OpponentPicker from "@/components/OpponentPicker";
+import TantanganTutorial from "@/components/TantanganTutorial";
+import { hasSeenTantanganTutorial, markTantanganTutorialSeen } from "@/lib/tutorial";
 import { Textarea } from "@/components/Input";
 
 type BatchSummary = {
@@ -105,6 +107,7 @@ export default function TantanganClient() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [tutorialOpen, setTutorialOpen] = useState(false);
 
   // Form tantang
   const [mode, setMode] = useState<"single" | "bulk">("single");
@@ -114,6 +117,16 @@ export default function TantanganClient() {
   const [message, setMessage] = useState("");
   const [formError, setFormError] = useState("");
   const [formBusy, setFormBusy] = useState(false);
+
+  // Deck kartu saya (gate tarung, FITUR 1): deck = kartu, jadi
+  // "punya deck" = cards.length > 0. Signature saja (tanpa kartu)
+  // TIDAK dihitung punya deck (lihat hasDeck di src/lib/game/deck.ts).
+  // deckLoaded hanya true kalau GET /api/deck SUKSES — kalau fetch
+  // gagal, gate fail-open (tidak memblokir).
+  const [deckCards, setDeckCards] = useState<string[]>([]);
+  const [deckLoaded, setDeckLoaded] = useState(false);
+  const needsDeck =
+    Boolean(myFighter) && deckLoaded && deckCards.length === 0;
 
   const toggleTarget = useCallback((id: string) => {
     setTargetIds((prev) =>
@@ -128,10 +141,11 @@ export default function TantanganClient() {
       return;
     }
     setUser(me.data.user);
-    const [listRes, inRes, outRes] = await Promise.all([
+    const [listRes, inRes, outRes, deckRes] = await Promise.all([
       clientApi<{ fighters: Fighter[] }>("/api/fighters?sort=wins"),
       clientApi<ChallengesResponse>("/api/challenges?box=in"),
       clientApi<ChallengesResponse>("/api/challenges?box=out"),
+      clientApi<{ cards: string[]; signature: string | null }>("/api/deck"),
     ]);
     if (listRes.ok) {
       setAllFighters(listRes.data.fighters);
@@ -148,6 +162,17 @@ export default function TantanganClient() {
       setOutgoing(outRes.data.challenges);
       setBatches((prev) => ({ ...(outRes.data.batches ?? {}), ...prev }));
     }
+    // Gate deck: hanya tandai deckLoaded kalau fetch SUKSES. Kalau
+    // gagal (mis. jaringan), deckLoaded tetap false dan gate fail-open
+    // (tidak memblokir) — gate ini hanya UX, server tidak menegakkannya.
+    // Kalau 404 karena belum ada fighter, form memang tidak tampil
+    // (EmptyState "Belum Punya Fighter" sudah menangani).
+    if (deckRes.ok) {
+      setDeckCards(
+        Array.isArray(deckRes.data.cards) ? deckRes.data.cards : [],
+      );
+      setDeckLoaded(true);
+    }
     setPhase("ready");
   }, []);
 
@@ -156,6 +181,20 @@ export default function TantanganClient() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  // Tutorial "Cara Bertarung" (FITUR 2): tampil sekali untuk semua
+  // user login yang mengunjungi /tantangan dan belum pernah melihatnya
+  // — tanpa syarat deck/fighter/riwayat. Hanya saat phase ready.
+  useEffect(() => {
+    if (phase !== "ready") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!hasSeenTantanganTutorial()) setTutorialOpen(true);
+  }, [phase]);
+
+  const closeTutorial = useCallback(() => {
+    markTantanganTutorialSeen();
+    setTutorialOpen(false);
+  }, []);
 
   const act = async (
     id: string,
@@ -187,6 +226,10 @@ export default function TantanganClient() {
 
   const createChallenge = async (e: FormEvent) => {
     e.preventDefault();
+    if (needsDeck) {
+      setFormError("Pilih deck dulu sebelum bertarung.");
+      return;
+    }
     if (!targetId) {
       setFormError("Pilih fighter yang mau ditantang.");
       return;
@@ -218,6 +261,10 @@ export default function TantanganClient() {
 
   const createBulkChallenge = async (e: FormEvent) => {
     e.preventDefault();
+    if (needsDeck) {
+      setFormError("Pilih deck dulu sebelum bertarung.");
+      return;
+    }
     if (targetIds.length === 0) {
       setFormError("Pilih minimal 1 fighter yang mau ditantang.");
       return;
@@ -387,6 +434,7 @@ export default function TantanganClient() {
 
   return (
     <div className="min-w-0 space-y-8">
+      <TantanganTutorial open={tutorialOpen} onClose={closeTutorial} />
       {notice ? (
         <p
           role="status"
@@ -416,11 +464,38 @@ export default function TantanganClient() {
         <section aria-labelledby="tantang-heading">
           <h2
             id="tantang-heading"
-            className="mb-4 overflow-visible break-words font-display text-[1.35rem] uppercase leading-[1.15] tracking-wide sm:text-3xl sm:leading-[1.1]"
+            className="mb-4 flex items-center gap-2 overflow-visible break-words font-display text-[1.35rem] uppercase leading-[1.15] tracking-wide sm:text-3xl sm:leading-[1.1]"
           >
-            Tantang <span className="text-amber-brand">Fighter Lain</span>
+            <span>
+              Tantang <span className="text-amber-brand">Fighter Lain</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setTutorialOpen(true)}
+              aria-label="Lihat cara bertarung"
+              title="Lihat cara bertarung"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-brand/60 text-lg font-bold text-amber-brand transition-colors hover:bg-amber-brand/15"
+            >
+              ?
+            </button>
           </h2>
           <GlassCard strong>
+            {/* Gate deck (FITUR 1): belum punya kartu deck = belum boleh
+                menantang. Alert di atas form, form tetap terlihat. */}
+            {needsDeck ? (
+              <div
+                role="alert"
+                className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-brand/50 bg-amber-brand/10 px-4 py-3"
+              >
+                <p className="text-sm font-semibold leading-relaxed text-paper">
+                  Kamu belum punya deck kartu — pilih deck dulu sebelum
+                  bertarung.
+                </p>
+                <ButtonLink href="/latihan#deck" size="sm">
+                  Pilih Deck
+                </ButtonLink>
+              </div>
+            ) : null}
             {/* Mode tantang: satu lawan atau banyak orang sekaligus */}
             <div
               role="group"
@@ -488,6 +563,8 @@ export default function TantanganClient() {
                     multi
                     selectedIds={targetIds}
                     onToggle={toggleTarget}
+                    onSelectAll={(ids) => setTargetIds(ids)}
+                    onClearAll={() => setTargetIds([])}
                   />
                 ) : (
                   <OpponentPicker
@@ -569,7 +646,9 @@ export default function TantanganClient() {
                 // setelah jatah reset. Gate jatah tetap ada di ACCEPT
                 // (kedua fighter).
                 disabled={
-                  formBusy || (mode === "bulk" ? targetIds.length === 0 : false)
+                  formBusy ||
+                  needsDeck ||
+                  (mode === "bulk" ? targetIds.length === 0 : false)
                 }
               >
                 {formBusy
@@ -578,6 +657,11 @@ export default function TantanganClient() {
                     ? `Kirim tantangan ke ${targetIds.length} orang`
                     : "Kirim Tantangan"}
               </Button>
+              {needsDeck ? (
+                <p className="text-sm text-paper-mute">
+                  Pilih deck dulu untuk mengaktifkan tantangan.
+                </p>
+              ) : null}
               {fightsRemaining <= 0 ? (
                 <p className="text-sm text-paper-mute">
                   Jatah tarungmu habis hari ini — tantangan tetap bisa

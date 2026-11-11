@@ -119,17 +119,68 @@ describe('DeckBuilder', () => {
     expect(html).toContain('Sudah di deck — pilih jurus lain');
   });
 
-  it('info dmg/target tampil di kartu kalau datanya ada', () => {
+  it('badge stat kartu dari katalog engine: DMG + target + STA (power x 6)', () => {
+    const html = render();
+    // Jab (moves.js Tinju): dmg 2, target head, power 0,5 → STA 3.
+    expect(html).toContain('DMG 2');
+    expect(html).toContain('Kepala');
+    expect(html).toContain('STA 3');
+    // Cross: dmg 2,5, power 0,7 → STA 4,2 (desimal koma ala Indonesia).
+    expect(html).toContain('DMG 2,5');
+    expect(html).toContain('STA 4,2');
+  });
+
+  it('kind tak dikenal: tidak ada badge stat (jangan tampilkan 0)', () => {
+    const html = render({
+      deck: {
+        cards: [],
+        signature: null,
+        style: 'tinju',
+        availableKinds: [
+          { kind: 'jurus_ngawur', label: 'Jurus Ngawur', style: 'other', styleLabel: 'Lainnya' },
+        ],
+        signatureOptions: [],
+      },
+      deckCards: [],
+    });
+    expect(html).toContain('Jurus Ngawur');
+    expect(html).not.toContain('DMG');
+    expect(html).not.toContain('STA');
+    expect(html).not.toContain('🎯');
+  });
+
+  it('finisher berframe emas + label Finisher', () => {
     const html = render({
       deck: {
         ...deck,
-        availableKinds: deck.availableKinds.map((k) =>
-          k.kind === 'jab' ? { ...k, dmg: 2, target: 'head' } : k,
-        ),
+        availableKinds: [
+          ...deck.availableKinds,
+          { kind: 'headkick', label: 'Head Kick', style: 'muaythai', styleLabel: 'Muay Thai', note: 'Finisher.' },
+        ],
       },
     });
-    expect(html).toContain('DMG 2');
-    expect(html).toContain('Target: Kepala');
+    expect(html).toContain('★ Finisher');
+    expect(html).toContain('DMG 4,5');
+    expect(html).toContain('STA 6');
+    // Border emas finisher (inline style border-color).
+    expect(html).toContain('border-color:#FDE047');
+  });
+
+  it('kartu signature berframe emas + pita nama + badge stat', () => {
+    const html = render();
+    // Opsi signature (Jab/Cross/Uppercut) semuanya berframe emas.
+    expect(html).toContain('★ Jurus khas');
+    expect(html).toContain('border-color:#FDE047');
+    expect(html).toContain('Lihat gerakan');
+  });
+
+  it('struktur kartu TCG: grid 2 kolom + area art 4/3 + pita nama + tombol perbesar + strip deck', () => {
+    const html = render();
+    expect(html).toContain('grid-cols-2');
+    expect(html).toContain('aspect-[4/3]');
+    expect(html).toContain('Deck saya');
+    expect(html).toContain('aria-label="Perbesar preview Jab"');
+    expect(html).toContain('Simpan deck');
   });
 
   it('tombol simpan + pesan hasil simpan', () => {
