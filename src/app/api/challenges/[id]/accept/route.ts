@@ -9,6 +9,7 @@ import {
 } from '@/lib/game/challenges';
 import { countFightsToday, DAILY_FIGHT_LIMIT } from '@/lib/game/daily-limit';
 import { FIGHT_DURATION_SEC, toEngineFighter } from '@/lib/game/engine-config';
+import { buildFightSetup } from '@/lib/game/fight-setup';
 import { notifyFighterOwner } from '@/lib/game/notify';
 import { ensureTitleCurrent } from '@/lib/game/title-service';
 import {
@@ -22,6 +23,7 @@ import {
 import { Challenge } from '@/models/Challenge';
 import { Fighter } from '@/models/Fighter';
 import { GameFight } from '@/models/GameFight';
+import { normalizeGameplanInput } from '@/lib/validation';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -64,6 +66,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (!checkOrigin(req)) throw forbidden('Origin tidak valid');
     const session = await requireAuth(req);
     const { id } = await params;
+    // Gameplan penerima (opsional, body boleh kosong → default
+    // seimbang/balanced). Body dibaca toleran: tanpa body tetap jalan.
+    const rawBody = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const accepterGameplan = normalizeGameplanInput(rawBody?.gameplan);
     await connectDB();
     await expireStaleChallenges();
 
@@ -148,6 +154,17 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       const left = toEngineFighter(challenger.toObject());
       const right = toEngineFighter(challenged.toObject());
 
+      // Stat + deck + gameplan kedua fighter → fightOpts. Gameplan
+      // penantang dari tantangan (saat create), penerima dari body ini.
+      // fightOpts disimpan di config supaya arena + verifikasi server
+      // menjalankan fight yang PERSIS SAMA.
+      const setup = await buildFightSetup(
+        challenger,
+        challenged,
+        challenge.gameplan,
+        accepterGameplan,
+      );
+
       const fight = await GameFight.create({
         fighterAId: challenger._id,
         fighterBId: challenged._id,
@@ -157,7 +174,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         map: challenge.map,
         durationSec: FIGHT_DURATION_SEC,
         status: 'pending',
-        config: { left, right },
+        config: { left, right, fightOpts: setup.fightOpts, gameplans: setup.gameplans },
         isTitleFight,
       });
 
@@ -195,6 +212,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           seed,
           map: challenge.map,
           duration: FIGHT_DURATION_SEC,
+          opts: setup.fightOpts,
         },
       });
     } catch (err) {

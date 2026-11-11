@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { serverApiGet } from "@/components/server-api";
+import { serverApiGet, dataOr } from "@/components/server-api";
 import {
   asFighter,
   formatWIB,
@@ -15,6 +15,7 @@ import type { MatchItem } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import StatChip from "@/components/StatChip";
+import PredictionBox from "@/components/PredictionBox";
 import { ButtonLink } from "@/components/Button";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +123,20 @@ export default async function PertandinganDetailPage({
   const aWon = !!a && winnerId !== "" && getId(a) === winnerId;
   const bWon = !!b && winnerId !== "" && getId(b) === winnerId;
   const decided = m.status === "decided" || m.status === "video_done";
+
+  // Badge rivalitas (head-to-head pasangan ini, kalau pernah bertemu).
+  let rivalryLabel: string | null = null;
+  if (a && b) {
+    try {
+      const rr = await serverApiGet<{ label: string | null; rivalry: { totalFights: number } }>(
+        `/api/fighters/${getId(a)}/rivalry?opponentId=${getId(b)}`,
+      );
+      const rd = dataOr(rr, null);
+      if (rd && rd.rivalry?.totalFights > 0) rivalryLabel = rd.label;
+    } catch {
+      rivalryLabel = null;
+    }
+  }
   const tournament =
     m.tournament ??
     (m.tournamentId && typeof m.tournamentId === "object"
@@ -173,6 +188,11 @@ export default async function PertandinganDetailPage({
       </header>
 
       {/* Dua fighter berdampingan */}
+      {rivalryLabel ? (
+        <p className="glass px-4 py-2 text-center text-sm font-semibold text-amber-brand">
+          ⚔️ {rivalryLabel}
+        </p>
+      ) : null}
       <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
         {a ? (
           <FighterSide fighter={a} isWinner={aWon} score={m.score?.a ?? null} align="left" />
@@ -235,6 +255,17 @@ export default async function PertandinganDetailPage({
           </p>
         </GlassCard>
       )}
+
+      {/* Prediksi penonton (hanya saat terjadwal & kedua fighter ada) */}
+      {a && b ? (
+        <PredictionBox
+          fightId={id}
+          kind="tournament"
+          fighterA={{ id: getId(a), displayName: a.displayName }}
+          fighterB={{ id: getId(b), displayName: b.displayName }}
+          canPredict={!decided}
+        />
+      ) : null}
 
       {/* Reel */}
       {m.reelUrl ? (

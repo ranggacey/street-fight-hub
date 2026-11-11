@@ -112,6 +112,8 @@ export interface FighterInput {
   style: FighterStyle;
   styleOther: string | null;
   selfDescription: string;
+  /** Berat badan (kg) untuk kelas berat — opsional, null = tanpa kelas. */
+  weightKg: number | null;
   game: FighterGameFields;
 }
 
@@ -230,6 +232,7 @@ export function validateFighterBody(body: Record<string, unknown>): FighterInput
     style,
     styleOther,
     selfDescription,
+    weightKg: parseWeightKg(body.weightKg),
     game: {
       signatureMove,
       tempo: parseTempo(body.tempo),
@@ -239,6 +242,20 @@ export function validateFighterBody(body: Record<string, unknown>): FighterInput
   };
 }
 
+/**
+ * Berat badan (kg) untuk kelas berat. Opsional: null/undefined/kosong
+ * = tanpa kelas. Angka harus 20–300 kg (batas kewarasan, bukan batas
+ * kelas — kelas dihitung di weight-classes.ts).
+ */
+export function parseWeightKg(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 20 || n > 300) {
+    throw badRequest('Berat badan harus 20-300 kg');
+  }
+  return Math.round(n * 10) / 10;
+}
+
 export interface FighterPatch {
   top: {
     displayName?: string;
@@ -246,6 +263,8 @@ export interface FighterPatch {
     style?: FighterStyle;
     styleOther?: string | null;
     selfDescription?: string;
+    /** Berat badan (kg); null = hapus (kembali tanpa kelas). */
+    weightKg?: number | null;
     signatureMove?: string | null;
     tempo?: FighterTempo;
     colors?: Record<string, string>;
@@ -287,6 +306,9 @@ export function parseFighterPatch(body: Record<string, unknown>): FighterPatch {
       600,
       'Deskripsi diri',
     );
+  }
+  if (body.weightKg !== undefined) {
+    top.weightKg = parseWeightKg(body.weightKg);
   }
   // Field game (customize fighter): jurus khas, tempo, warna per bagian.
   // signatureMove divalidasi terhadap gaya EFEKTIF di route (gaya baru
@@ -377,6 +399,8 @@ export interface ChallengeInput {
   challengedFighterId: string;
   message: string | null;
   map: ArenaMap;
+  /** Gameplan penantang (dipilih saat tantangan dibuat; default seimbang/balanced). */
+  gameplan: { tempo: string; focus: string };
 }
 
 /** Batas lawan sekali kirim bulk — pelindung spam, bukan jatah harian. */
@@ -438,7 +462,31 @@ export function validateChallengeBody(body: Record<string, unknown>): ChallengeI
     }
     map = body.map as ArenaMap;
   }
-  return { challengedFighterId, message, map };
+  // Gameplan penantang (opsional): tempo harus salah satu dari 3 tempo,
+  // focus = kind gerakan atau 'balanced'. Nilai lain → default.
+  // Fokus TIDAK divalidasi terhadap daftar jurus di sini (deck bisa
+  // berubah); engine hanya memakai focus sebagai bobot tambahan kalau
+  // kind-nya ada di pool gerakan.
+  const gameplan = normalizeGameplanInput(body.gameplan);
+  return { challengedFighterId, message, map, gameplan };
+}
+
+/** Normalisasi input gameplan mentah (body API) → { tempo, focus } valid. */
+export function normalizeGameplanInput(input: unknown): { tempo: string; focus: string } {
+  if (!input || typeof input !== 'object') {
+    return { tempo: 'seimbang', focus: 'balanced' };
+  }
+  const o = input as Record<string, unknown>;
+  const tempo =
+    typeof o.tempo === 'string' &&
+    (FIGHTER_TEMPOS as readonly string[]).includes(o.tempo)
+      ? o.tempo
+      : 'seimbang';
+  const focus =
+    typeof o.focus === 'string' && o.focus.trim().length > 0
+      ? o.focus.trim()
+      : 'balanced';
+  return { tempo, focus };
 }
 
 /** Validasi teks chat global (1–500 karakter). */

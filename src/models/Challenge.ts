@@ -42,6 +42,10 @@ const challengeSchema = new Schema(
     /** Batch tantang-banyak-orang: Challenge dalam satu kirim berbagi batchId. */
     batchId: { type: Schema.Types.ObjectId, default: null },
     gameFightId: { type: Schema.Types.ObjectId, ref: 'GameFight', default: null },
+    /** Gameplan penantang saat tantangan dibuat (tempo + fokus) —
+     * dipakai saat accept untuk membangun fightOpts. Null = default
+     * (seimbang/balanced). */
+    gameplan: { type: Schema.Types.Mixed, default: null },
     map: {
       type: String,
       enum: ['ring', 'gudang', 'jalanan', 'dojo'],

@@ -17,6 +17,8 @@ import type {
   GameHistoryItem,
   TitleHistoryItem,
 } from "@/components/types";
+import { weightClassLabel } from "@/lib/game/weight-classes";
+import { INJURY_STAT_LABELS } from "@/lib/game/progress";
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import { ButtonLink } from "@/components/Button";
@@ -31,6 +33,32 @@ type FighterDetailResponse = {
   history: FightHistoryItem[];
   gameHistory?: GameHistoryItem[];
   titleHistory?: TitleHistoryItem[];
+};
+
+/** GET /api/fighters/[id]/progress — XP/level/koin/gear/achievement/cedera. */
+type ProgressResponse = {
+  progress: {
+    level: number;
+    xp: number;
+    xpInLevel: number;
+    xpForNextLevel: number;
+    xpProgressPct: number;
+    coins: number;
+    gearOwned: string[];
+    achievements: string[];
+    injury: { stat: string; pct: number; fightsRemaining: number } | null;
+    totalFights: number;
+    currentWinStreak: number;
+    activityStreakDays: number;
+  };
+  gear: { id: string; label: string; description: string; price: number }[];
+  achievements: {
+    id: string;
+    label: string;
+    description: string;
+    icon: string;
+    unlocked: boolean;
+  }[];
 };
 
 function toDetail(raw: FighterDetailResponse | null): FighterDetail | null {
@@ -88,6 +116,15 @@ export default async function FighterProfilePage({
   const f = toDetail(dataOr(res, null));
   if (!f) notFound();
 
+  // Progres anti-monoton (gagal fetch = seksi tidak tampil, bukan crash).
+  let progressRes: ProgressResponse | null = null;
+  try {
+    const pr = await serverApiGet<ProgressResponse>(`/api/fighters/${id}/progress`);
+    progressRes = dataOr(pr, null);
+  } catch {
+    progressRes = null;
+  }
+
   const record = f.record ?? { wins: 0, losses: 0, draws: 0, kos: 0 };
   const color = styleColor(f.style);
   const history = f.history ?? f.matches ?? [];
@@ -126,6 +163,7 @@ export default async function FighterProfilePage({
               </a>
               {" • "}
               {styleLabel(f.style, f.styleOther)}
+              {f.weightKg ? ` • ${f.weightKg} kg (${weightClassLabel(f.weightKg)})` : " • Tanpa kelas"}
               {f.status === "retired" ? " • Pensiun" : ""}
             </p>
           </div>
@@ -149,6 +187,112 @@ export default async function FighterProfilePage({
           <StatChip label="Rating" value={f.rating ?? 1000} tone="cyan" />
         </div>
       </section>
+
+      {/* Progres: XP/level, koin, cedera, achievement, gear */}
+      {progressRes ? (
+        <section aria-labelledby="progres-heading">
+          <h2
+            id="progres-heading"
+            className="mb-4 font-display text-3xl uppercase tracking-wide"
+          >
+            Progres <span className="text-amber-brand">Fighter</span>
+          </h2>
+          <GlassCard className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-display text-2xl uppercase tracking-wide">
+                Level {progressRes.progress.level}
+                <span className="ml-2 text-sm normal-case tracking-normal text-paper-dim">
+                  {progressRes.progress.xp} XP
+                </span>
+              </p>
+              <p className="font-semibold text-amber-brand">
+                🪙 {progressRes.progress.coins} koin
+              </p>
+            </div>
+            <div
+              className="h-3 w-full overflow-hidden rounded-full bg-white/10"
+              role="progressbar"
+              aria-valuenow={progressRes.progress.xpProgressPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Progres XP ke level berikutnya"
+            >
+              <div
+                className="h-full rounded-full bg-amber-brand"
+                style={{ width: `${progressRes.progress.xpProgressPct}%` }}
+              />
+            </div>
+            <p className="text-sm text-paper-dim">
+              {progressRes.progress.xpInLevel}/{progressRes.progress.xpForNextLevel} XP
+              ke level {progressRes.progress.level + 1}
+              {progressRes.progress.currentWinStreak > 0
+                ? ` • 🔥 ${progressRes.progress.currentWinStreak}x menang beruntun`
+                : ""}
+              {progressRes.progress.activityStreakDays > 0
+                ? ` • 📅 aktif ${progressRes.progress.activityStreakDays} hari beruntun`
+                : ""}
+            </p>
+            {progressRes.progress.injury ? (
+              <p className="rounded-xl border border-red-brand/50 bg-red-brand/10 px-3 py-2 text-sm font-semibold text-red-400">
+                🤕 Cedera:{" "}
+                {INJURY_STAT_LABELS[
+                  progressRes.progress.injury.stat as keyof typeof INJURY_STAT_LABELS
+                ] ?? progressRes.progress.injury.stat}{" "}
+                -{progressRes.progress.injury.pct}% — sembuh setelah{" "}
+                {progressRes.progress.injury.fightsRemaining} fight lagi.
+              </p>
+            ) : null}
+
+            <div>
+              <h3 className="mb-2 font-display text-xl uppercase tracking-wide">
+                Achievement
+              </h3>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {progressRes.achievements.map((a) => (
+                  <div
+                    key={a.id}
+                    className={`rounded-xl border px-3 py-2 text-center ${
+                      a.unlocked
+                        ? "border-amber-brand/60 bg-amber-brand/10"
+                        : "border-white/10 bg-white/[0.03] opacity-60"
+                    }`}
+                    title={a.description}
+                  >
+                    <p className="text-xl">{a.icon}</p>
+                    <p className="mt-1 text-xs font-semibold text-paper">{a.label}</p>
+                    <p className="text-[11px] text-paper-mute">
+                      {a.unlocked ? "Terbuka" : "Terkunci"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-display text-xl uppercase tracking-wide">
+                Gear Dimiliki
+              </h3>
+              {progressRes.gear.length === 0 ? (
+                <p className="text-sm text-paper-dim">
+                  Belum ada gear. Menang fight untuk dapat koin, lalu belanja
+                  di toko.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {progressRes.gear.map((g) => (
+                    <Badge key={g.id} tone="amber">
+                      {g.label}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3">
+                <ButtonLink href="/toko">Ke Toko Gear 🛒</ButtonLink>
+              </div>
+            </div>
+          </GlassCard>
+        </section>
+      ) : null}
 
       {/* Deskripsi diri */}
       {f.selfDescription ? (

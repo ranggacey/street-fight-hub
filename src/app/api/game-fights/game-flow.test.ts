@@ -108,6 +108,9 @@ interface AcceptOut {
     seed: number;
     map: string;
     duration: number;
+    /** fightOpts dari sfa-config — arena memainkannya, server
+     * memverifikasi dengannya (lihat result route). */
+    opts: Parameters<typeof expectedResult>[4] | null;
   };
 }
 interface ResultOut {
@@ -150,7 +153,12 @@ async function playOneFight(
   const accBody = await json<ApiData<AcceptOut>>(accRes);
   const { gameFight, config } = accBody.data;
 
-  const expected = expectedResult(config.fighters.left, config.fighters.right, config.duration, config.seed);
+  // Tes ini mensimulasikan klien arena: arena memainkan fight DENGAN
+  // opts dari sfa-config (stat/deck/gameplan/stamina), jadi expected
+  // harus dihitung dengan opts yang sama — server memverifikasi
+  // dengan fightOpts tersimpan. Tanpa opts, hasil bisa berbeda
+  // (sistem stamina aktif) dan fight jadi disputed.
+  const expected = expectedResult(config.fighters.left, config.fighters.right, config.duration, config.seed, config.opts ?? undefined);
   const payload = {
     winner: tamperWinner
       ? expected.winner === 'R'
@@ -273,7 +281,7 @@ describe('Game flow integration (challenge → fight → result → gelar)', () 
     expect(config.fighters.right).toBeDefined();
 
     // 6. Submit hasil yang cocok → verified, completed, Elo/casual berubah.
-    const expected1 = expectedResult(config.fighters.left, config.fighters.right, config.duration, config.seed);
+    const expected1 = expectedResult(config.fighters.left, config.fighters.right, config.duration, config.seed, config.opts ?? undefined);
     const ratingBefore = (await Fighter.findById(fighterAId).lean())?.rating;
     const subRes = await submitResult(
       req(`/api/game-fights/${fight1Id}/result`, {

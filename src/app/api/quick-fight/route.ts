@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/db';
 import { CHALLENGE_TTL_MS, expireStaleChallenges } from '@/lib/game/challenges';
 import { countFightsToday, DAILY_FIGHT_LIMIT } from '@/lib/game/daily-limit';
 import { FIGHT_DURATION_SEC, toEngineFighter } from '@/lib/game/engine-config';
+import { buildFightSetup } from '@/lib/game/fight-setup';
 import { notifyFighterOwner } from '@/lib/game/notify';
 import {
   countActiveFights,
@@ -23,6 +24,7 @@ import {
 import { Challenge } from '@/models/Challenge';
 import { Fighter } from '@/models/Fighter';
 import { GameFight } from '@/models/GameFight';
+import { normalizeGameplanInput } from '@/lib/validation';
 
 /**
  * POST /api/quick-fight — Gas Tarung (quick match).
@@ -60,6 +62,10 @@ export async function POST(req: NextRequest) {
   try {
     if (!checkOrigin(req)) throw forbidden('Origin tidak valid');
     const session = await requireAuth(req);
+    // Gameplan saya (opsional, body boleh kosong → default). Lawan
+    // (acak) memakai gameplan default — ia tidak memilih di quick-fight.
+    const rawBody = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const myGameplan = normalizeGameplanInput(rawBody?.gameplan);
     await connectDB();
     await expireStaleChallenges();
 
@@ -93,6 +99,7 @@ export async function POST(req: NextRequest) {
     const opponent = await findQuickFightOpponent(
       mine._id.toString(),
       mine.rating ?? 1000,
+      mine.weightKg ?? null,
     );
     if (!opponent) {
       return ok({ status: 'no_opponent', opponent: null });
@@ -157,6 +164,17 @@ export async function POST(req: NextRequest) {
       const left = toEngineFighter(mine.toObject());
       const right = toEngineFighter(opponent);
 
+      // Stat + deck + gameplan kedua fighter → fightOpts (disimpan di
+      // config supaya arena + verifikasi server menjalankan fight sama).
+      // Lawan quick-fight memakai gameplan default (tidak memilih).
+      const opponentDoc = await Fighter.findById(opponent.id);
+      const setup = await buildFightSetup(
+        mine,
+        opponentDoc ?? { _id: opponent.id },
+        myGameplan,
+        null,
+      );
+
       const fight = await GameFight.create({
         fighterAId: mine._id,
         fighterBId: opponent.id,
@@ -166,7 +184,7 @@ export async function POST(req: NextRequest) {
         map: challenge.map,
         durationSec: FIGHT_DURATION_SEC,
         status: 'pending',
-        config: { left, right },
+        config: { left, right, fightOpts: setup.fightOpts, gameplans: setup.gameplans },
         isTitleFight,
       });
 
@@ -224,6 +242,7 @@ export async function POST(req: NextRequest) {
           seed,
           map: challenge.map,
           duration: FIGHT_DURATION_SEC,
+          opts: setup.fightOpts,
         },
       });
     } catch (err) {

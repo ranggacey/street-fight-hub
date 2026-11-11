@@ -23,8 +23,20 @@
  * - Warna (`colors`/`color`) dan nama TIDAK memengaruhi hasil buildFight
  *   (hanya dipakai render), tapi tetap disimpan di config supaya replay
  *   Fase 2 menampilkan petarung yang identik.
+ *
+ * PERUBAHAN 2026-11-11 (Training+Stat+Deck): fight yang dibuat SESUDAH
+ * fitur ini membawa `opts` (stat/deck/gameplan) di `sfa-config` dan di
+ * `GameFight.config.fightOpts`. `expectedResult`/`verifyFightResult`
+ * menerima `fightOpts` opsional dan meneruskannya ke `buildFight`.
+ * Fight lama (fightOpts null) tetap terverifikasi tanpa opts seperti dulu.
  */
 import { buildFight, fightStats, keyMoments } from './fight.js';
+import type { FightOpts } from '../game/stat-effects';
+
+/** Opsi buildFight yang disimpan di GameFight.config.fightOpts. */
+export type BuildFightOpts = FightOpts & {
+  forcedResult?: { result: 'ko' | 'decision'; winner: 'R' | 'B' };
+};
 
 export type EngineSide = 'R' | 'B';
 
@@ -115,14 +127,18 @@ function close(a: number, b: number, eps = 0.0015): boolean {
 /**
  * Jalankan ulang fight dari seed + config tersimpan, kembalikan hasil
  * yang diharapkan (bentuk yang sama dengan `sfa-result`).
+ * `fightOpts` = opts yang disimpan di GameFight.config.fightOpts saat
+ * fight dibuat (stat/deck/gameplan) — tanpa ini, fight ber-stat TIDAK
+ * bisa direproduksi (server re-run tanpa opts ≠ hasil arena dengan opts).
  */
 export function expectedResult(
   left: EngineFighter,
   right: EngineFighter,
   durationSec: number,
   seed: number,
+  fightOpts?: BuildFightOpts | null,
 ): ExpectedResult {
-  const fight = buildFight(left, right, durationSec, seed);
+  const fight = buildFight(left, right, durationSec, seed, fightOpts ?? undefined);
   // Draw bisa datang dari lotere baru (result === 'draw') ATAU dari
   // decision dengan HP akhir sama persis (kasus lama).
   const isDraw =
@@ -168,8 +184,9 @@ export function verifyFightResult(
   durationSec: number,
   seed: number,
   client: ClientResult | null | undefined,
+  fightOpts?: BuildFightOpts | null,
 ): VerifyOutcome {
-  const expected = expectedResult(left, right, durationSec, seed);
+  const expected = expectedResult(left, right, durationSec, seed, fightOpts);
   if (!client || typeof client !== 'object') {
     return { ok: false, expected, reason: 'invalid_payload' };
   }

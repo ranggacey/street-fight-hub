@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { checkOrigin, requireAuth } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { updateRatings } from '@/lib/game/elo';
+import { awardFightOutcome, resolvePredictions } from '@/lib/game/progress';
 import { verifyFightResult } from '@/lib/fight-engine/verify';
 import { notifyFighterOwner } from '@/lib/game/notify';
 import { applyTitleAfterFight, ensureTitleCurrent } from '@/lib/game/title-service';
@@ -77,7 +78,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const config = fight.config as {
       left: Record<string, unknown>;
       right: Record<string, unknown>;
+      fightOpts?: Parameters<typeof verifyFightResult>[5];
     };
+    // Fight ber-stat (dibuat sesudah Training+Stat+Deck) WAJIB
+    // diverifikasi DENGAN opts yang sama seperti arena — tanpa opts,
+    // server re-run menghasilkan fight berbeda → disputed padahal
+    // hasilnya sah. Fight lama (fightOpts null) tetap tanpa opts.
     const verification = verifyFightResult(
       config.left as never,
       config.right as never,
@@ -92,6 +98,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         keyMoments: (input.keyMoments ?? null) as never,
         seed: input.seed ?? undefined,
       },
+      config.fightOpts ?? null,
     );
 
     const now = new Date();
@@ -191,12 +198,48 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     await notifyFighterOwner(fight.fighterAId.toString(), 'fight_result', fight._id.toString());
     await notifyFighterOwner(fight.fighterBId.toString(), 'fight_result', fight._id.toString());
 
+    // --- Progres anti-monoton (XP/koin/achievement/cedera + prediksi) ---
+    // Jalan SETELAH Elo/rekor/gelar tercatat (achievement membaca record
+    // terbaru). Kegagalan di sini TIDAK boleh membatalkan hasil fight
+    // yang sudah terverifikasi — ditangkap dan dicatat saja.
+    let progressA: unknown = null;
+    let progressB: unknown = null;
+    let predictions: unknown = null;
+    try {
+      const method = expected.method as 'KO' | 'decision' | 'draw';
+      const aResult = expected.winner === 'R' ? 'win' : expected.winner === 'B' ? 'loss' : 'draw';
+      const bResult = expected.winner === 'B' ? 'win' : expected.winner === 'R' ? 'loss' : 'draw';
+      [progressA, progressB] = await Promise.all([
+        awardFightOutcome(fight.fighterAId.toString(), {
+          result: aResult,
+          method,
+          isTitleFight,
+          isTournament: false,
+        }),
+        awardFightOutcome(fight.fighterBId.toString(), {
+          result: bResult,
+          method,
+          isTitleFight,
+          isTournament: false,
+        }),
+      ]);
+      predictions = await resolvePredictions(
+        fight._id.toString(),
+        'game',
+        winnerFighterId ? winnerFighterId.toString() : null,
+      );
+    } catch (progressErr) {
+      console.error('Gagal mencatat progres fight', fight._id.toString(), progressErr);
+    }
+
     return ok({
       fight: serialize(fight.toObject()),
       verified: true,
       elo: { before: eloBefore, after: eloAfter },
       isTitleFight,
       titleEvents: titleOutcome.events,
+      progress: { a: progressA, b: progressB },
+      predictions,
     });
   } catch (err) {
     return handleError(err);

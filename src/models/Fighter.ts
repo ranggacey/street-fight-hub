@@ -65,9 +65,19 @@ const fighterSchema = new Schema(
     status: { type: String, enum: ['active', 'retired'], default: 'active' },
     // --- Game kasual (Fase 1) ---
     // rating Elo: SATU angka (tidak terpecah kasual/turnamen); berubah
-    // hanya saat GameFight selesai (kasual/terbuka/gelar). Match turnamen
-    // (draw.ts) TIDAK mengubah rating — hanya record.
+    // saat GameFight selesai (kasual/terbuka/gelar) DAN saat Match
+    // turnamen diputuskan (draw.ts, K=32 sama seperti kasual —
+    // keputusan user 2026-11-11).
     rating: { type: Number, default: 1000 },
+    /**
+     * Berat badan (kg) untuk kelas berat — HANYA mekanik matchmaking /
+     * tarung (preferensi Gas Tarung + peringatan selisih kelas di kartu
+     * tantangan). TIDAK PERNAH membagi klasemen (klasemen tetap satu
+     * ranking murni). null = "Tanpa kelas", bisa melawan siapa saja.
+     * Batas kelas: Ringan <70, Menengah 70–85, Berat >85
+     * (lihat src/lib/game/weight-classes.ts).
+     */
+    weightKg: { type: Number, default: null },
     /** Jurus khas: kind gerakan dari moves.js gaya ini (bobot 2.5x di engine). */
     signatureMove: { type: String, default: null },
     tempo: {

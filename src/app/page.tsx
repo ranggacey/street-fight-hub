@@ -305,21 +305,20 @@ export default async function Home() {
         </section>
       ) : null}
 
-      {/* Top 5 rating point kasual */}
+      {/* Top 5 rating */}
       <section aria-labelledby="top-heading">
         <div className="mb-4 flex items-end justify-between gap-3">
           <h2
             id="top-heading"
             className="font-display text-3xl uppercase tracking-wide sm:text-4xl"
           >
-            Top 5{" "}
-            <span className="text-amber-brand">Rating Point Kasual</span>
+            Top 5 <span className="text-amber-brand">Rating</span>
           </h2>
           <Link
-            href="/klasemen?tab=kasual"
+            href="/klasemen"
             className="shrink-0 text-sm font-bold text-amber-brand hover:underline"
           >
-            Klasemen kasual →
+            Klasemen →
           </Link>
         </div>
         {topEntries.length === 0 ? (

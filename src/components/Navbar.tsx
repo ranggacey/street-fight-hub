@@ -21,6 +21,7 @@ const PUBLIC_SEGMENTS = new Set([
   "gelar",
   "obrolan",
   "profil",
+  "latihan",
 ]);
 
 /** Ikon rumah SVG untuk tombol Beranda — selalu terlihat, bukan cuma logo. */
@@ -50,6 +51,7 @@ const NAV_LINKS = [
   { href: "/tantangan", label: "Tantangan" },
   { href: "/obrolan", label: "Obrolan" },
   { href: "/gelar", label: "Gelar" },
+  { href: "/latihan", label: "Latihan" },
 ];
 
 export default function Navbar() {

@@ -12,6 +12,7 @@ import { generatePBP, activeLine, COMMENTATORS } from './commentary.js';
 import { windupDurOf } from './techniques.js';
 import { drawPoster, POSTER_W, POSTER_H } from './poster.js';
 import { SFX } from './sfx.js';
+import { specialForAttack, normalizeKind } from './special-fx.js';
 import { createVoice } from './voice.js';
 
 const LS_KEY = 'sfa-fighters-v1';
@@ -459,8 +460,15 @@ function buildSFXEvents(f) {
   ];
   for (const a of f.attacks) {
     const rt = realTime(a.t);
-    if (a.outcome === 'hit') evs.push({ type: 'hit', t: rt, power: a.power });
-    else if (a.outcome === 'block') evs.push({ type: 'block', t: rt });
+    if (a.outcome === 'hit') {
+      // Jurus spesial (jurus khas penyerang ATAU finisher): event 'special'
+      // supaya sfx.js memainkan lapisan whoosh + impact profilnya, bukan
+      // hit biasa. Penentuan profil terpusat di specialForAttack.
+      const attacker = a.by === 'R' ? f.left : f.right;
+      const profile = specialForAttack(a, attacker && attacker.signatureMove);
+      if (profile) evs.push({ type: 'special', t: rt, kind: normalizeKind(a.kind), power: a.power });
+      else evs.push({ type: 'hit', t: rt, power: a.power });
+    } else if (a.outcome === 'block') evs.push({ type: 'block', t: rt });
   }
   if (f.result === 'ko') evs.push({ type: 'ko', t: realTime(f.koT) });
   evs.push({ type: 'bell', t: realTime(f.duration) });
@@ -752,6 +760,15 @@ function onEmbedMessage(ev) {
     if (d.opts.weights) fo.weights = d.opts.weights;
     if (d.opts.tempo) fo.tempo = d.opts.tempo;
     if (d.opts.forcedResult) fo.forcedResult = d.opts.forcedResult;
+    // Opts Training+Stat+Deck (2026-11-11) — diteruskan apa adanya ke
+    // buildFight; field yang tidak dikenal diabaikan engine.
+    if (d.opts.statMods) fo.statMods = d.opts.statMods;
+    if (typeof d.opts.winBias === 'number') fo.winBias = d.opts.winBias;
+    if (d.opts.stamina) fo.stamina = d.opts.stamina;
+    if (d.opts.deck) fo.deck = d.opts.deck;
+    if (d.opts.comboBonus) fo.comboBonus = d.opts.comboBonus;
+    if (d.opts.matchupMul) fo.matchupMul = d.opts.matchupMul;
+    if (d.opts.gameplan) fo.gameplan = d.opts.gameplan;
   }
   embed.fightOpts = Object.keys(fo).length ? fo : null;
   if (embed.seed !== null) $('inpSeed').value = String(embed.seed);

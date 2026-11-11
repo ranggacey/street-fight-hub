@@ -1,3 +1,5 @@
+import { specialProfileFor } from './special-fx.js';
+
 // sfx.js — SFX pukulan anime via WebAudio.
 // Resep (anime-sfx-research + video Reels QF highlight / NF4):
 // whoosh dibesar-besarkan + punch-anime-01 (disetujui user, inti pukulan)
@@ -14,6 +16,12 @@
 //   peak-aligned berat mencapai 2.75 -> clipping.
 // Audio juga di-route ke MediaStreamDestination agar export MediaRecorder
 // menangkap suara yang sama dengan yang didengar.
+//
+// Lapisan SFX jurus spesial (special-fx.js): whoosh profil + inti
+// punch-anime-01 + file impact profil. File 'special-*' di bundle adalah
+// potongan/salinan dari sfx-free/ (Mixkit/Animax, tanpa atribusi) —
+// kick-01 dipotong 1,45->0,8 dtk, whoosh-heavy-03 1,25->0,6 dtk,
+// ko-sting-03 1,85->1,2 dtk supaya tiap file tetap kecil (<= ~20 KB).
 
 const FILES = {
   whooshJab: 'audio/whoosh-jab-01.wav',
@@ -36,6 +44,16 @@ const FILES = {
   boom: 'audio/boom-heavy-01.mp3',
   crowdBed: 'audio/crowd-arena-bed-01.mp3',
   crowdCheer: 'audio/crowd-cheer-ko-01.mp3',
+  // Jurus spesial (profil di special-fx.js — kunci = nama file bundle).
+  spPunchHeavy01: 'audio/special-punch-heavy-01.mp3',
+  spPunchHeavy04: 'audio/special-punch-heavy-04.mp3',
+  spKick01: 'audio/special-kick-01.mp3',
+  spKnee01: 'audio/special-knee-01.mp3',
+  spSlam01: 'audio/special-slam-01.mp3',
+  spKoSting01: 'audio/special-ko-sting-01.mp3',
+  spWood01: 'audio/special-wood-01.mp3',
+  spWhooshHeavy01: 'audio/special-whoosh-heavy-01.mp3',
+  spWhooshFast01: 'audio/special-whoosh-fast-01.mp3',
 };
 // File besar (>88KB, tidak bisa di-upload via CLI arg 128KB) dikonversi ke MP3;
 // WAV aslinya tetap di folder audio (tidak ikut deploy).
@@ -44,6 +62,7 @@ export class SFX {
   constructor() {
     this.ctx = null;
     this.buffers = {};
+    this.buffersByFile = {}; // nama file bundle -> AudioBuffer (untuk _special)
     this.master = null;
     this.recDest = null;
     this.crowdSrc = null;
@@ -83,6 +102,7 @@ export class SFX {
           const bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
           this.buffers[key] = await this.ctx.decodeAudioData(bytes.buffer);
+          this.buffersByFile[name] = this.buffers[key];
         } catch (e) {
           console.warn('[sfx] gagal muat', url, e);
         }
@@ -131,6 +151,36 @@ export class SFX {
     ng.gain.value = size === 'big' ? 0.4 : 0.25;
     noise.connect(ng); ng.connect(this.master);
     noise.start(when);
+  }
+
+  // Mainkan satu file bundle berdasarkan NAMA FILE (bukan kunci FILES) —
+  // dipakai lapisan spesial yang kuncinya datang dari special-fx.js.
+  _playFile(fileName, when, { gain = 1, rate = 1 } = {}) {
+    const buf = this.buffersByFile[fileName];
+    if (!buf || !this.ctx) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = this.ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g); g.connect(this.master);
+    src.start(when);
+  }
+
+  // Satu jurus spesial yang mendarat: whoosh profil (puncak 0,03 dtk
+  // sebelum kontak) + inti punch-anime-01 (peak tepat di kontak, resep
+  // yang sama seperti _hit) + file impact profil tepat di kontak.
+  // Skala 0,42 (tier berat, anti-clipping — lihat header): whoosh +
+  // punch + impact yang peak-aligned tanpa skala mencapai ~2,75.
+  _special(when, kind, power) {
+    const profile = specialProfileFor(kind);
+    if (!profile) { this._hit(when, power ?? 0.7); return; }
+    const scale = 0.42;
+    const p = power ?? 0.7;
+    this._playFile(profile.whooshKey, when - 0.15, { gain: 0.9, rate: 0.95 });
+    this._play('punchAnime', when - 0.062, { gain: 0.85 * (0.65 + 0.35 * p) * scale });
+    this._playFile(profile.sfxKey, when, { gain: 0.85 * scale });
+    if (profile.burst === 'shockwave') this._synthSnap(when, 'big');
   }
 
   // Satu pukulan (resep Reels QF highlight / NF4): punch-anime-01 sebagai
@@ -184,7 +234,7 @@ export class SFX {
   }
 
   // Jadwalkan seluruh SFX fight dari daftar event.
-  // events: [{type:'hit'|'block'|'ko'|'bell'|'dash', t (detik sim), power}]
+  // events: [{type:'hit'|'block'|'ko'|'bell'|'dash'|'special', t (detik sim), power, kind}]
   // t0 = waktu AudioContext saat fight dimulai (sim t=0).
   schedule(events, t0) {
     if (!this.ctx) return;
@@ -192,6 +242,7 @@ export class SFX {
     for (const ev of events) {
       const when = t0 + ev.t;
       if (ev.type === 'hit') this._hit(when, ev.power ?? 0.7);
+      else if (ev.type === 'special') this._special(when, ev.kind, ev.power ?? 0.7);
       else if (ev.type === 'block') this._block(when);
       else if (ev.type === 'ko') { this._boom(when); this._cheer(when + 0.15); }
       else if (ev.type === 'dash') this._play('whooshDash', when, { gain: 0.6 });
