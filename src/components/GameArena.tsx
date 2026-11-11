@@ -35,6 +35,7 @@ type FightDetail = {
     seed: number;
     map: string;
     duration: number;
+    opts?: Record<string, unknown> | null;
   };
   fighterA: Fighter;
   fighterB: Fighter;
@@ -636,6 +637,8 @@ export default function GameArena({
             seed: detail.config.seed,
             map: detail.config.map,
             duration: detail.config.duration,
+            // Opts stat/deck/gameplan (null untuk fight lama pra-stat).
+            opts: detail.config.opts ?? null,
             // Mode ekspor video: Arena merekam otomatis saat Tarung diklik.
             autoRecord: exportMode,
           },

@@ -93,4 +93,41 @@ describe("Klasemen: satu rekor (record) untuk semua fight", () => {
     expect((entries[0] as unknown as Record<string, unknown>).casualRecord).toBeUndefined();
     expect((entries[1] as unknown as Record<string, unknown>).casualRecord).toBeUndefined();
   });
+
+  it("tie-break rating sama: wins desc, lalu kos desc, lalu losses asc", async () => {
+    if (skipIfNoDb()) return;
+    // Ketiga fighter rating sama (1000) — urutan ditentukan tie-break,
+    // BUKAN createdAt. Mereka masuk di bawah A (1016) dari test sebelumnya
+    // dan di atas B (984); jadi dicek urutan relatif antar ketiganya.
+    const mk = async (suffix: string, record: { wins: number; losses: number; draws: number; kos: number }) => {
+      const u = await User.create({ username: `u_lb_tb_${suffix}`, passwordHash: "x" });
+      await Fighter.create({
+        userId: u._id,
+        displayName: `TB ${suffix}`,
+        igUsername: `tb_${suffix}`,
+        style: "street",
+        selfDescription: SELF_DESC,
+        rating: 1000,
+        record,
+      });
+    };
+    // C: 5W-0L, 2 KO — paling atas di grup rating 1000.
+    await mk("c", { wins: 5, losses: 0, draws: 0, kos: 2 });
+    // D: 5W-1L, 2 KO — kalah dari C karena losses lebih banyak.
+    await mk("d", { wins: 5, losses: 1, draws: 0, kos: 2 });
+    // E: 5W-0L, 1 KO — kalah dari C/D karena KO lebih sedikit.
+    await mk("e", { wins: 5, losses: 0, draws: 0, kos: 1 });
+    // F: 4W-0L, 9 KO — kalah dari ketiganya karena wins lebih sedikit
+    // (KO banyak tidak menolong kalau wins kalah).
+    await mk("f", { wins: 4, losses: 0, draws: 0, kos: 9 });
+
+    __resetLeaderboardCache();
+    const entries = await getCasualLeaderboard();
+    const names = entries.map((e) => e.displayName);
+    const idx = (name: string) => names.indexOf(name);
+    expect(idx("TB c")).toBeGreaterThan(-1);
+    expect(idx("TB c")).toBeLessThan(idx("TB d"));
+    expect(idx("TB d")).toBeLessThan(idx("TB e"));
+    expect(idx("TB e")).toBeLessThan(idx("TB f"));
+  });
 });

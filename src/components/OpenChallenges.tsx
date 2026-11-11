@@ -10,6 +10,7 @@ import {
   styleLabel,
 } from "@/components/api";
 import type { Challenge, Fighter, SessionUser } from "@/components/types";
+import { weightClassLabel, weightMismatchWarning } from "@/lib/game/weight-classes";
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import Button from "@/components/Button";
@@ -310,6 +311,15 @@ export default function OpenChallenges() {
                   ? c.challengerFighterId.id
                   : null;
               const isMine = !!myId && challengerId === myId;
+              const challengerWeight =
+                c.challengerFighterId &&
+                typeof c.challengerFighterId === "object"
+                  ? c.challengerFighterId.weightKg ?? null
+                  : null;
+              const classWarning =
+                !isMine && myFighter
+                  ? weightMismatchWarning(myFighter.weightKg ?? null, challengerWeight)
+                  : null;
               return (
                 <GlassCard key={id} className="px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -329,6 +339,16 @@ export default function OpenChallenges() {
                           ? ` • Kedaluwarsa ${formatWIB(c.expiresAt)}`
                           : ""}
                       </p>
+                      {challengerWeight ? (
+                        <p className="mt-0.5 text-sm text-paper-dim">
+                          Kelas: {weightClassLabel(challengerWeight)}
+                        </p>
+                      ) : null}
+                      {classWarning ? (
+                        <p className="mt-0.5 text-sm font-semibold text-red-400">
+                          ⚠️ {classWarning}
+                        </p>
+                      ) : null}
                     </div>
                     {isMine ? (
                       <Badge tone="amber">Tantanganmu</Badge>

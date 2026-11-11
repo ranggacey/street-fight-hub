@@ -85,4 +85,46 @@ describe('simulateFight', () => {
     expect(r.rolls.length).toBeGreaterThan(0);
     expect(r.rolls.every((v) => v >= 0 && v < 1)).toBe(true);
   });
+
+  describe('bias (opsional, untuk sim stat-aware)', () => {
+    it('bias 0 = perilaku lama persis', () => {
+      for (const seed of [0, 1, 7, 42, 1234]) {
+        expect(simulateFight(seed, 0)).toEqual(simulateFight(seed));
+      }
+    });
+
+    it('bias +0.5 → semua pemenang KO adalah A; -0.5 → semua B', () => {
+      let koA = 0;
+      let koB = 0;
+      for (let seed = 0; seed < 2000; seed++) {
+        const rPlus = simulateFight(seed, 0.5);
+        if (rPlus.method === 'KO') {
+          expect(rPlus.winner).toBe('A');
+          koA++;
+        }
+        const rMinus = simulateFight(seed, -0.5);
+        if (rMinus.method === 'KO') {
+          expect(rMinus.winner).toBe('B');
+          koB++;
+        }
+      }
+      expect(koA).toBeGreaterThan(0);
+      expect(koB).toBeGreaterThan(0);
+    });
+
+    it('bias dijepit ke [-0.5, 0.5]', () => {
+      expect(simulateFight(42, 2)).toEqual(simulateFight(42, 0.5));
+      expect(simulateFight(42, -2)).toEqual(simulateFight(42, -0.5));
+    });
+
+    it('bias positif menaikkan jumlah kemenangan KO A (bukan decision)', () => {
+      let winsA0 = 0;
+      let winsAPlus = 0;
+      for (let seed = 0; seed < 5000; seed++) {
+        if (simulateFight(seed, 0).winner === 'A') winsA0++;
+        if (simulateFight(seed, 0.25).winner === 'A') winsAPlus++;
+      }
+      expect(winsAPlus).toBeGreaterThan(winsA0);
+    });
+  });
 });

@@ -92,6 +92,8 @@ export interface Fighter {
   updatedAt?: string;
   /** Game (Fase 1). */
   rating?: number;
+  /** Berat badan (kg) untuk kelas berat — null = tanpa kelas. */
+  weightKg?: number | null;
   signatureMove?: string | null;
   tempo?: FighterTempo;
   colors?: FighterColors;

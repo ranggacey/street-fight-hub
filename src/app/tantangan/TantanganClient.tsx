@@ -15,6 +15,7 @@ import type {
   FighterSummary,
   SessionUser,
 } from "@/components/types";
+import { weightMismatchWarning } from "@/lib/game/weight-classes";
 import GlassCard from "@/components/GlassCard";
 import Badge from "@/components/Badge";
 import Button, { ButtonLink } from "@/components/Button";
@@ -296,6 +297,16 @@ export default function TantanganClient() {
     // Status batch tantang-banyak-orang (dari ringkasan GET): baris
     // "menunggu X dari N lawan" / "sudah diterima" di daftar keluar.
     const batch = c.batchId ? batches[c.batchId] : undefined;
+    // Peringatan selisih kelas berat (>1 kelas: Ringan vs Berat).
+    const challengerWeight =
+      c.challengerFighterId && typeof c.challengerFighterId === "object"
+        ? c.challengerFighterId.weightKg ?? null
+        : null;
+    const challengedWeight =
+      c.challengedFighterId && typeof c.challengedFighterId === "object"
+        ? c.challengedFighterId.weightKg ?? null
+        : null;
+    const classWarning = weightMismatchWarning(challengerWeight, challengedWeight);
     const batchLine =
       batch && batch.total > 1
         ? batch.accepted > 0
@@ -319,6 +330,11 @@ export default function TantanganClient() {
             {batchLine ? (
               <p className="mt-0.5 text-sm font-semibold text-amber-brand">
                 {batchLine}
+              </p>
+            ) : null}
+            {classWarning ? (
+              <p className="mt-0.5 text-sm font-semibold text-red-400">
+                ⚠️ {classWarning}
               </p>
             ) : null}
             {c.status === "cancelled" && c.cancelReason ? (

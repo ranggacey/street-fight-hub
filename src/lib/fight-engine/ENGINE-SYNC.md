@@ -15,11 +15,14 @@ lihat bawah).**
 
 | File | md5 |
 |---|---|
-| `fight.js` | `4b32072497a2fe712a8775ddc061c179` |
+| `fight.js` | `f93eeeeb43e632b2a92ac16fb4fd17e4` |
 | `moves.js` | `2cb25133d47edc70823c9018cc522bf9` |
 | `techniques.js` | `62618f9a409048d60f82be4ef7c728d2` |
 | `damage.js` | `debb3b2ea36fbbe88cdd1ef8f9813533` |
 
+Salinan browser Arena (`public/arena/js/fight.js`) WAJIB md5-identik
+dengan `fight.js` di folder ini (kedua copy diubah bersamaan 2026-11-11;
+tes `engine-stat-effects.test.ts` membuktikan hasil identik).
 ## Perubahan 2026-11-08 (Agen A — jarak gelud + lotere hasil)
 
 - **Lotere gabungan (metode, pemenang):** Decision R 30% / Decision B 30% /
@@ -140,6 +143,52 @@ score/koTime — TIDAK berubah; `buildPositions` murni posisi, tanpa rng):
 - **Tes:** `src/lib/__tests__/style-aliases.test.ts` baru (alias +
   `movesFor` per gaya); tes `PERILAKU TERDOKUMENTASI` di
   `training-config.test.ts` diperbarui ke perilaku baru.
+
+## Perubahan 2026-11-11 (Training+Stat+Deck — stat/deck/gameplan di engine)
+
+Perintah user: tidak ada menang karena hoki; knockdown bukan angka
+tetap. `fight.js` diubah IDENTIK di kedua copy (folder ini + Arena
+`public/arena/js/fight.js`, md5 sama `f93eeeeb43e632b2a92ac16fb4fd17e4`).
+Detail implementasi di header `fight.js` + `src/lib/game/stat-effects.ts`.
+
+- **winBias (pengganti lotere pemenang):** `opts.winBias` ∈ [-0,35, +0,35]
+  menggeser HANYA roll pemenang (peluang R = 0,5 + winBias); distribusi
+  metode tetap decision 60% / KO 30% / draw 10%. winBias 0/undefined =
+  lotere lama persis (aliran rng tidak berubah — `winnerRoll` dulu
+  ditarik lalu dibuang). Dihitung deterministik dari stat tersimpan
+  (`winBiasFromStats`) supaya server re-run mereproduksi fight.
+- **statMods:** `opts.statMods.{R,B}` (dmgMul, dmgTakenMul, dodgeBonus,
+  blockBonus, hitBonus, attackSpeedMul, fatigueRate, stat efektif).
+  Dilipat ke `atk.power` saat serangan dibuat (konsisten di dmgOf /
+  fightStats / keyMoments); finisher KO tidak dilipat (harus pas sisa
+  HP). Tanpa statMods → perilaku lama persis.
+- **Stamina:** `opts.stamina.{R,B}` pool awal; tiap gerakan memakan
+  `move.power * 6 * fatigueRate` (kartu deck 1,5x — `opts.deck`).
+  Kehabisan stamina: damage x0,7 + jeda x1,25. Tanpa opts.stamina,
+  sistem mati (fight lama tidak berubah).
+- **Knockdown dari stat:** peluang per hit kena =
+  `clamp(0,10 + (powerEff penyerang - defenseEff bertahan) * 0,004 +
+  (powerEff penyerang - staminaEff bertahan) * 0,002, 0,01, 0,25)`.
+  Stat 10v10 → 0,10 = baseline lama (tes engine-rates §26 tidak
+  berubah). Tanpa statMods peluang tetap 0,10.
+- **Hook combo/matchup:** `opts.comboBonus` / `opts.matchupMul`
+  ({R,B} pengali damage, default 1). Kombo kini DIDETEKSI LIVE di
+  `buildFight` (riwayat 4 gerakan terakhir per sisi, `detectCombo` +
+  `COMBO_DEFS` mirror dari `src/lib/game/combos.ts` — paritas dites di
+  `engine-combos.test.ts`); bonus hanya pada hit terakhir rangkaian
+  yang mendarat, label `atk.combo` = nama kombo. `opts.matchupMul`
+  diisi `buildFightSetup` dari `matchupMultiplier` (gaya kedua
+  fighter); sim turnamen (draw.ts) tidak memakai matchup — hanya
+  bias stat/deck.
+- **Gameplan:** tempo → `opts.tempo` (sudah didukung engine); fokus →
+  bobot weights +50%; `opts.gameplan` tersimpan informatif.
+- **Verifikasi:** `verify.ts` menerima `fightOpts` opsional dan
+  meneruskannya ke `buildFight`. Route result
+  (`src/app/api/game-fights/[id]/result/route.ts`) SUDAH meneruskan
+  `fight.config.fightOpts` ke `verifyFightResult` (diperbaiki
+  2026-11-11 saat integrasi akhir) — fight ber-stat terverifikasi
+  dengan opts yang sama seperti arena; fight lama (fightOpts null)
+  tetap terverifikasi tanpa opts seperti dulu.
 
 ## Aturan
 

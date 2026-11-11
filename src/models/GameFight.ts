@@ -29,6 +29,16 @@ const gameFightSchema = new Schema(
     config: {
       left: { type: Schema.Types.Mixed, required: true },
       right: { type: Schema.Types.Mixed, required: true },
+      /**
+       * Opts buildFight yang dipakai fight ini (stat/deck/gameplan —
+       * dihitung server saat fight dibuat, lihat lib/game/fight-setup.ts).
+       * Disimpan supaya verifikasi server (verifyFightResult) + replay
+       * mereproduksi fight yang PERSIS SAMA. Null = fight lama pra-stat
+       * (verifikasi tanpa opts, seperti dulu).
+       */
+      fightOpts: { type: Schema.Types.Mixed, default: null },
+      /** Gameplan kedua sisi saat fight dibuat (tempo + fokus). */
+      gameplans: { type: Schema.Types.Mixed, default: null },
     },
     result: {
       winnerSide: { type: String, enum: ['R', 'B', null], default: null },

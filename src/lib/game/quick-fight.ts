@@ -23,6 +23,7 @@ import {
   type FighterLike,
 } from './engine-config';
 import { countFightsTodayByFighter, DAILY_FIGHT_LIMIT } from './daily-limit';
+import { weightClassDistance } from './weight-classes';
 
 /** Lawan diprioritaskan kalau selisih rating ≤ 100; selebihnya fallback. */
 export const QUICK_FIGHT_RATING_WINDOW = 100;
@@ -32,6 +33,10 @@ export interface QuickFightCandidate extends FighterLike {
   id: string;
   rating: number;
   ratingDiff: number;
+  /** Berat badan lawan (kg) — null = tanpa kelas. */
+  weightKg: number | null;
+  /** Jarak kelas berat ke saya (0 = sekelas / salah satu tanpa kelas). */
+  classDistance: number;
 }
 
 /** Berapa fight aktif (pending/playing) yang melibatkan fighter ini? */
@@ -57,18 +62,23 @@ export async function busyFighterIds(): Promise<Set<string>> {
 
 /**
  * Cari lawan quick-fight untuk satu fighter. Mengembalikan kandidat
- * terbaik (selisih rating terkecil, prefer dalam ±100) atau null kalau
- * tidak ada lawan yang eligible saat ini.
+ * terbaik atau null kalau tidak ada lawan yang eligible saat ini.
+ *
+ * Prioritas: (1) kelas berat paling dekat — sekelas dulu (±1 kelas
+ * diizinkan, lintas kelas hanya kalau tidak ada lawan sekelas yang
+ * siap; fighter tanpa kelas cocok dengan siapa saja), lalu
+ * (2) selisih rating terkecil, prefer dalam ±100.
  */
 export async function findQuickFightOpponent(
   myFighterId: string,
   myRating: number,
+  myWeightKg?: number | null,
 ): Promise<QuickFightCandidate | null> {
   const fighters = await Fighter.find({
     status: 'active',
     _id: { $ne: myFighterId },
   })
-    .select('displayName style signatureMove tempo colors accessories rating createdAt')
+    .select('displayName style signatureMove tempo colors accessories rating weightKg createdAt')
     .sort({ createdAt: 1 })
     .lean();
   if (fighters.length === 0) return null;
@@ -86,6 +96,7 @@ export async function findQuickFightOpponent(
     // Jatah habis: sudah 5 fight hari ini (WIB).
     if ((usedToday.get(id) ?? 0) >= DAILY_FIGHT_LIMIT) continue;
     const rating = f.rating ?? 1000;
+    const weightKg = (f as { weightKg?: number | null }).weightKg ?? null;
     candidates.push({
       id,
       displayName: f.displayName,
@@ -96,14 +107,21 @@ export async function findQuickFightOpponent(
       accessories: (f.accessories ?? null) as QuickFightCandidate['accessories'],
       rating,
       ratingDiff: Math.abs(rating - myRating),
+      weightKg,
+      classDistance: weightClassDistance(myWeightKg ?? null, weightKg),
     });
   }
 
-  // Urut selisih rating terkecil dulu (yang paling seimbang duluan).
-  candidates.sort((a, b) => a.ratingDiff - b.ratingDiff);
-  // Prefer dalam jendela ±100; kalau tidak ada, fallback ke yang paling dekat.
+  // Urut: jarak kelas dulu, lalu selisih rating.
+  candidates.sort((a, b) => a.classDistance - b.classDistance || a.ratingDiff - b.ratingDiff);
+  // Prefer sekelas (jarak 0) dalam jendela ±100; lalu ±1 kelas dalam
+  // jendela; kalau tidak ada, fallback ke kandidat terbaik (lintas
+  // kelas diizinkan hanya kalau tidak ada lawan sekelas yang siap).
   return (
-    candidates.find((c) => c.ratingDiff <= QUICK_FIGHT_RATING_WINDOW) ??
+    candidates.find((c) => c.classDistance === 0 && c.ratingDiff <= QUICK_FIGHT_RATING_WINDOW) ??
+    candidates.find((c) => c.classDistance <= 1 && c.ratingDiff <= QUICK_FIGHT_RATING_WINDOW) ??
+    candidates.find((c) => c.classDistance === 0) ??
+    candidates.find((c) => c.classDistance <= 1) ??
     candidates[0] ??
     null
   );

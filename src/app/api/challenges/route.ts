@@ -80,13 +80,14 @@ export async function POST(req: NextRequest) {
       status: 'pending',
       map: input.map,
       message: input.message,
+      gameplan: input.gameplan,
       expiresAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
     });
     await notifyFighterOwner(target._id.toString(), 'challenge_received', challenge._id.toString());
 
     const populated = await Challenge.findById(challenge._id)
-      .populate('challengerFighterId', 'displayName igUsername style rating')
-      .populate('challengedFighterId', 'displayName igUsername style rating')
+      .populate('challengerFighterId', 'displayName igUsername style rating weightKg')
+      .populate('challengedFighterId', 'displayName igUsername style rating weightKg')
       .lean();
     return ok(
       {
@@ -139,8 +140,8 @@ export async function GET(req: NextRequest) {
     }
 
     const challenges = await Challenge.find(filter)
-      .populate('challengerFighterId', 'displayName igUsername style rating')
-      .populate('challengedFighterId', 'displayName igUsername style rating')
+      .populate('challengerFighterId', 'displayName igUsername style rating weightKg')
+      .populate('challengedFighterId', 'displayName igUsername style rating weightKg')
       .populate('gameFightId', 'status')
       .sort({ createdAt: -1 })
       .limit(50)

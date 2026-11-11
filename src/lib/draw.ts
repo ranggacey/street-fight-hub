@@ -4,6 +4,10 @@ import { Tournament } from '../models/Tournament';
 import { TournamentEntry } from '../models/TournamentEntry';
 import { VideoTask } from '../models/VideoTask';
 import { nextRound, type RoundName } from './bracket';
+import { updateRatings } from './game/elo';
+import { loadFighterStats } from './game/fight-setup';
+import { awardFightOutcome, resolvePredictions } from './game/progress';
+import { winBiasFromStats } from './game/stat-effects';
 
 /**
  * Draw — simulasi pertarungan dengan seeded RNG (CONTRACT §6).
@@ -55,7 +59,18 @@ export interface FightSimulation {
   rolls: number[];
 }
 
-export function simulateFight(seed: number): FightSimulation {
+/**
+ * Simulasi satu fight turnamen dari seed.
+ *
+ * @param seed seed RNG (mulberry32).
+ * @param bias geser roll pemenang KO: positif menguntungkan A, negatif
+ *   menguntungkan B (dijepit ke [-0.5, 0.5]). Dipakai koordinator untuk
+ *   menyambung efek stat (winBiasFromStats) — bias 0 = perilaku lama
+ *   persis, hasil deterministik per seed tidak berubah. Perhatian: bias
+ *   hanya menggeser roll pemenang KO; pemenang decision tetap ditentukan
+ *   skor damage, dan draw tetap dari skor sama.
+ */
+export function simulateFight(seed: number, bias = 0): FightSimulation {
   const rng = mulberry32(seed);
   const rolls: number[] = [];
   const roll = (): number => {
@@ -66,7 +81,8 @@ export function simulateFight(seed: number): FightSimulation {
 
   const methodPick = roll() < 0.5 ? 'KO' : 'decision';
   // Roll pemenang dipakai untuk KO; untuk decision pemenang ditentukan skor.
-  const winnerPick = roll() < 0.5 ? 'A' : 'B';
+  const clampedBias = Math.max(-0.5, Math.min(0.5, bias));
+  const winnerPick = roll() < 0.5 + clampedBias ? 'A' : 'B';
   const koTimeSec = methodPick === 'KO' ? 35 + Math.floor(roll() * 21) : null; // 35-55
 
   const totalTicks = methodPick === 'KO' && koTimeSec !== null ? Math.ceil(koTimeSec / 5) : 12;
@@ -148,6 +164,13 @@ export interface DecideMatchResult {
  * kedua fighter, buat videoTask, lalu majukan pemenang (advanceWinners).
  * Aturan rekor: KO → pemenang wins+1 & kos+1, kalah losses+1.
  * Decision → wins+1 / losses+1. Draw → keduanya draws+1 (advancer tetap maju).
+ * Aturan rating (keputusan 2026-11-11, membalikkan aturan lama):
+ * kemenangan turnamen MENGUBAH rating Elo persis seperti fight kasual
+ * (K=32, via updateRatings) — KO/decision skor 1/0, draw 0.5/0.5.
+ * Bye tidak mengubah rating (match bye ditolak di awal fungsi ini).
+ * Sim memakai bias stat (winBiasFromStats via loadFighterStats);
+ * setelah record/rating di-update, hadiah progres + prediksi penonton
+ * diberikan via awardFightOutcome / resolvePredictions (progress.ts).
  */
 export async function decideMatch(matchId: string, seed: number): Promise<DecideMatchResult> {
   const match = await Match.findById(matchId);
@@ -156,7 +179,15 @@ export async function decideMatch(matchId: string, seed: number): Promise<Decide
     throw new Error('Match sudah diputuskan atau bye');
   }
 
-  const sim = simulateFight(seed);
+  // Sim stat-aware (skema disetujui 2026-11-10): bias pemenang dari
+  // selisih stat efektif kedua fighter (winBiasFromStats, ±0,25;
+  // positif = menguntungkan A). Fighter tanpa dokumen stat = stat 10
+  // semua → bias 0 → lotere lama persis.
+  const [statsA, statsB] = await Promise.all([
+    loadFighterStats(match.fighterAId.toString()),
+    loadFighterStats(match.fighterBId!.toString()),
+  ]);
+  const sim = simulateFight(seed, winBiasFromStats(statsA, statsB));
   const advancerIsA = sim.advancer === 'A';
   const winnerSide = sim.method === 'draw' ? sim.advancer : sim.winner;
   const winnerId = winnerSide === 'A' ? match.fighterAId : match.fighterBId;
@@ -174,19 +205,44 @@ export async function decideMatch(matchId: string, seed: number): Promise<Decide
   match.decidedAt = new Date();
   await match.save();
 
-  const winner = await Fighter.findById(winnerId);
+  // --- Rating Elo (keputusan 2026-11-11): kemenangan turnamen mengubah
+  // rating persis seperti fight kasual — SATU field rating, K=32.
+  // KO/decision: skor 1/0 untuk pemenang/kalah; draw: 0.5/0.5 untuk
+  // keduanya (rating bergerak sedikit ke arah satu sama lain).
+  const fighterA = await Fighter.findById(match.fighterAId);
+  const fighterB = match.fighterBId
+    ? await Fighter.findById(match.fighterBId)
+    : null;
+  const scoreA = sim.method === 'draw' ? 0.5 : winnerSide === 'A' ? 1 : 0;
+  const [newRatingA, newRatingB] = updateRatings(
+    fighterA?.rating ?? 1000,
+    fighterB?.rating ?? 1000,
+    scoreA,
+  );
+  if (fighterA) fighterA.rating = newRatingA;
+  if (fighterB) fighterB.rating = newRatingB;
+  // NOTE: tidak ada lagi TODO hook progress di sini — modul
+  // src/lib/game/progress.ts sudah ada (antarmuka stabil) dan
+  // dipanggil di bawah, setelah record/rating di-update.
+
+  const winner = winnerSide === 'A' ? fighterA : fighterB;
+  const loser =
+    sim.method === 'draw'
+      ? null
+      : winnerSide === 'A'
+        ? fighterB
+        : fighterA;
   if (sim.method === 'KO') {
     if (winner) {
       winner.record.wins += 1;
       winner.record.kos += 1;
       await winner.save();
     }
+    if (loser) {
+      loser.record.losses += 1;
+      await loser.save();
+    }
     if (loserId) {
-      const loser = await Fighter.findById(loserId);
-      if (loser) {
-        loser.record.losses += 1;
-        await loser.save();
-      }
       await TournamentEntry.updateOne(
         { tournamentId: match.tournamentId, fighterId: loserId },
         { $set: { status: 'eliminated' } },
@@ -197,12 +253,11 @@ export async function decideMatch(matchId: string, seed: number): Promise<Decide
       winner.record.wins += 1;
       await winner.save();
     }
+    if (loser) {
+      loser.record.losses += 1;
+      await loser.save();
+    }
     if (loserId) {
-      const loser = await Fighter.findById(loserId);
-      if (loser) {
-        loser.record.losses += 1;
-        await loser.save();
-      }
       await TournamentEntry.updateOne(
         { tournamentId: match.tournamentId, fighterId: loserId },
         { $set: { status: 'eliminated' } },
@@ -210,8 +265,7 @@ export async function decideMatch(matchId: string, seed: number): Promise<Decide
     }
   } else {
     // draw: keduanya draws+1, advancer tetap maju
-    const otherId = advancerIsA ? match.fighterBId : match.fighterAId;
-    const other = await Fighter.findById(otherId);
+    const other = advancerIsA ? fighterB : fighterA;
     if (winner) {
       winner.record.draws += 1;
       await winner.save();
@@ -220,6 +274,54 @@ export async function decideMatch(matchId: string, seed: number): Promise<Decide
       other.record.draws += 1;
       await other.save();
     }
+  }
+
+  // --- Hadiah progres + prediksi penonton (src/lib/game/progress.ts,
+  // antarmuka stabil untuk agen lain). SETELAH record/rating di-update,
+  // karena achievement membaca record terbaru Fighter. Turnamen bukan
+  // title fight (isTitleFight false). Seri: prediksi tetap open
+  // (resolvePredictions dengan winner null → resolved 0).
+  // Kegagalan di sini TIDAK boleh membatalkan match yang sudah
+  // diputuskan — VideoTask + advanceWinners di bawah harus tetap
+  // jalan (sama seperti result route GameFight).
+  try {
+    if (sim.method === 'draw') {
+      const otherId = advancerIsA ? match.fighterBId : match.fighterAId;
+      await awardFightOutcome(winnerId.toString(), {
+        result: 'draw',
+        method: 'draw',
+        isTitleFight: false,
+        isTournament: true,
+      });
+      await awardFightOutcome(String(otherId), {
+        result: 'draw',
+        method: 'draw',
+        isTitleFight: false,
+        isTournament: true,
+      });
+    } else {
+      await awardFightOutcome(winnerId.toString(), {
+        result: 'win',
+        method: sim.method,
+        isTitleFight: false,
+        isTournament: true,
+      });
+      if (loserId) {
+        await awardFightOutcome(loserId.toString(), {
+          result: 'loss',
+          method: sim.method,
+          isTitleFight: false,
+          isTournament: true,
+        });
+      }
+    }
+    await resolvePredictions(
+      match._id.toString(),
+      'tournament',
+      sim.method === 'draw' ? null : winnerId.toString(),
+    );
+  } catch (progressErr) {
+    console.error('Gagal mencatat progres turnamen', match._id.toString(), progressErr);
   }
 
   // Satu videoTask per match yang diputuskan (bye tidak dibuat di sini karena

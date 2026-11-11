@@ -14,6 +14,7 @@ import {
 } from '@/lib/http';
 import { Challenge } from '@/models/Challenge';
 import { Fighter } from '@/models/Fighter';
+import { normalizeGameplanInput } from '@/lib/validation';
 
 const ARENA_MAPS = ['ring', 'gudang', 'jalanan', 'dojo'] as const;
 type ArenaMap = (typeof ARENA_MAPS)[number];
@@ -35,6 +36,7 @@ function serializeChallenge(c: unknown): Record<string, unknown> {
 function parseOpenChallengeBody(body: Record<string, unknown>): {
   map: ArenaMap;
   message: string | null;
+  gameplan: { tempo: string; focus: string };
 } {
   let map: ArenaMap = 'ring';
   if (body.map !== undefined && body.map !== null) {
@@ -50,7 +52,7 @@ function parseOpenChallengeBody(body: Record<string, unknown>): {
     if (message.length > 140) throw badRequest('Pesan tantangan maksimal 140 karakter');
     if (message === '') message = null;
   }
-  return { map, message };
+  return { map, message, gameplan: normalizeGameplanInput(body.gameplan) };
 }
 
 /**
@@ -91,11 +93,12 @@ export async function POST(req: NextRequest) {
       status: 'pending',
       map: input.map,
       message: input.message,
+      gameplan: input.gameplan,
       expiresAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
     });
 
     const populated = await Challenge.findById(challenge._id)
-      .populate('challengerFighterId', 'displayName igUsername style rating')
+      .populate('challengerFighterId', 'displayName igUsername style rating weightKg')
       .lean();
     return ok(
       {
@@ -119,7 +122,7 @@ export async function GET() {
     await expireStaleChallenges();
 
     const challenges = await Challenge.find({ kind: 'open', status: 'pending' })
-      .populate('challengerFighterId', 'displayName igUsername style rating')
+      .populate('challengerFighterId', 'displayName igUsername style rating weightKg')
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();

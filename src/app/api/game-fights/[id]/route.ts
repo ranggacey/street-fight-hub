@@ -62,6 +62,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const config = fight.config as {
       left: Record<string, unknown>;
       right: Record<string, unknown>;
+      fightOpts?: Record<string, unknown> | null;
     };
     return ok({
       fight: serialize(fight),
@@ -72,6 +73,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
         seed: fight.seed,
         map: fight.map,
         duration: fight.durationSec,
+        // Opts stat/deck/gameplan (null untuk fight lama pra-stat).
+        opts: config.fightOpts ?? null,
       },
       fighterA: serialize(fighterA),
       fighterB: serialize(fighterB),

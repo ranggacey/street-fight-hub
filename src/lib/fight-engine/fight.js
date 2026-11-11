@@ -56,6 +56,37 @@ function pickOutcome(rng) {
   return dodges[Math.floor(rng() * dodges.length)];
 }
 
+// Varian pickOutcome dengan efek stat (lihat stat-effects.ts): hitBonus
+// penyerang (Accuracy) menaikkan peluang hit; dodgeBonus bertahan
+// (Speed) + blockBonus bertahan (Defense) menggerus hit dan menaikkan
+// dodge/block. Tarikan rng SAMA dengan pickOutcome (1x, +1x kalau dodge)
+// supaya aliran rng tetap sebanding. TANPA statMods, buildFight memakai
+// pickOutcome lama persis.
+function pickOutcomeStats(rng, hitBonus, dodgeBonus, blockBonus) {
+  const hitP = Math.max(0.5, Math.min(0.95, 0.80 + hitBonus - dodgeBonus * 0.5 - blockBonus * 0.5));
+  const blockP = Math.max(0.05, Math.min(0.30, 0.10 + blockBonus));
+  const r = rng();
+  if (r < hitP) return 'hit';
+  if (r < hitP + blockP) return 'block';
+  const dodges = ['slip', 'slip', 'duck', 'roll', 'sidestep', 'parry', 'flinch'];
+  return dodges[Math.floor(rng() * dodges.length)];
+}
+
+// Peluang knockdown per hit kena dari stat efektif (CERMIN
+// knockdownProb() di src/lib/game/stat-effects.ts — ubah keduanya
+// bersamaan). Dasar 0,10 = baseline lama pra-stat.
+function knockdownProb(attPowerEff, defDefenseEff, defStaminaEff) {
+  const p = 0.10 + (attPowerEff - defDefenseEff) * 0.004 + (attPowerEff - defStaminaEff) * 0.002;
+  return Math.max(0.01, Math.min(0.25, p));
+}
+
+// Mod stat netral (stat 10 semua) — dipakai kalau opts.statMods tidak ada.
+const NEUTRAL_MODS = {
+  dmgMul: 1, dmgTakenMul: 1, dodgeBonus: 0, blockBonus: 0, hitBonus: 0,
+  attackSpeedMul: 1, fatigueRate: 1,
+  powerEff: 10, defenseEff: 10, staminaEff: 10, speedEff: 10, accuracyEff: 10,
+};
+
 // --- Opsi director (Fase 1 Hub) ---
 // opts.weights: { R: { kind: bobot }, B: {...} } — pengali bobot pilih gerak.
 //   Tanpa opts (atau tanpa entri kind) bobot = 1 untuk semua → pick uniform
@@ -70,6 +101,32 @@ function pickOutcome(rng) {
 //   nilai 'draw' di forcedResult diabaikan seperti nilai tidak valid lain.
 //   Undian asli tetap ditarik dari rng lalu DITIMPA, supaya aliran rng
 //   (dan koreografi) tetap sebanding dengan run tanpa forcedResult.
+// --- Opsi STAT/DECK/GAMEPLAN (Training+Stat+Deck, 2026-11-11) ---
+// opts.statMods: { R: {...}, B: {...} } — pengali/bonus per sisi dari
+//   src/lib/game/stat-effects.ts (dmgMul, dmgTakenMul, dodgeBonus,
+//   blockBonus, hitBonus, attackSpeedMul, fatigueRate, powerEff,
+//   defenseEff, staminaEff, ...). TANPA statMods, perilaku lama persis
+//   (aliran rng tidak berubah — lihat pickOutcome + knockdown di bawah).
+// opts.winBias: number [-0.35, +0.35] — geser peluang menang (positif =
+//   menguntungkan R). Hanya roll PEMENANG yang digeser; distribusi metode
+//   (decision 60% / KO 30% / draw 10%) tetap. winBias 0/undefined =
+//   lotere lama persis. Dihitung deterministik dari stat tersimpan
+//   (winBiasFromStats) supaya server re-run mereproduksi fight.
+// opts.stamina: { R: pool, B: pool } — pool stamina awal per sisi.
+//   Tiap gerakan memakan stamina (move.power * 6 * fatigueRate; kartu
+//   deck 1,5x). Petarung kehabisan stamina (<= 0) = damage x0,7 dan
+//   jeda antar serangan x1,25. TANPA opts.stamina, sistem stamina mati.
+// opts.deck: { R: [kind...], B: [...] } — kind kartu deck (biaya 1,5x).
+// opts.comboBonus / opts.matchupMul: { R: mult, B: mult } — HOOK modul
+//   combo/matchup (agen lain); netral 1, pengali damage.
+// opts.gameplan: { R: {tempo, focus}, B: {...} } — informatif saja
+//   (tempo/fokus sudah dikodekan ke opts.tempo/opts.weights oleh
+//   buildFightOpts); engine mengabaikan field ini.
+// KNOCKDOWN (bukan angka tetap — perintah user 2026-11-11): peluang per
+//   hit kena = clamp(0,10 + (powerEff penyerang - defenseEff bertahan)
+//   * 0,004 + (powerEff penyerang - staminaEff bertahan) * 0,002,
+//   0,01, 0,25). Stat 10v10 → 0,10 = baseline lama. TANPA statMods,
+//   peluang tetap 0,10 (tes engine-rates §26 tidak berubah).
 function tempoOf(who, opts, fighters) {
   const t = opts?.tempo?.[who] ?? fighters[who]?.tempo ?? 'seimbang';
   return t === 'agresif' || t === 'bertahan' ? t : 'seimbang';
@@ -552,6 +609,43 @@ export function idleGapStats(fight) {
 
 // Bangun satu fight lengkap dari dua fighter + durasi + seed.
 // Mengembalikan objek fight (dipakai buildScene + commentary + SFX).
+// --- Kombo live (2026-11-11) ---
+// Tabel ini MIRROR dari src/lib/game/combos.ts (sumber kebenaran) —
+// tes engine-combos.test.ts menegaskan paritas keduanya (urutan, nama,
+// bonusPct). Deteksi murni suffix-match, TANPA rng: aliran rng dan
+// hasil fight tanpa kombo TIDAK berubah. Bonus hanya pada hit terakhir
+// rangkaian (sesuai antarmuka detectCombo di combos.ts).
+export const COMBO_DEFS = [
+  { sequence: ['jab', 'cross', 'hook'], name: 'Kombo Kilat', bonusPct: 15 },
+  { sequence: ['lowkick', 'bodykick', 'headkick'], name: 'Kombo Badai', bonusPct: 15 },
+  { sequence: ['doubleleg', 'suplex'], name: 'Kombo Banting', bonusPct: 20 },
+  { sequence: ['jab', 'jab', 'cross'], name: 'Kombo Satu-Dua', bonusPct: 10 },
+  { sequence: ['cross', 'hook', 'uppercut'], name: 'Kombo Upper', bonusPct: 15 },
+  { sequence: ['takedown', 'bodyslam'], name: 'Kombo Banting Jalanan', bonusPct: 20 },
+];
+
+/**
+ * Deteksi kombo dari akhir history (daftar kind yang sudah dilempar
+ * penyerang itu, urut kronologis, termasuk gerakan barusan). Kombo
+ * terpanjang yang cocok menang, atau null kalau tidak ada rangkaian
+ * yang selesai.
+ */
+export function detectCombo(history) {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  let best = null;
+  for (const combo of COMBO_DEFS) {
+    const n = combo.sequence.length;
+    if (history.length < n) continue;
+    const tail = history.slice(history.length - n);
+    if (tail.every((kind, i) => kind === combo.sequence[i])) {
+      if (!best || n > best.length) {
+        best = { name: combo.name, bonusPct: combo.bonusPct, length: n };
+      }
+    }
+  }
+  return best;
+}
+
 export function buildFight(left, right, duration, seed, opts = {}) {
   const rng = mulberry32(seed);
   const fighters = { R: left, B: right };
@@ -566,13 +660,26 @@ export function buildFight(left, right, duration, seed, opts = {}) {
   // Draw = hasil seri: winner null, HP akhir disamakan persis oleh
   // steering + penyesuaian power di akhir (lihat § "Penyeimbang draw").
   const lotRoll = rng();
-  rng();
+  const winnerRoll = rng();
+  // winBias (stat/deck): geser HANYA roll pemenang. winBias 0 =
+  // lotere lama persis (satu roll gabungan). winBias != 0: metode dari
+  // lotRoll (decision 60% / KO 30% / draw 10% — distribusi tetap),
+  // pemenang dari winnerRoll (peluang R = 0,5 + winBias). winnerRoll
+  // dulu ditarik lalu dibuang, jadi aliran rng sesudah undian tetap sama.
+  const winBias = typeof opts?.winBias === 'number'
+    ? Math.max(-0.35, Math.min(0.35, opts.winBias)) : 0;
   let result, winner;
-  if (lotRoll < 0.30) { result = 'decision'; winner = 'R'; }
-  else if (lotRoll < 0.60) { result = 'decision'; winner = 'B'; }
-  else if (lotRoll < 0.75) { result = 'ko'; winner = 'R'; }
-  else if (lotRoll < 0.90) { result = 'ko'; winner = 'B'; }
-  else { result = 'draw'; winner = null; }
+  if (!winBias) {
+    if (lotRoll < 0.30) { result = 'decision'; winner = 'R'; }
+    else if (lotRoll < 0.60) { result = 'decision'; winner = 'B'; }
+    else if (lotRoll < 0.75) { result = 'ko'; winner = 'R'; }
+    else if (lotRoll < 0.90) { result = 'ko'; winner = 'B'; }
+    else { result = 'draw'; winner = null; }
+  } else {
+    if (lotRoll < 0.60) { result = 'decision'; winner = winnerRoll < 0.5 + winBias ? 'R' : 'B'; }
+    else if (lotRoll < 0.90) { result = 'ko'; winner = winnerRoll < 0.5 + winBias ? 'R' : 'B'; }
+    else { result = 'draw'; winner = null; }
+  }
   const fr = opts?.forcedResult;
   if (fr && (fr.result === 'ko' || fr.result === 'decision') && (fr.winner === 'R' || fr.winner === 'B')) {
     result = fr.result;
@@ -638,6 +745,25 @@ export function buildFight(left, right, duration, seed, opts = {}) {
 
   cheers.push({ t: 0.8, dur: 1.2, power: 0.5 });
 
+  // --- Efek stat/stamina (Training+Stat+Deck, 2026-11-11) ---
+  // hasStats false → mods netral (perilaku lama persis). Stamina hanya
+  // aktif kalau opts.stamina diisi kedua sisi (fight lama tanpa opts
+  // tidak kena sistem stamina).
+  const hasStats = !!(opts?.statMods?.R && opts?.statMods?.B);
+  const mods = hasStats ? opts.statMods : { R: NEUTRAL_MODS, B: NEUTRAL_MODS };
+  const staminaOn = typeof opts?.stamina?.R === 'number' && typeof opts?.stamina?.B === 'number';
+  const stamina = staminaOn ? { R: opts.stamina.R, B: opts.stamina.B } : null;
+  const deckKinds = {
+    R: new Set(Array.isArray(opts?.deck?.R) ? opts.deck.R : []),
+    B: new Set(Array.isArray(opts?.deck?.B) ? opts.deck.B : []),
+  };
+  const comboBonus = { R: opts?.comboBonus?.R ?? 1, B: opts?.comboBonus?.B ?? 1 };
+  const matchupMul = { R: opts?.matchupMul?.R ?? 1, B: opts?.matchupMul?.B ?? 1 };
+  // Riwayat gerakan per sisi untuk deteksi kombo live (maks 4 terakhir —
+  // kombo terpanjang 3 gerakan). Di-reset tiap buildFight, jadi replay
+  // server dari seed yang sama selalu menghasilkan kombo yang sama.
+  const moveHistory = { R: [], B: [] };
+
   let t = 1.6; // Serangan pertama di 1.6 dtk: walk-in [0,1.0] + jalan
   // mendekat sampai jarak serang. Serangan di 0.9 dtk gagal kontak
   // karena petarung masih 150px apart (di luar jangkauan).
@@ -680,6 +806,12 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     const wBy = opts?.weights?.[by] ?? (att.signatureMove ? { [att.signatureMove]: 2.5 } : undefined);
     const tempoBy = tempoOf(by, opts, fighters);
     let move = pickWeighted(pool, wBy, tempoBy, rng);
+    // Riwayat gerakan penyerang untuk deteksi kombo (termasuk gerakan
+    // ini). Feint/ginga ikut tercatat — suffix-match otomatis gagal
+    // kalau rangkaian terputus gerakan non-serangan.
+    moveHistory[by].push(move.kind);
+    if (moveHistory[by].length > 4) moveHistory[by].shift();
+    const combo = detectCombo(moveHistory[by]);
     // --- Windup tidak boleh tumpang tindih dengan jendela ambil kayu ---
     // Penjaga di atas hanya menggeser WAKTU serangan ke weapon.t+3.0, tapi
     // windup (0.16-0.4 dtk sebelum t) tetap jatuh di dalam jendela pickup:
@@ -701,12 +833,31 @@ export function buildFight(left, right, duration, seed, opts = {}) {
     // 2026-11-08, diganti knockdown 10% per hit yang kena, diundi setelah
     // steering di bawah.)
     // --- Outcome + HP steering ---
-    let outcome = pickOutcome(rng);
+    // Dengan statMods: peluang hit/block/dodge digeser Accuracy/Speed/
+    // Defense (pickOutcomeStats, tarikan rng sama). Tanpa statMods:
+    // pickOutcome lama persis.
+    let outcome = hasStats
+      ? pickOutcomeStats(rng, mods[by].hitBonus, mods[def].dodgeBonus, mods[def].blockBonus)
+      : pickOutcome(rng);
     // Ginga = stance, bukan serangan (seperti feint): outcome 'feint'
     // supaya tidak ada damage/knockback/reaksi hit pada lawan.
     if (move.kind === 'feint' || move.kind === 'ginga') outcome = 'feint';
     let power = 0.9 + rng() * 0.4;
     if (move.power >= 0.9) power = 1.1 + rng() * 0.25;
+    // Lipat efek stat ke power serangan (dmgOf / fightStats / keyMoments
+    // semua membaca atk.power, jadi konsisten di semua pembaca):
+    // damage penyerang (Power) x damage diterima bertahan (Defense) x
+    // pengali statis opts (comboBonus/matchupMul) x kombo live (hanya
+    // kalau hit terakhir rangkaian kombo DAN outcome-nya hit — feint
+    // dan gerakan yang di-steering ke block/slip tidak dapat bonus
+    // kombo; power yang sudah terlanjur terlipat sebelum steering
+    // tetap dipakai sebagai chip block, seperti efek stat).
+    // Finisher KO TIDAK dilipat (power-nya dihitung dari sisa HP — harus pas).
+    const exhausted = staminaOn && stamina[by] <= 0;
+    power = power * mods[by].dmgMul * mods[def].dmgTakenMul * comboBonus[by] * matchupMul[by];
+    const comboHit = combo && outcome === 'hit';
+    if (comboHit) power *= 1 + combo.bonusPct / 100;
+    if (exhausted) power *= 0.7;
     // Softening di akhir jalur KO: pemenang dipaksa kena terus.
     if (result === 'ko' && by === winner && t > koT - 6) outcome = 'hit';
     // Steering agar hasil undian bertahan — DUA FASE:
@@ -803,23 +954,36 @@ export function buildFight(left, right, duration, seed, opts = {}) {
         }
       }
     }
-    // --- Knockdown: 10% per pukulan/tendangan yang KENA (2026-11-08,
-    // perintah user "rate jatoh 10%"). Diundi SETELAH steering, supaya
-    // hanya hit yang benar-benar mendarat yang bisa menjatuhkan (hit
-    // yang dilunakkan jadi block/slip tidak ikut diundi). Menggantikan
-    // knockdown tengah fight lama (sekali per fight, 50%).
-    // Dampak waktu: tiap knockdown menjeda ~3,6 dtk (jatuh 0,4 +
-    // terbaring 1,8 + bangun 1,4) — dengan ~5 knockdown/fight, ~18 dtk
-    // jeda tersebar di 60 dtk; hit tetap mendarat di semua jendela.
+    // --- Knockdown: peluang dari STAT (2026-11-11), bukan angka tetap ---
+    // p = knockdownProb(powerEff penyerang, defenseEff + staminaEff
+    // bertahan) — 10% di stat 10v10 (baseline lama), naik kalau Power
+    // penyerang jauh di atas Defense/Stamina bertahan, turun sebaliknya.
+    // Diundi SETELAH steering, supaya hanya hit yang benar-benar
+    // mendarat yang bisa menjatuhkan. TANPA statMods peluang tetap 0,10.
     let knockdown = false;
-    if (outcome === 'hit' && rng() < 0.10) knockdown = true;
+    const kdP = hasStats
+      ? knockdownProb(mods[by].powerEff, mods[def].defenseEff, mods[def].staminaEff)
+      : 0.10;
+    if (outcome === 'hit' && rng() < kdP) knockdown = true;
     const atk = { t, by, kind: move.kind, target: move.target || 'head', outcome, power };
+    // Label kombo hanya kalau hit-nya benar-benar mendarat (outcome
+    // akhir 'hit' — kalau steering mengubahnya jadi block, bonus power
+    // tetap terlipat sebagai chip tapi tanpa label kombo).
+    if (comboHit && outcome === 'hit') atk.combo = combo.name;
     if (knockdown && outcome === 'hit') {
       atk.knockdown = true;
       knockdowns.push({ who: def, t: t + 0.4, getupStart: t + 0.4 + 1.8 });
       cheers.push({ t, dur: 1.2, power: 0.9 });
     }
     attacks.push(atk);
+    // Biaya stamina gerakan ini (move.power * 6 * fatigueRate; kartu
+    // deck 1,5x — jurus deck lebih kuat tapi lebih menguras). Dipotong
+    // SETELAH serangan dilempar, jadi serangan ini memakai stamina
+    // sebelum potongan (exhausted dihitung di atas dari saldo awal).
+    if (staminaOn) {
+      const cost = move.power * 6 * mods[by].fatigueRate * (deckKinds[by].has(move.kind) ? 1.5 : 1);
+      stamina[by] -= cost;
+    }
     if (outcome === 'hit') {
       hp[def] = Math.max(0, hp[def] - dmgOf(atk));
       if (power >= 1.2) {
@@ -830,7 +994,10 @@ export function buildFight(left, right, duration, seed, opts = {}) {
       hp[def] = Math.max(0, hp[def] - dmgOf(atk));
     }
     // --- Jeda kontak: rentang tergantung tempo penyerang saat itu ---
-    const gap = gapFor(tempoBy, rng);
+    // Speed mempercepat (gap dibagi attackSpeedMul); kehabisan stamina
+    // memperlambat (gap x1,25).
+    let gap = gapFor(tempoBy, rng) / mods[by].attackSpeedMul;
+    if (staminaOn && stamina[by] <= 0) gap *= 1.25;
     t = t + gap;
     // Setelah knockdown: jangan jadwal serangan selama korban terbaring
     // (1,8 dtk, getupStart) + 1,4 dtk — animasi bangun sendiri ~0,91 dtk

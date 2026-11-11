@@ -4,9 +4,12 @@
  * snapshot 7 hari terakhir (reason 'periodic'). UI riwayat klasemen
  * (baca snapshot ini) = Fase 2.
  *
- * Rekor di sini SATU (record) untuk semua fight — kasual, turnamen,
- * gelar. Klasemen "kasual" vs "turnamen" hanya beda URUTAN (rating vs
- * kemenangan), bukan beda rekor.
+ * SATU klasemen untuk semua fighter: satu rekor (record) + satu rating
+ * Elo untuk semua mode — kasual, turnamen, gelar. Tidak ada lagi
+ * pemisah "turnamen vs kasual" atau filter gaya: urutannya tunggal,
+ * rating desc, lalu wins desc, lalu kos desc, lalu losses asc
+ * (keputusan 2026-11-11). Kemenangan turnamen mengubah rating Elo
+ * persis seperti fight kasual (lihat lib/draw.ts).
  */
 import { TtlCache } from '../cache';
 import { Fighter } from '../../models/Fighter';
@@ -34,7 +37,11 @@ export interface LeaderboardEntry {
 
 export async function getCasualLeaderboard(): Promise<LeaderboardEntry[]> {
   const fighters = await Fighter.find({ status: 'active' })
-    .sort({ rating: -1, 'record.wins': -1, createdAt: 1 })
+    // SATU urutan klasemen (keputusan 2026-11-11): rating desc, wins desc,
+    // kos desc, losses asc, lalu createdAt asc. Index di Fighter.ts hanya
+    // mencakup (rating, wins, createdAt) — kos/losses diurut di memori,
+    // aman di skala fighter saat ini.
+    .sort({ rating: -1, 'record.wins': -1, 'record.kos': -1, 'record.losses': 1, createdAt: 1 })
     .select('displayName igUsername style rating record')
     .lean();
   return fighters.map((f, i) => ({

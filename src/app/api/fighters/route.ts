@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
         style: input.style,
         styleOther: input.styleOther,
         selfDescription: input.selfDescription,
+        weightKg: input.weightKg ?? null,
         record: { wins: 0, losses: 0, draws: 0, kos: 0 },
         status: 'active',
         rating: 1000,

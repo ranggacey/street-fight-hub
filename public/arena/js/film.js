@@ -16,6 +16,7 @@ import { ACCESSORY_IDS, ACCESSORY_DEFAULTS, normalizeGear, vTaperTorsoPts, drawS
 import { SCENE as S, realTime, warp } from './scenes.js';
 import { TECHNIQUE_KEYS, windupDurOf, totalDurOf, STRIKE_TRAVEL, techniquePose, mergePose, lerpPoseFull, lerpAngle, wrapDelta, normAng } from './techniques.js';
 import { fighterColors } from './moves.js';
+import { specialProfileFor, specialForAttack } from './special-fx.js';
 import { buildPositions, positionAt, RING_X_MIN, RING_X_MAX } from './fight.js';
 
 const W = S.W, H = S.H, FPS = S.FPS;
@@ -366,6 +367,28 @@ function spawnSparks(particles, t0, x, y, n, power, seedSalt) {
   }
 }
 
+// Garis es/angin (pre-effect jurus spesial): streak horizontal tipis warna
+// profil, hidup 0,3 dtk — back-step Superman punch (CF40 v4: debu + garis
+// es) dan angin putaran tendangan/bantingan. Deterministik (rng berseed).
+function spawnIceLines(particles, t0, x, y, n, color, seedSalt) {
+  const r = rng(Math.floor(t0 * 1000) * 131 + seedSalt);
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      t0, x: x + (r() - 0.5) * 60, y: y - r() * 50,
+      vx: (r() < 0.5 ? -1 : 1) * (60 + r() * 120), vy: -20 - r() * 40,
+      life: 0.3 * (0.7 + r() * 0.6), size: 14 + r() * 18, ice: true, color,
+    });
+  }
+}
+
+// Jurus khas petarung 'who' ('R'/'B') dari SCENE — dipakai fungsi murni
+// (shake/zoom/flash) yang tidak memegang objek fighter sim.
+function signatureOf(who) {
+  const cfg = S.FIGHTERS[who];
+  if (!cfg) return null;
+  return (cfg.gear && cfg.gear.signatureMove) || cfg.signatureMove || null;
+}
+
 // Sistem aksesoris (katalog + normalizeGear + gambar per bagian) tinggal
 // di ./accessories.js — dipindah 2026-11-08 supaya file ini muat di batas
 // argumen upload Vercel (125.000 byte, lihat scripts/deploy.mjs).
@@ -382,6 +405,8 @@ function newFighter(key) {
     lean: 0.1, bodyRot: 0, mode: 'guard', hitUntil: -1,
     pose: poseGuard(key), bob: 0, slideDustAcc: 0,
     smear: 0, smearLimb: null, smearWind: null,
+    signatureMove: (cfg.gear && cfg.gear.signatureMove) || cfg.signatureMove || null,
+    specialStretch: 0, // regang udara jurus spesial (airDash) — render-only
     hasWeapon: false, // kayu diambil di tengah fight (event WEAPON)
     feet: { F: { x: cfg.startX + 28 * cfg.face }, B: { x: cfg.startX - 22 * cfg.face } },
     stepDist: 0,
@@ -624,6 +649,7 @@ function stepFighter(f, o, s, dt, particles, impacts, rings, rt, stepLog) {
   let ikOverride = null;
   let poseDirect = null;
   f.smear = 0; f.smearLimb = null; f.smearWind = null;
+  f.specialStretch = 0; // regang udara jurus spesial — di-set cabang attack
 
   // --- WEAPON PICKUP (baru di web app): jalan ke tepi ring, ambil kayu ---
   // JANGAN bajak mode jatuh/bangkit (bug 2026-11-09, ketahuan saat perbaikan
@@ -703,8 +729,25 @@ function stepFighter(f, o, s, dt, particles, impacts, rings, rt, stepLog) {
     const limb = limbFor(myAtk.kind);
     let entry = rt.atk.get(myAtk.t);
     if (!entry) {
-      entry = { limb, ghostX: o.x, ghost: ghostPoint(o.x, o.face, myAtk.target), fistStart: null, stepInDone: false, returnDone: false, jumped: false };
+      entry = { limb, ghostX: o.x, ghost: ghostPoint(o.x, o.face, myAtk.target), fistStart: null, stepInDone: false, returnDone: false, jumped: false, preFxDone: false };
       rt.atk.set(myAtk.t, entry);
+    }
+    // Jurus spesial (jurus khas penyerang ATAU finisher): pre-effect sekali
+    // saat wind-up dimulai + regang udara selama jendela hentak.
+    const spProfile = specialForAttack(myAtk, f.signatureMove);
+    if (spProfile && !entry.preFxDone && ph >= -windupDur(myAtk)) {
+      entry.preFxDone = true;
+      if (spProfile.preEffect === 'ice-lines') {
+        spawnIceLines(particles, s, f.x, GROUND, 10, spProfile.ringColor, 71);
+        spawnDust(particles, s, f.x - f.face * 30, GROUND, 8, 90, 0.9, 0.6, 5, 72);
+      } else if (spProfile.preEffect === 'dust') {
+        spawnDust(particles, s, f.x - f.face * 30, GROUND, 10, 110, 1.0, 0.6, 5, 72);
+      } else if (spProfile.preEffect === 'wind') {
+        spawnIceLines(particles, s, f.x, GROUND - 60, 8, spProfile.ringColor, 73);
+      }
+    }
+    if (spProfile && spProfile.airDash && ph >= -STRIKE_TRAVEL && ph < 0.12) {
+      f.specialStretch = 1;
     }
     if ((kk === 'jab' || kk === 'cross') && !entry.stepInDone && ph > -windupDur(myAtk)) {
       entry.stepInDone = true;
@@ -730,7 +773,7 @@ function stepFighter(f, o, s, dt, particles, impacts, rings, rt, stepLog) {
       const fistPt = k >= 0.9 ? targetPt : lerpPt(entry.fistStart, targetPt, easeOut(k));
       ikOverride = { limb, point: fistPt, elbowUp: kk === 'hook' || isKick(kk), isKnee, isElbow };
       if (ph >= -0.05 && ph <= -0.015) {
-        f.smear = (myAtk.kind === 'finisher' || myAtk.kind === 'flyknee') ? 0.9 : 0.6;
+        f.smear = (spProfile || myAtk.kind === 'finisher' || myAtk.kind === 'flyknee') ? 0.9 : 0.6;
         f.smearLimb = limb;
         f.smearWind = mergePose(poseGuard(f.key), TECHNIQUE_KEYS[kk][0].pose);
       }
@@ -1209,6 +1252,13 @@ function triggerAttack(atk, R, B, t, particles, impacts) {
   if (atk.outcome === 'hit') {
     const cx = center.x - dir * 6, cy = center.y;
     impacts.push({ t, x: cx, y: cy, power: vp, kind: 'hit' });
+    // Jurus spesial: tandai impact dengan kind-nya supaya impactVisualAt /
+    // drawImpacts memakai cincin + burst profil (di atas VFX dasar).
+    const spProfile = specialForAttack(atk, att.signatureMove);
+    if (spProfile) {
+      impacts[impacts.length - 1].special = kindKey(atk.kind);
+      spawnSparks(particles, t, cx, cy, Math.round(4 + vp * 6), vp, 54);
+    }
     spawnDust(particles, t, cx, cy + 30, Math.round(6 + vp * 8), 90 + vp * 110, 1.0, 0.5, 5, 51);
     // Percikan terang hanya untuk pukulan/tendangan mid+ (tier, lihat
     // impactTier): light tetap debu saja supaya hierarki terbaca.
@@ -1520,6 +1570,25 @@ export function koZoomAt(tf) {
   return 1 + 0.12 * (1 - sstep((age - 1.0) / 1.0));
 }
 
+// Zoom sesaat jurus spesial: naik 0,25 dtk -> turun 0,35 dtk (total 0,6 dtk),
+// puncak = profil.zoom (haymaker/finisher 1,12 — sama seperti puncak zoom
+// KO). Fungsi MURNI dari waktu nyata (dipakai render + test).
+export function specialZoomAt(tf) {
+  const t = tf - S.INTRO_DUR;
+  if (t < 0) return 1;
+  let z = 1;
+  for (const a of S.ATTACKS) {
+    const sp = specialForAttack(a, signatureOf(a.by));
+    if (!sp || sp.zoom <= 1) continue;
+    const it = realTime(a.t);
+    const age = t - it;
+    if (age < 0 || age >= 0.6) continue;
+    const k = age < 0.25 ? sstep(age / 0.25) : 1 - sstep((age - 0.25) / 0.35);
+    z = Math.max(z, 1 + (sp.zoom - 1) * k);
+  }
+  return z;
+}
+
 // Shockwave KO: cincin membesar dari kepala pecundang selama 0,6 dtk
 // setelah KO (kilau + gelombang kejut, pasangan zoom). Fungsi MURNI dari
 // waktu nyata + titik kepala saat itu.
@@ -1705,6 +1774,9 @@ export function cameraShakeAt(tf) {
     const age = t - it;
     if (age < 0 || age >= SHAKE_DUR) continue;
     trauma += traumaOfKind(a.kind, a.knockdown) * (1 - age / SHAKE_DUR);
+    // Jurus spesial: trauma minimal = shake profil (haymaker/finisher 1,0).
+    const sp = specialForAttack(a, signatureOf(a.by));
+    if (sp) trauma = Math.max(trauma, sp.shake * (1 - age / SHAKE_DUR));
   }
   trauma = Math.min(1, trauma);
   if (trauma <= 0) return { x: 0, y: 0, trauma: 0 };
@@ -1732,6 +1804,9 @@ export function hitStopFlashAt(tf) {
       const tier = impactTier(atk.power);
       p = tier === 'heavy' ? 0.22 : tier === 'mid' ? 0.16 : 0.10;
       if (atk.knockdown) p = 0.22;
+      // Jurus spesial: kilau minimal 0,26 supaya freeze-nya terbaca.
+      const sp = specialForAttack(atk, signatureOf(atk.by));
+      if (sp) p = Math.max(p, 0.26);
     }
     peak = Math.max(peak, p * (1 - age / HITSTOP_FLASH_DUR));
   }
@@ -1969,6 +2044,9 @@ export function render(c, tf) {
     cam.x = lerp(cam.x, clamp(loser.x, 380, 900), ((koZ - 1) / 0.12) * 0.6);
     cam.z *= koZ;
   }
+  // Zoom sesaat jurus spesial (pusat frame — tanpa geser target).
+  const spZ = specialZoomAt(tf);
+  if (spZ > 1) cam.z *= spZ;
   c.save();
   c.translate(W / 2, H / 2);
   // Camera shake (§32): di ruang LAYAR (sebelum scale) supaya offset
@@ -2453,6 +2531,14 @@ export function drawFighter(c, f, s, sim, front) {
   c.save();
   c.lineCap = 'round'; c.lineJoin = 'round';
 
+  // Regang udara jurus spesial (airDash): tubuh meregang horizontal sesaat
+  // saat menerjang — visual saja, sendi/posisi sim tidak berubah.
+  if (f.specialStretch > 0) {
+    c.translate(f.x, GROUND);
+    c.scale(1 + 0.22 * f.specialStretch, 1 - 0.10 * f.specialStretch);
+    c.translate(-f.x, -GROUND);
+  }
+
   const fillPoly = (pts, fill) => {
     if (!pts.length) return;
     c.fillStyle = fill;
@@ -2686,6 +2772,16 @@ function drawParticles(c, s, particles) {
     if (k < 0 || k > 1) continue;
     const px = p.x + p.vx * (s - p.t0);
     const py = p.y + p.vy * (s - p.t0) + 0.5 * GRAV * 0.25 * (s - p.t0) * (s - p.t0);
+    if (p.ice) {
+      // Garis es/angin pre-effect: streak horizontal warna profil.
+      c.globalAlpha = 0.85 * (1 - k);
+      c.strokeStyle = p.color || '#7DD3FC';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(px - p.size / 2, py); c.lineTo(px + p.size / 2, py);
+      c.stroke();
+      continue;
+    }
     if (p.spark) {
       // Percikan kontak: kuning-putih terang, mengecil + memudar cepat.
       c.globalAlpha = 0.9 * (1 - k);
@@ -2727,13 +2823,16 @@ export function impactVisualAt(s, impacts) {
     if (k < 0 || k > 1) continue;
     const tier = impactTier(im.power);
     const isHit = kind === 'hit';
+    const sp = im.special ? specialProfileFor(im.special) : null;
     out.push({
       x: im.x, y: im.y, power: im.power, kind, tier, k, dur,
-      ringR: isHit ? (14 + im.power * 14) * (0.4 + k * 1.2) : (9 + im.power * 8) * (0.6 + k * 0.9),
+      special: im.special || null, burst: sp ? sp.burst : null,
+      ringColor: sp ? sp.ringColor : null,
+      ringR: (isHit ? (14 + im.power * 14) * (0.4 + k * 1.2) : (9 + im.power * 8) * (0.6 + k * 0.9)) * (sp ? sp.ringSize : 1),
       ringW: isHit ? (tier === 'heavy' ? 6 : tier === 'mid' ? 4.5 : 3) : 2.5,
       flashR: isHit ? (11 + im.power * 9) * (1 - k * 0.65) : 0,
       rayR: isHit ? (12 + im.power * 16) * (1 + k * 0.5) : (10 + im.power * 10) * (1 + k * 0.4),
-      rays: isHit ? (tier === 'heavy' ? 12 : 8) : 4,
+      rays: isHit ? (sp ? 12 + sp.speedLines : (tier === 'heavy' ? 12 : 8)) : 4,
       alpha: (isHit ? 0.95 : 0.5) * (1 - k),
     });
   }
@@ -2754,6 +2853,27 @@ function drawImpacts(c, s, impacts) {
       c.globalAlpha = v.alpha * 0.7;
       c.strokeStyle = PALETTE.yellow; c.lineWidth = 2;
       c.beginPath(); c.arc(v.x, v.y, v.ringR * 1.3, 0, Math.PI * 2); c.stroke();
+    }
+    // Jurus spesial: cincin profil (warna unik jurus) + cincin luar +
+    // starburst/shockwave oversized warna profil — di atas cincin dasar.
+    if (isHit && v.special && v.ringColor) {
+      c.globalAlpha = v.alpha;
+      c.strokeStyle = v.ringColor; c.lineWidth = v.ringW + 2;
+      c.beginPath(); c.arc(v.x, v.y, v.ringR, 0, Math.PI * 2); c.stroke();
+      c.globalAlpha = v.alpha * 0.7;
+      c.lineWidth = 2;
+      c.beginPath(); c.arc(v.x, v.y, v.ringR * 1.35, 0, Math.PI * 2); c.stroke();
+      if (v.burst === 'starburst' || v.burst === 'shockwave') {
+        c.globalAlpha = v.alpha;
+        c.strokeStyle = v.ringColor; c.lineWidth = 3;
+        for (let i = 0; i < v.rays; i++) {
+          const a = (i / v.rays) * Math.PI * 2 + 0.26;
+          c.beginPath();
+          c.moveTo(v.x + Math.cos(a) * v.rayR * 0.7, v.y + Math.sin(a) * v.rayR * 0.7);
+          c.lineTo(v.x + Math.cos(a) * v.rayR * 1.6, v.y + Math.sin(a) * v.rayR * 1.6);
+          c.stroke();
+        }
+      }
     }
     // Sinar kontak.
     c.globalAlpha = v.alpha;
@@ -2807,9 +2927,12 @@ export function speedLinesAt(s, sim) {
     const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
     const px = -dy, py = dx; // tegak lurus arah serang
     const tier = impactTier(atk.power);
-    const n = tier === 'heavy' ? 4 : tier === 'mid' ? 3 : 2;
-    const alpha = 0.5 * Math.sin(Math.PI * p);
+    let n = tier === 'heavy' ? 4 : tier === 'mid' ? 3 : 2;
+    let alpha = 0.5 * Math.sin(Math.PI * p);
     const L = 30 + atk.power * 12;
+    // Jurus spesial: garis ekstra + warna cincin profil + alpha lebih kuat.
+    const sp = specialForAttack(atk, att.signatureMove);
+    if (sp) { n += sp.speedLines; alpha = Math.min(0.7, alpha * 1.4); }
     for (let i = 0; i < n; i++) {
       const off = (i - (n - 1) / 2) * 15;
       const mx = tip.x + px * off - dx * (8 + i * 12);
@@ -2817,7 +2940,7 @@ export function speedLinesAt(s, sim) {
       out.push({
         x1: mx - dx * L / 2, y1: my - dy * L / 2,
         x2: mx + dx * L / 2, y2: my + dy * L / 2,
-        alpha, width: tier === 'heavy' ? 3.5 : 3, color: att.color, kind: atk.kind,
+        alpha, width: tier === 'heavy' ? 3.5 : 3, color: sp ? sp.ringColor : att.color, kind: atk.kind,
       });
     }
   }
