@@ -764,6 +764,7 @@ function onEmbedMessage(ev) {
     // buildFight; field yang tidak dikenal diabaikan engine.
     if (d.opts.statMods) fo.statMods = d.opts.statMods;
     if (typeof d.opts.winBias === 'number') fo.winBias = d.opts.winBias;
+    if (typeof d.opts.matchupScore === 'number') fo.matchupScore = d.opts.matchupScore;
     if (d.opts.stamina) fo.stamina = d.opts.stamina;
     if (d.opts.deck) fo.deck = d.opts.deck;
     if (d.opts.comboBonus) fo.comboBonus = d.opts.comboBonus;

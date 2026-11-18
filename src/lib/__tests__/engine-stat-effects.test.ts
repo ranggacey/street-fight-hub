@@ -46,9 +46,9 @@ function at(level: number): Stats {
 }
 const NO_DECK = { cards: [], signature: null };
 
-function optsFor(a: Stats, b: Stats, winBiasOverride?: number) {
+function optsFor(a: Stats, b: Stats, matchupScoreOverride?: number) {
   const o = buildFightOpts(a, b, NO_DECK, NO_DECK, SEIMBANG, SEIMBANG);
-  if (winBiasOverride !== undefined) o.winBias = winBiasOverride;
+  if (matchupScoreOverride !== undefined) o.matchupScore = matchupScoreOverride;
   return o;
 }
 
@@ -100,7 +100,7 @@ describe('Opts netral = perilaku lama persis', () => {
   });
 });
 
-describe('winBias — determinisme + arah', () => {
+describe('matchupScore v2 — determinisme + arah', () => {
   it('config + seed sama → hasil sama persis', () => {
     const o = optsFor(at(50), at(10));
     const a = buildFightHub(LEFT, RIGHT, DURATION, 777, o);
@@ -108,32 +108,34 @@ describe('winBias — determinisme + arah', () => {
     expect(b).toEqual(a);
   });
 
-  it('winBias +0,35 → R menang jelas lebih sering (N=300)', () => {
+  it('matchupScore +0,15 (maks) → R menang ~90% non-draw (N=300)', () => {
     let winR = 0;
     let draw = 0;
     const N = 300;
     for (let s = 1; s <= N; s++) {
-      const f = buildFightHub(LEFT, RIGHT, DURATION, s, optsFor(S10, S10, 0.35));
+      const f = buildFightHub(LEFT, RIGHT, DURATION, s, optsFor(S10, S10, 0.15));
       if (f.result === 'draw') draw++;
       else if (f.winner === 'R') winR++;
     }
-    // Peluang teori R ≈ (0,5+0,35) * 0,9 ≈ 76%; batas bawah longgar 60%.
-    expect(winR / N).toBeGreaterThan(0.6);
+    // Skor maks 0,15 > form noise ±0,10 → E selalu ≥ 0,05 → R menang
+    // semua fight non-draw (teori ≈ 90%); batas bawah longgar 80%.
+    expect(winR / N).toBeGreaterThan(0.8);
     expect(draw / N).toBeGreaterThan(0.05);
     expect(draw / N).toBeLessThan(0.2);
   });
 
-  it('winBias -0,35 → R menang jelas lebih jarang (N=300)', () => {
+  it('matchupScore -0,15 (min) → R hampir tidak pernah menang (N=300)', () => {
     let winR = 0;
     const N = 300;
     for (let s = 1; s <= N; s++) {
-      const f = buildFightHub(LEFT, RIGHT, DURATION, s, optsFor(S10, S10, -0.35));
+      const f = buildFightHub(LEFT, RIGHT, DURATION, s, optsFor(S10, S10, -0.15));
       if (f.winner === 'R') winR++;
     }
-    expect(winR / N).toBeLessThan(0.4);
+    // E = -0,15 + form ≤ -0,05 < 0 selalu → R tidak pernah menang.
+    expect(winR / N).toBeLessThan(0.05);
   });
 
-  it('winBias 0 → 40–60% (N=300)', () => {
+  it('matchupScore 0 → 40–60% (N=300)', () => {
     let winR = 0;
     const N = 300;
     for (let s = 1; s <= N; s++) {
@@ -144,13 +146,13 @@ describe('winBias — determinisme + arah', () => {
     expect(winR / N).toBeLessThanOrEqual(0.65);
   });
 
-  it('distribusi metode tetap (decision ~60% / KO ~30% / draw ~10%) walau winBias ≠ 0', () => {
+  it('distribusi metode tetap (decision ~60% / KO ~30% / draw ~10%) walau skor ≠ 0', () => {
     let decision = 0;
     let ko = 0;
     let draw = 0;
     const N = 300;
     for (let s = 1; s <= N; s++) {
-      const f = buildFightHub(LEFT, RIGHT, DURATION, s, optsFor(S10, S10, 0.35));
+      const f = buildFightHub(LEFT, RIGHT, DURATION, s, optsFor(S10, S10, 0.15));
       if (f.result === 'decision') decision++;
       else if (f.result === 'ko') ko++;
       else draw++;

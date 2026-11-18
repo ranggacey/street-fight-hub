@@ -28,7 +28,11 @@ const RIGHT = {
 const DURATION = 60;
 const N = 300;
 
-const FINISHER = new Set(['finisher', 'flyknee', 'stickchop']);
+const FINISHER = new Set(['finisher', 'flyknee', 'headkick', 'stickchop']);
+// Kanon finisher (moves.js FINISHER_KINDS + fight.js FINISHER_DMG): headkick
+// ikut 1,5x sejak FINISHER_DMG disamakan 20 (2026-11-18). Set lokal ini
+// sempat ketinggalan headkick → hpAt test meremehkan damage headkick dan
+// guard-test gagal 232/300 padahal steering engine baik-baik saja.
 const DODGES = new Set(['slip', 'duck', 'roll', 'sidestep', 'parry', 'flinch']);
 
 type Atk = { t: number; by: string; kind: string; outcome: string; power: number; knockdown?: boolean };

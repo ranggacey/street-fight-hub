@@ -33,24 +33,41 @@
  * sama (cermin) ada di fight.js kedua copy — lihat
  * src/lib/fight-engine/ENGINE-SYNC.md.
  *
- * WIN BIAS (pengganti lotere pemenang murni — perintah user: tidak ada
- * menang karena hoki): winBias ∈ [-0,35, +0,35], positif = menguntungkan
- * sisi R (kiri). Dihitung dari selisih stat efektif kedua fighter +
- * selisih kekuatan deck:
+ * SKOR MATCHUP v2 (balance 2026-11-18 — perintah user: stat JANGAN
+ * terlalu berpengaruh, deck counter + matchup gaya yang menentukan,
+ * TIDAK ADA hoki): skor S ∈ [-0,15, +0,15], positif = menguntungkan
+ * sisi R (kiri), dari 4 komponen:
+ *   stat     = 0,05 × tanh(skorStat / 150)  (skorStat sama seperti v1,
+ *             tapi lewat tanh + cap ±0,05 — selisih stat 90 poin tidak
+ *             lagi auto-menang; 100v10 tanpa counter ≈ 68%, bukan 83%)
+ *   gaya     = (matchupMul(A,B) − matchupMul(B,A)) × 0,3, cap ±0,04
+ *             (matriks style-matchups.ts, TIDAK berubah)
+ *   deck     = (coverageA − coverageB) × 0,04 (deck-counters.ts:
+ *             fraksi slot deck yang menjawab ancaman dominan deck lawan)
+ *   gameplan = siklus tempo bertahan > agresif > seimbang > bertahan,
+ *             ±0,015
+ * Counter total (±0,08) LEBIH BESAR dari stat (±0,05) — sengaja.
+ * Engine memakai skor HANYA untuk menentukan pemenang (E = skor +
+ * form noise kecil ±0,10 dari seed; E ≥ 0 → R menang); distribusi
+ * metode (decision 60% / KO 30% / draw 10%) TIDAK berubah. Seed sama
+ * + skor sama = hasil sama persis (deterministik).
+ * Penyelarasan knockdown: powerEff exchange digeser antisimetris
+ * sebesar (gaya + deck + gameplan) × 600 — powerEff HANYA dipakai
+ * rumus peluang knockdown (fight.js), bukan damage, jadi pemenang
+ * skor tidak kontradiksi dengan jumlah knockdown di replay.
+ *
+ * WIN BIAS v1 (winBiasFromStats, ±0,35) TIDAK lagi dipakai engine —
+ * dipertahankan HANYA untuk sim turnamen (draw.ts), yang memang
+ * memakai lotere berbobot:
  *   skorStat = Δpower*1,0 + Δspeed*0,6 + Δstamina*0,5 + Δdefense*0,7
  *              + Δaccuracy*0,6
  *   winBias = clamp(skorStat * 0,0028
  *                   + (deckStrA - deckStrB) * 0,1, -0,35, 0,35)
- * deckStr = rata-rata dmg kartu deck (signature berbobot 2,5x); deck
- * kosong = rata-rata dmg pool semua gaya (~3,53) — kartu lemah bisa
- * MERUGIKAN karena engine dipaksa lebih sering memilihnya.
- * Engine memakai winBias HANYA untuk roll pemenang (peluang menang
- * = 0,5 + winBias di antara fight non-draw); distribusi metode
- * (decision 60% / KO 30% / draw 10%) TIDAK berubah. winBias = 0 →
- * lotere lama persis (aliran rng tidak berubah).
  */
 
 import { FINISHER_KINDS, STYLES } from '../fight-engine/moves.js';
+import { coverage, dominantThreat } from './deck-counters';
+import { matchupMultiplier } from './style-matchups';
 
 export type StatKey = 'power' | 'speed' | 'stamina' | 'defense' | 'accuracy';
 
@@ -249,6 +266,115 @@ export function winBiasFromStats(
 }
 
 // ---------------------------------------------------------------------------
+// Skor matchup v2 (balance 2026-11-18) — lihat header file.
+// Dipakai engine (buildFight) untuk menentukan pemenang; deterministik.
+// ---------------------------------------------------------------------------
+
+/** Cap total skor matchup v2. */
+export const MATCHUP_SCORE_CAP = 0.15;
+/** Cap kontribusi stat pada skor. */
+export const STAT_SCORE_CAP = 0.05;
+/** Pembagi tanh kurva stat (skorStat 68 → 42% cap, 136 → 72%, 272 → 95%). */
+export const STAT_TANH_DIV = 150;
+/** Skala selisih pengali matchup gaya → skor. */
+export const STYLE_SCORE_SCALE = 0.3;
+/** Cap kontribusi gaya. */
+export const STYLE_SCORE_CAP = 0.04;
+/** Cap kontribusi deck (selisih coverage × nilai ini). */
+export const DECK_SCORE_CAP = 0.04;
+/** Langkah tempo counter (siklus bertahan > agresif > seimbang > bertahan). */
+export const GAMEPLAN_STEP = 0.015;
+/**
+ * Geser powerEff exchange per 1,00 poin counter (gaya+deck+gameplan).
+ * powerEff HANYA dipakai rumus peluang knockdown di fight.js (bukan
+ * damage), jadi ini menyelaraskan KD dengan pemenang skor tanpa
+ * mengubah damage. 600 → kasus counter (0,068) digeser ±41.
+ * (Dinaikkan 400 → 600 pada 2026-11-18: dengan 400, baris style-only
+ * R30 gulat vs B50 tinju menang 55,3% tapi share KD cuma 38,5% —
+ * replay tampak kontradiktif karena defense stat 50 menahan KD; 600
+ * mengangkat share KD-nya ke 60% tanpa mengubah satu pun win rate,
+ * karena powerEff tidak dipakai damage/pemenang.)
+ */
+export const KD_SHIFT_PER_POINT = 600;
+
+const STAT_SCORE_W = { power: 1.0, speed: 0.6, stamina: 0.5, defense: 0.7, accuracy: 0.6 };
+
+/** Komponen skor matchup v2 (positif = menguntungkan sisi pertama). */
+export interface MatchupScoreParts {
+  stat: number;
+  style: number;
+  deck: number;
+  gameplan: number;
+  total: number;
+}
+
+/** Siklus tempo: bertahan > agresif > seimbang > bertahan. */
+const TEMPO_BEATS: Record<string, string> = {
+  bertahan: 'agresif',
+  agresif: 'seimbang',
+  seimbang: 'bertahan',
+};
+
+function statScorePart(a: Stats, b: Stats): number {
+  const ea = effectiveStats(a);
+  const eb = effectiveStats(b);
+  const s =
+    (ea.power - eb.power) * STAT_SCORE_W.power +
+    (ea.speed - eb.speed) * STAT_SCORE_W.speed +
+    (ea.stamina - eb.stamina) * STAT_SCORE_W.stamina +
+    (ea.defense - eb.defense) * STAT_SCORE_W.defense +
+    (ea.accuracy - eb.accuracy) * STAT_SCORE_W.accuracy;
+  return STAT_SCORE_CAP * Math.tanh(s / STAT_TANH_DIV);
+}
+
+function styleScorePart(styleA: string | null | undefined, styleB: string | null | undefined): number {
+  const d =
+    (matchupMultiplier(styleA, styleB) - matchupMultiplier(styleB, styleA)) *
+    STYLE_SCORE_SCALE;
+  return clamp(d, -STYLE_SCORE_CAP, STYLE_SCORE_CAP);
+}
+
+function deckScorePart(deckA: DeckInput | null | undefined, deckB: DeckInput | null | undefined): number {
+  return (
+    coverage(deckA, dominantThreat(deckB)) -
+    coverage(deckB, dominantThreat(deckA))
+  ) * DECK_SCORE_CAP;
+}
+
+function gameplanScorePart(tempoA: string, tempoB: string): number {
+  if (tempoA === tempoB) return 0;
+  if (TEMPO_BEATS[tempoA] === tempoB) return GAMEPLAN_STEP;
+  if (TEMPO_BEATS[tempoB] === tempoA) return -GAMEPLAN_STEP;
+  return 0;
+}
+
+/**
+ * Skor matchup v2 lengkap. Gaya boleh null (mis. pemanggil lama tanpa
+ * info gaya) → komponen gaya 0. Total di-clamp ±MATCHUP_SCORE_CAP.
+ */
+export function matchupScoreV2(
+  statsA: Stats,
+  statsB: Stats,
+  styleA: string | null | undefined,
+  styleB: string | null | undefined,
+  deckA: DeckInput | null | undefined,
+  deckB: DeckInput | null | undefined,
+  tempoA: string,
+  tempoB: string,
+): MatchupScoreParts {
+  const stat = statScorePart(statsA, statsB);
+  const style = styleScorePart(styleA, styleB);
+  const deck = deckScorePart(deckA, deckB);
+  const gameplan = gameplanScorePart(tempoA, tempoB);
+  const total = clamp(
+    stat + style + deck + gameplan,
+    -MATCHUP_SCORE_CAP,
+    MATCHUP_SCORE_CAP,
+  );
+  return { stat, style, deck, gameplan, total };
+}
+
+// ---------------------------------------------------------------------------
 // Gameplan — dipilih SEKALI sebelum fight, lalu dikunci (disimpan di
 // GameFight.config supaya verifikasi server mereproduksi fight yang sama).
 // ---------------------------------------------------------------------------
@@ -307,7 +433,9 @@ export interface FightOpts {
   weights: { R: Record<string, number>; B: Record<string, number> };
   tempo: { R: GameplanTempo; B: GameplanTempo };
   statMods: { R: SideStatMods; B: SideStatMods };
-  winBias: number;
+  /** Skor matchup v2 (stat-effects.ts) — engine menentukan pemenang
+   *  dari skor + form noise kecil dari seed. */
+  matchupScore: number;
   stamina: { R: number; B: number };
   /** Kind kartu deck per sisi (biaya stamina 1,5x di engine). */
   deck: { R: string[]; B: string[] };
@@ -340,6 +468,11 @@ export function deckWeights(deck: DeckInput, gameplan: Gameplan): Record<string,
 /**
  * Bangun opts buildFight lengkap dari stat + deck + gameplan kedua fighter.
  * Deterministik: input sama → opts sama persis (server re-run = hasil sama).
+ * `leftStyle`/`rightStyle` opsional (pemanggil lama tanpa info gaya → komponen
+ * gaya 0); buildFightSetup mengisinya dari dokumen Fighter.
+ * Skor matchup v2 dihitung di sini; powerEff exchange digeser antisimetris
+ * sebesar (gaya+deck+gameplan) × KD_SHIFT_PER_POINT supaya knockdown di
+ * replay selaras dengan pemenang skor (powerEff hanya dipakai rumus KD).
  */
 export function buildFightOpts(
   leftStats: Stats,
@@ -348,15 +481,32 @@ export function buildFightOpts(
   rightDeck: DeckInput,
   leftGameplan: Gameplan,
   rightGameplan: Gameplan,
+  leftStyle?: string | null,
+  rightStyle?: string | null,
 ): FightOpts {
+  const score = matchupScoreV2(
+    leftStats,
+    rightStats,
+    leftStyle ?? null,
+    rightStyle ?? null,
+    leftDeck,
+    rightDeck,
+    leftGameplan.tempo,
+    rightGameplan.tempo,
+  );
+  const statMods = { R: statModsFor(leftStats), B: statModsFor(rightStats) };
+  const kdShift = (score.style + score.deck + score.gameplan) * KD_SHIFT_PER_POINT;
+  const clampEff = (v: number): number => Math.max(1, Math.min(200, v));
+  statMods.R.powerEff = clampEff(statMods.R.powerEff + kdShift);
+  statMods.B.powerEff = clampEff(statMods.B.powerEff - kdShift);
   return {
     weights: {
       R: deckWeights(leftDeck, leftGameplan),
       B: deckWeights(rightDeck, rightGameplan),
     },
     tempo: { R: leftGameplan.tempo, B: rightGameplan.tempo },
-    statMods: { R: statModsFor(leftStats), B: statModsFor(rightStats) },
-    winBias: winBiasFromStats(leftStats, rightStats, leftDeck, rightDeck),
+    statMods,
+    matchupScore: score.total,
     stamina: {
       R: staminaPoolFor(leftStats),
       B: staminaPoolFor(rightStats),

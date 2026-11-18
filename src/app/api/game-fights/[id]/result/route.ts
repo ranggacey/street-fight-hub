@@ -184,14 +184,24 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     }
 
     if (isTitleFight) {
-      const existingTask = await VideoTask.findOne({ gameFightId: fight._id });
-      if (!existingTask) {
-        await VideoTask.create({
-          kind: 'title',
-          gameFightId: fight._id,
-          status: 'queued',
-          note: `Title fight ${fight._id} — ${expected.method} ${expected.score.a}-${expected.score.b}`,
-        });
+      // VideoTask adalah artefak admin downstream — kegagalannya TIDAK
+      // boleh membatalkan hasil fight yang sudah terverifikasi & tersimpan
+      // (mis. E11000 matchId di DB segar: index unique matchId yang dibuat
+      // Mongoose tanpa sparse menolak task title-fight kedua, karena
+      // keduanya tanpa matchId → null duplikat; di produksi index-nya
+      // sparse sehingga tidak terjadi).
+      try {
+        const existingTask = await VideoTask.findOne({ gameFightId: fight._id });
+        if (!existingTask) {
+          await VideoTask.create({
+            kind: 'title',
+            gameFightId: fight._id,
+            status: 'queued',
+            note: `Title fight ${fight._id} — ${expected.method} ${expected.score.a}-${expected.score.b}`,
+          });
+        }
+      } catch (videoTaskErr) {
+        console.error('Gagal membuat VideoTask title fight', fight._id.toString(), videoTaskErr);
       }
     }
 

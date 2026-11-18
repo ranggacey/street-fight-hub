@@ -207,7 +207,7 @@ describe('buildFightOpts', () => {
       { tempo: 'seimbang', focus: 'balanced' },
       { tempo: 'seimbang', focus: 'balanced' },
     );
-    expect(o.winBias).toBe(0);
+    expect(o.matchupScore).toBe(0);
     expect(o.weights).toEqual({ R: {}, B: {} });
     expect(o.tempo).toEqual({ R: 'seimbang', B: 'seimbang' });
     expect(o.stamina).toEqual({ R: 100, B: 100 });

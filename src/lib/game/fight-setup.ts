@@ -105,6 +105,8 @@ export async function buildFightSetup(
     rightDeck,
     gl,
     gr,
+    leftFighter.style ?? null,
+    rightFighter.style ?? null,
   );
   // Matchup gaya: pengali damage per sisi dari pasangan gaya kedua
   // fighter (0.95–1.10; mirror = 1.00; gaya tak dikenal = 1.00).

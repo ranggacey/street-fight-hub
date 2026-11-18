@@ -27,7 +27,7 @@ export function randomSeed() {
   return Math.floor(Math.random() * 900000) + 100000;
 }
 
-const FINISHER_DMG = { finisher: 20, flyknee: 20, stickchop: 18 };
+const FINISHER_DMG = { finisher: 20, flyknee: 20, headkick: 20, stickchop: 20 };
 // Selisih HP maksimum yang dibiarkan steering draw (lihat blok steering).
 const DRAW_MARGIN = 12;
 
@@ -107,11 +107,12 @@ const NEUTRAL_MODS = {
 //   blockBonus, hitBonus, attackSpeedMul, fatigueRate, powerEff,
 //   defenseEff, staminaEff, ...). TANPA statMods, perilaku lama persis
 //   (aliran rng tidak berubah — lihat pickOutcome + knockdown di bawah).
-// opts.winBias: number [-0.35, +0.35] — geser peluang menang (positif =
-//   menguntungkan R). Hanya roll PEMENANG yang digeser; distribusi metode
-//   (decision 60% / KO 30% / draw 10%) tetap. winBias 0/undefined =
-//   lotere lama persis. Dihitung deterministik dari stat tersimpan
-//   (winBiasFromStats) supaya server re-run mereproduksi fight.
+// opts.matchupScore: number [-0.15, +0.15] — skor matchup v2 (positif =
+//   menguntungkan R). Pemenang dari skor + form noise kecil (±0,10 dari
+//   seed); distribusi metode (decision 60% / KO 30% / draw 10%) tetap.
+//   matchupScore 0/undefined = 45/45/10 (imbang). Dihitung deterministik
+//   dari stat/deck/gameplan tersimpan (matchupScoreV2 di stat-effects.ts)
+//   supaya server re-run mereproduksi fight.
 // opts.stamina: { R: pool, B: pool } — pool stamina awal per sisi.
 //   Tiap gerakan memakan stamina (move.power * 6 * fatigueRate; kartu
 //   deck 1,5x). Petarung kehabisan stamina (<= 0) = damage x0,7 dan
@@ -650,35 +651,29 @@ export function buildFight(left, right, duration, seed, opts = {}) {
   const rng = mulberry32(seed);
   const fighters = { R: left, B: right };
 
-  // --- UNDIAN DULU (sebelum koreografi) ---
-  // Lotere gabungan (metode, pemenang) — SATU tarikan rng (2026-11-08):
-  //   Decision R 30% | Decision B 30% | KO R 15% | KO B 15% | Draw 10%.
-  //   Peluang menang R vs B tetap 50/50 (30+15 = 45% tiap sisi + 10% draw).
-  // Dua tarikan rng ini SELALU dilakukan — tarikan ke-2 dipertahankan
-  // (dulu lotWinner) supaya aliran rng setelah undian tetap sebanding
-  // dengan run lama; forcedResult hanya menimpa hasilnya (lihat bawah).
-  // Draw = hasil seri: winner null, HP akhir disamakan persis oleh
-  // steering + penyesuaian power di akhir (lihat § "Penyeimbang draw").
+  // --- HASIL DULU (sebelum koreografi) — SKOR MATCHUP v2 (2026-11-18) ---
+  // BUKAN lotere pemenang: metode dari lotRoll (decision 60% / KO 30% /
+  // draw 10% — distribusi tetap seperti dulu); pemenang dari SKOR matchup
+  // (opts.matchupScore ∈ [-0,15, +0,15], dihitung server di
+  // stat-effects.ts dari stat + gaya + deck counter + gameplan) + form
+  // noise kecil (±0,10, deterministik dari winnerRoll). E = skor + form;
+  // E >= 0 → R menang. Seed sama + skor sama = hasil sama persis.
+  // Dua tarikan rng ini SELALU dilakukan supaya aliran rng setelah
+  // penentuan hasil tetap sebanding dengan run lama; forcedResult hanya
+  // menimpa hasilnya (lihat bawah). Draw = hasil seri: winner null, HP
+  // akhir disamakan persis oleh steering + penyesuaian power di akhir
+  // (lihat § "Penyeimbang draw").
   const lotRoll = rng();
   const winnerRoll = rng();
-  // winBias (stat/deck): geser HANYA roll pemenang. winBias 0 =
-  // lotere lama persis (satu roll gabungan). winBias != 0: metode dari
-  // lotRoll (decision 60% / KO 30% / draw 10% — distribusi tetap),
-  // pemenang dari winnerRoll (peluang R = 0,5 + winBias). winnerRoll
-  // dulu ditarik lalu dibuang, jadi aliran rng sesudah undian tetap sama.
-  const winBias = typeof opts?.winBias === 'number'
-    ? Math.max(-0.35, Math.min(0.35, opts.winBias)) : 0;
+  const matchupScore = typeof opts?.matchupScore === 'number'
+    ? Math.max(-0.15, Math.min(0.15, opts.matchupScore)) : 0;
   let result, winner;
-  if (!winBias) {
-    if (lotRoll < 0.30) { result = 'decision'; winner = 'R'; }
-    else if (lotRoll < 0.60) { result = 'decision'; winner = 'B'; }
-    else if (lotRoll < 0.75) { result = 'ko'; winner = 'R'; }
-    else if (lotRoll < 0.90) { result = 'ko'; winner = 'B'; }
-    else { result = 'draw'; winner = null; }
-  } else {
-    if (lotRoll < 0.60) { result = 'decision'; winner = winnerRoll < 0.5 + winBias ? 'R' : 'B'; }
-    else if (lotRoll < 0.90) { result = 'ko'; winner = winnerRoll < 0.5 + winBias ? 'R' : 'B'; }
-    else { result = 'draw'; winner = null; }
+  if (lotRoll < 0.60) { result = 'decision'; }
+  else if (lotRoll < 0.90) { result = 'ko'; }
+  else { result = 'draw'; winner = null; }
+  if (result !== 'draw') {
+    const form = (winnerRoll - 0.5) * 0.2; // ±0,10
+    winner = matchupScore + form >= 0 ? 'R' : 'B';
   }
   const fr = opts?.forcedResult;
   if (fr && (fr.result === 'ko' || fr.result === 'decision') && (fr.winner === 'R' || fr.winner === 'B')) {

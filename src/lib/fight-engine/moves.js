@@ -206,7 +206,14 @@ export const STYLES = {
 // Gerakan yang hanya boleh dipakai kalau petarung memegang senjata kayu.
 export const WEAPON_MOVES = new Set(['stickswing', 'stickchop']);
 // Gerakan finisher (hanya di akhir jalur KO).
-export const FINISHER_KINDS = new Set(['finisher', 'flyknee', 'headkick']);
+// Kanon: finisher, flyknee, headkick, stickchop — sama dengan
+// FINISHER_KINDS di public/arena/js/special-fx.js dan film.js.
+export const FINISHER_KINDS = new Set([
+  'finisher',
+  'flyknee',
+  'headkick',
+  'stickchop',
+]);
 // Damage chip saat block — re-export dari js/damage.js (sumber kebenaran
 // tunggal; dulu didefinisikan duplikat di sini dengan nilai yang sama).
 export { BLOCK_CHIP } from './damage.js';

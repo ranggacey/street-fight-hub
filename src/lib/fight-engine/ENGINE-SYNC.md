@@ -15,8 +15,8 @@ lihat bawah).**
 
 | File | md5 |
 |---|---|
-| `fight.js` | `f93eeeeb43e632b2a92ac16fb4fd17e4` |
-| `moves.js` | `2cb25133d47edc70823c9018cc522bf9` |
+| `fight.js` | `82ec9e72e20800fa42926096c24f5a18` |
+| `moves.js` | `3c67f0cd4c78a8160701857e22a4f089` |
 | `techniques.js` | `62618f9a409048d60f82be4ef7c728d2` |
 | `damage.js` | `debb3b2ea36fbbe88cdd1ef8f9813533` |
 
@@ -217,3 +217,35 @@ Detail implementasi di header `fight.js` + `src/lib/game/stat-effects.ts`.
 - `STYLES` / `movesFor(fighter)` / `normalizeStyle(style)` — daftar gerakan
   per gaya (dipakai validasi `signatureMove` + picker di form fighter).
 - `DMG_BASE` / `BLOCK_CHIP` (`damage.js`) — konstanta damage (satu sumber).
+
+## Perubahan 2026-11-18 (balance v2 — skor matchup, bukan lotere)
+
+Perintah user: stat JANGAN terlalu berpengaruh, deck counter + matchup
+gaya yang menentukan, TIDAK ADA hoki. Kedua copy `fight.js` diubah
+bersamaan (md5-identik, lihat tabel di atas):
+
+- **Pemenang dari skor, bukan lotere:** `opts.matchupScore` ∈ [-0,15,
+  +0,15] (dihitung `matchupScoreV2` di `stat-effects.ts` dari stat
+  (tanh, cap ±0,05) + gaya (matriks, cap ±0,04) + deck counter
+  (`deck-counters.ts`, cap ±0,04) + gameplan (siklus tempo, ±0,015)).
+  Metode tetap dari seed (decision 60% / KO 30% / draw 10%);
+  pemenang dari E = skor + form noise ±0,10 dari seed (E ≥ 0 → R).
+  Cabang legacy `!winBias` + clamp ±0,35 DIHAPUS; `forcedResult`
+  tetap override. `winBiasFromStats` dipertahankan hanya untuk sim
+  turnamen (`draw.ts`).
+- **KD selaras pemenang:** `buildFightOpts` menggeser `powerEff`
+  exchange antisimetris sebesar (gaya+deck+gameplan) × 600 — powerEff
+  hanya dipakai rumus peluang knockdown (`fight.js:965`), bukan damage.
+- **Arena:** `public/arena/js/app.js` (`onEmbedMessage`) meneruskan
+  `matchupScore` dari `sfa-config` ke `buildFight` (tanpa ini replay
+  video kehilangan skor). `FINISHER_DMG` tetap {20, 20, 20, 20}.
+- **Kompatibilitas:** fight yang dibuat SEBELUM deploy ini menyimpan
+  `fightOpts` tanpa `matchupScore` (hanya `winBias`) — engine
+  memperlakukannya sebagai skor 0 (45/45/10). Re-run verifikasi
+  server atas fight lama bisa `winner_mismatch` (disputed); fight
+  baru menyimpan `matchupScore` dan terverifikasi normal.
+- **Verifikasi:** `npm run simulate-balance` (jalur produksi,
+  N=2000/matchup) — mirror 45/45/10, 100v10 60–70%, counter stat-30
+  kalahkan stat-50, determinisme 2000/2000 identik. Tes:
+  `src/lib/__tests__/balance-v2.test.ts` (+ blok matchupScore di
+  `engine-stat-effects.test.ts`).
