@@ -35,8 +35,8 @@
  *
  * SKOR MATCHUP v2 (balance 2026-11-18 — perintah user: stat JANGAN
  * terlalu berpengaruh, deck counter + matchup gaya yang menentukan,
- * TIDAK ADA hoki): skor S ∈ [-0,15, +0,15], positif = menguntungkan
- * sisi R (kiri), dari 4 komponen:
+ * TIDAK ADA hoki): skor S ∈ [-0,13, +0,13], positif = menguntungkan
+ * sisi R (kiri), dari 3 komponen:
  *   stat     = 0,05 × tanh(skorStat / 150)  (skorStat sama seperti v1,
  *             tapi lewat tanh + cap ±0,05 — selisih stat 90 poin tidak
  *             lagi auto-menang; 100v10 tanpa counter ≈ 68%, bukan 83%)
@@ -44,15 +44,17 @@
  *             (matriks style-matchups.ts, TIDAK berubah)
  *   deck     = (coverageA − coverageB) × 0,04 (deck-counters.ts:
  *             fraksi slot deck yang menjawab ancaman dominan deck lawan)
- *   gameplan = siklus tempo bertahan > agresif > seimbang > bertahan,
- *             ±0,015
+ * Komponen ke-4 (gameplan/siklus tempo bertahan > agresif > seimbang,
+ * ±0,015) DIMATIKAN per keputusan user 2026-11-18 17:45 ("tahan") —
+ * tempo/fokus gameplan tetap dipakai engine untuk bobot gerakan +
+ * pacing, tapi TIDAK lagi memengaruhi skor pemenang.
  * Counter total (±0,08) LEBIH BESAR dari stat (±0,05) — sengaja.
  * Engine memakai skor HANYA untuk menentukan pemenang (E = skor +
  * form noise kecil ±0,10 dari seed; E ≥ 0 → R menang); distribusi
  * metode (decision 60% / KO 30% / draw 10%) TIDAK berubah. Seed sama
  * + skor sama = hasil sama persis (deterministik).
  * Penyelarasan knockdown: powerEff exchange digeser antisimetris
- * sebesar (gaya + deck + gameplan) × 600 — powerEff HANYA dipakai
+ * sebesar (gaya + deck) × 600 — powerEff HANYA dipakai
  * rumus peluang knockdown (fight.js), bukan damage, jadi pemenang
  * skor tidak kontradiksi dengan jumlah knockdown di replay.
  *
@@ -270,8 +272,8 @@ export function winBiasFromStats(
 // Dipakai engine (buildFight) untuk menentukan pemenang; deterministik.
 // ---------------------------------------------------------------------------
 
-/** Cap total skor matchup v2. */
-export const MATCHUP_SCORE_CAP = 0.15;
+/** Cap total skor matchup v2 (maks 3 komponen: 0,05 + 0,04 + 0,04). */
+export const MATCHUP_SCORE_CAP = 0.13;
 /** Cap kontribusi stat pada skor. */
 export const STAT_SCORE_CAP = 0.05;
 /** Pembagi tanh kurva stat (skorStat 68 → 42% cap, 136 → 72%, 272 → 95%). */
@@ -282,10 +284,8 @@ export const STYLE_SCORE_SCALE = 0.3;
 export const STYLE_SCORE_CAP = 0.04;
 /** Cap kontribusi deck (selisih coverage × nilai ini). */
 export const DECK_SCORE_CAP = 0.04;
-/** Langkah tempo counter (siklus bertahan > agresif > seimbang > bertahan). */
-export const GAMEPLAN_STEP = 0.015;
 /**
- * Geser powerEff exchange per 1,00 poin counter (gaya+deck+gameplan).
+ * Geser powerEff exchange per 1,00 poin counter (gaya+deck).
  * powerEff HANYA dipakai rumus peluang knockdown di fight.js (bukan
  * damage), jadi ini menyelaraskan KD dengan pemenang skor tanpa
  * mengubah damage. 600 → kasus counter (0,068) digeser ±41.
@@ -294,6 +294,8 @@ export const GAMEPLAN_STEP = 0.015;
  * replay tampak kontradiktif karena defense stat 50 menahan KD; 600
  * mengangkat share KD-nya ke 60% tanpa mengubah satu pun win rate,
  * karena powerEff tidak dipakai damage/pemenang.)
+ * (Gameplan dikeluarkan dari geser ini 2026-11-18 17:45 — keputusan
+ * user "tahan" siklus tempo; tempo tidak lagi memengaruhi skor.)
  */
 export const KD_SHIFT_PER_POINT = 600;
 
@@ -304,16 +306,8 @@ export interface MatchupScoreParts {
   stat: number;
   style: number;
   deck: number;
-  gameplan: number;
   total: number;
 }
-
-/** Siklus tempo: bertahan > agresif > seimbang > bertahan. */
-const TEMPO_BEATS: Record<string, string> = {
-  bertahan: 'agresif',
-  agresif: 'seimbang',
-  seimbang: 'bertahan',
-};
 
 function statScorePart(a: Stats, b: Stats): number {
   const ea = effectiveStats(a);
@@ -341,16 +335,11 @@ function deckScorePart(deckA: DeckInput | null | undefined, deckB: DeckInput | n
   ) * DECK_SCORE_CAP;
 }
 
-function gameplanScorePart(tempoA: string, tempoB: string): number {
-  if (tempoA === tempoB) return 0;
-  if (TEMPO_BEATS[tempoA] === tempoB) return GAMEPLAN_STEP;
-  if (TEMPO_BEATS[tempoB] === tempoA) return -GAMEPLAN_STEP;
-  return 0;
-}
-
 /**
- * Skor matchup v2 lengkap. Gaya boleh null (mis. pemanggil lama tanpa
- * info gaya) → komponen gaya 0. Total di-clamp ±MATCHUP_SCORE_CAP.
+ * Skor matchup v2 lengkap (3 komponen — gameplan/siklus tempo TIDAK
+ * lagi dihitung di sini, keputusan user 2026-11-18 17:45 "tahan").
+ * Gaya boleh null (mis. pemanggil lama tanpa info gaya) → komponen
+ * gaya 0. Total di-clamp ±MATCHUP_SCORE_CAP.
  */
 export function matchupScoreV2(
   statsA: Stats,
@@ -359,19 +348,16 @@ export function matchupScoreV2(
   styleB: string | null | undefined,
   deckA: DeckInput | null | undefined,
   deckB: DeckInput | null | undefined,
-  tempoA: string,
-  tempoB: string,
 ): MatchupScoreParts {
   const stat = statScorePart(statsA, statsB);
   const style = styleScorePart(styleA, styleB);
   const deck = deckScorePart(deckA, deckB);
-  const gameplan = gameplanScorePart(tempoA, tempoB);
   const total = clamp(
-    stat + style + deck + gameplan,
+    stat + style + deck,
     -MATCHUP_SCORE_CAP,
     MATCHUP_SCORE_CAP,
   );
-  return { stat, style, deck, gameplan, total };
+  return { stat, style, deck, total };
 }
 
 // ---------------------------------------------------------------------------
@@ -471,7 +457,7 @@ export function deckWeights(deck: DeckInput, gameplan: Gameplan): Record<string,
  * `leftStyle`/`rightStyle` opsional (pemanggil lama tanpa info gaya → komponen
  * gaya 0); buildFightSetup mengisinya dari dokumen Fighter.
  * Skor matchup v2 dihitung di sini; powerEff exchange digeser antisimetris
- * sebesar (gaya+deck+gameplan) × KD_SHIFT_PER_POINT supaya knockdown di
+ * sebesar (gaya+deck) × KD_SHIFT_PER_POINT supaya knockdown di
  * replay selaras dengan pemenang skor (powerEff hanya dipakai rumus KD).
  */
 export function buildFightOpts(
@@ -491,11 +477,9 @@ export function buildFightOpts(
     rightStyle ?? null,
     leftDeck,
     rightDeck,
-    leftGameplan.tempo,
-    rightGameplan.tempo,
   );
   const statMods = { R: statModsFor(leftStats), B: statModsFor(rightStats) };
-  const kdShift = (score.style + score.deck + score.gameplan) * KD_SHIFT_PER_POINT;
+  const kdShift = (score.style + score.deck) * KD_SHIFT_PER_POINT;
   const clampEff = (v: number): number => Math.max(1, Math.min(200, v));
   statMods.R.powerEff = clampEff(statMods.R.powerEff + kdShift);
   statMods.B.powerEff = clampEff(statMods.B.powerEff - kdShift);

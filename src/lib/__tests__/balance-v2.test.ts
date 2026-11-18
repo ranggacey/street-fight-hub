@@ -65,24 +65,24 @@ describe('deck counter — ancaman dominan + coverage', () => {
 
 describe('matchupScoreV2 — komponen + cap', () => {
   it('stat sama + gaya sama + deck sama + tempo sama = 0', () => {
-    const s = matchupScoreV2(S10, S10, 'muaythai', 'muaythai', DECK_KUAT, DECK_KUAT, 'seimbang', 'seimbang');
+    const s = matchupScoreV2(S10, S10, 'muaythai', 'muaythai', DECK_KUAT, DECK_KUAT);
     expect(s.total).toBe(0);
-    expect(s).toEqual({ stat: 0, style: 0, deck: 0, gameplan: 0, total: 0 });
+    expect(s).toEqual({ stat: 0, style: 0, deck: 0, total: 0 });
   });
 
   it('100v10 tanpa counter: stat ≈ +0,047 (tanh, bukan linear)', () => {
-    const s = matchupScoreV2(at(100), at(10), 'tinju', 'tinju', DECK_KUAT, DECK_KUAT, 'seimbang', 'seimbang');
+    const s = matchupScoreV2(at(100), at(10), 'tinju', 'tinju', DECK_KUAT, DECK_KUAT);
     expect(s.stat).toBeCloseTo(0.047, 2);
     expect(s.total).toBeCloseTo(0.047, 2);
   });
 
   it('30v10 tanpa counter: stat ≈ +0,021', () => {
-    const s = matchupScoreV2(at(30), at(10), 'tinju', 'tinju', DECK_KUAT, DECK_KUAT, 'seimbang', 'seimbang');
+    const s = matchupScoreV2(at(30), at(10), 'tinju', 'tinju', DECK_KUAT, DECK_KUAT);
     expect(s.stat).toBeCloseTo(0.021, 2);
   });
 
   it('gaya: gulat vs tinju = (1,08 − 0,95) × 0,3 ≈ +0,039', () => {
-    const s = matchupScoreV2(S10, S10, 'gulat', 'tinju', NO_DECK, NO_DECK, 'seimbang', 'seimbang');
+    const s = matchupScoreV2(S10, S10, 'gulat', 'tinju', NO_DECK, NO_DECK);
     expect(s.style).toBeCloseTo(0.039, 3);
   });
 
@@ -94,8 +94,6 @@ describe('matchupScoreV2 — komponen + cap', () => {
       'tinju',
       DECK_ANTI_KICK,
       DECK_KUAT,
-      'seimbang',
-      'seimbang',
     );
     expect(s.stat).toBeCloseTo(-0.021, 2);
     expect(s.style).toBeCloseTo(0.039, 3);
@@ -103,14 +101,28 @@ describe('matchupScoreV2 — komponen + cap', () => {
     expect(s.total).toBeCloseTo(0.046, 2);
   });
 
-  it('gameplan: bertahan > agresif (+0,015), agresif < bertahan (−0,015)', () => {
-    const a = matchupScoreV2(S10, S10, null, null, NO_DECK, NO_DECK, 'bertahan', 'agresif');
-    const b = matchupScoreV2(S10, S10, null, null, NO_DECK, NO_DECK, 'agresif', 'bertahan');
-    expect(a.gameplan).toBe(0.015);
-    expect(b.gameplan).toBe(-0.015);
+  it('tempo TIDAK memengaruhi skor (siklus tempo dimatikan 2026-11-18)', () => {
+    // Gameplan yang sama-sama seimbang vs tempo berlawanan harus
+    // menghasilkan skor + geser KD yang IDENTIK — tempo hanya dipakai
+    // engine untuk bobot gerakan + pacing, bukan pemenang.
+    const a = buildFightOpts(
+      at(30), at(50), DECK_ANTI_KICK, DECK_KUAT,
+      { tempo: 'bertahan', focus: 'balanced' },
+      { tempo: 'agresif', focus: 'balanced' },
+      'gulat', 'tinju',
+    );
+    const b = buildFightOpts(
+      at(30), at(50), DECK_ANTI_KICK, DECK_KUAT,
+      SEIMBANG, SEIMBANG,
+      'gulat', 'tinju',
+    );
+    expect(a.matchupScore).toBe(b.matchupScore);
+    expect(a.matchupScore).toBeCloseTo(0.046, 2);
+    expect(a.statMods.R.powerEff).toBe(b.statMods.R.powerEff);
+    expect(a.statMods.B.powerEff).toBe(b.statMods.B.powerEff);
   });
 
-  it('total tidak pernah melewati cap ±0,15', () => {
+  it('total tidak pernah melewati cap ±0,13', () => {
     const s = matchupScoreV2(
       at(100),
       at(10),
@@ -118,10 +130,8 @@ describe('matchupScoreV2 — komponen + cap', () => {
       'tinju',
       DECK_ANTI_KICK,
       NO_DECK,
-      'bertahan',
-      'agresif',
     );
-    expect(Math.abs(s.total)).toBeLessThanOrEqual(0.15);
+    expect(Math.abs(s.total)).toBeLessThanOrEqual(0.13);
   });
 });
 

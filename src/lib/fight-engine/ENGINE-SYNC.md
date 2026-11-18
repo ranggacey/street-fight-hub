@@ -15,7 +15,7 @@ lihat bawah).**
 
 | File | md5 |
 |---|---|
-| `fight.js` | `82ec9e72e20800fa42926096c24f5a18` |
+| `fight.js` | `241701471dac961d89300f8e1717d1e9` |
 | `moves.js` | `3c67f0cd4c78a8160701857e22a4f089` |
 | `techniques.js` | `62618f9a409048d60f82be4ef7c728d2` |
 | `damage.js` | `debb3b2ea36fbbe88cdd1ef8f9813533` |
@@ -224,18 +224,25 @@ Perintah user: stat JANGAN terlalu berpengaruh, deck counter + matchup
 gaya yang menentukan, TIDAK ADA hoki. Kedua copy `fight.js` diubah
 bersamaan (md5-identik, lihat tabel di atas):
 
-- **Pemenang dari skor, bukan lotere:** `opts.matchupScore` ∈ [-0,15,
-  +0,15] (dihitung `matchupScoreV2` di `stat-effects.ts` dari stat
+- **Pemenang dari skor, bukan lotere:** `opts.matchupScore` ∈ [-0,13,
+  +0,13] (dihitung `matchupScoreV2` di `stat-effects.ts` dari stat
   (tanh, cap ±0,05) + gaya (matriks, cap ±0,04) + deck counter
-  (`deck-counters.ts`, cap ±0,04) + gameplan (siklus tempo, ±0,015)).
+  (`deck-counters.ts`, cap ±0,04)).
   Metode tetap dari seed (decision 60% / KO 30% / draw 10%);
   pemenang dari E = skor + form noise ±0,10 dari seed (E ≥ 0 → R).
   Cabang legacy `!winBias` + clamp ±0,35 DIHAPUS; `forcedResult`
   tetap override. `winBiasFromStats` dipertahankan hanya untuk sim
   turnamen (`draw.ts`).
 - **KD selaras pemenang:** `buildFightOpts` menggeser `powerEff`
-  exchange antisimetris sebesar (gaya+deck+gameplan) × 600 — powerEff
+  exchange antisimetris sebesar (gaya+deck) × 600 — powerEff
   hanya dipakai rumus peluang knockdown (`fight.js:965`), bukan damage.
+- **2026-11-18 17:45 — gameplan/siklus tempo DIMATIKAN dari skor
+  (keputusan user "tahan"):** komponen ke-4 (bertahan > agresif >
+  seimbang, ±0,015) dihapus dari `matchupScoreV2`; cap total jadi
+  ±0,13 (0,05+0,04+0,04); clamp engine di `fight.js` ikut jadi ±0,13;
+  tempo/fokus gameplan TETAP dipakai untuk bobot gerakan + pacing
+  engine, hanya tidak lagi memengaruhi skor pemenang. Angka komponen
+  lain (stat/gaya/deck) TIDAK berubah.
 - **Arena:** `public/arena/js/app.js` (`onEmbedMessage`) meneruskan
   `matchupScore` dari `sfa-config` ke `buildFight` (tanpa ini replay
   video kehilangan skor). `FINISHER_DMG` tetap {20, 20, 20, 20}.

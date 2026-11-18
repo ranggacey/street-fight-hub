@@ -107,11 +107,11 @@ const NEUTRAL_MODS = {
 //   blockBonus, hitBonus, attackSpeedMul, fatigueRate, powerEff,
 //   defenseEff, staminaEff, ...). TANPA statMods, perilaku lama persis
 //   (aliran rng tidak berubah — lihat pickOutcome + knockdown di bawah).
-// opts.matchupScore: number [-0.15, +0.15] — skor matchup v2 (positif =
+// opts.matchupScore: number [-0.13, +0.13] — skor matchup v2 (positif =
 //   menguntungkan R). Pemenang dari skor + form noise kecil (±0,10 dari
 //   seed); distribusi metode (decision 60% / KO 30% / draw 10%) tetap.
 //   matchupScore 0/undefined = 45/45/10 (imbang). Dihitung deterministik
-//   dari stat/deck/gameplan tersimpan (matchupScoreV2 di stat-effects.ts)
+//   dari stat/deck tersimpan (matchupScoreV2 di stat-effects.ts)
 //   supaya server re-run mereproduksi fight.
 // opts.stamina: { R: pool, B: pool } — pool stamina awal per sisi.
 //   Tiap gerakan memakan stamina (move.power * 6 * fatigueRate; kartu
@@ -654,8 +654,8 @@ export function buildFight(left, right, duration, seed, opts = {}) {
   // --- HASIL DULU (sebelum koreografi) — SKOR MATCHUP v2 (2026-11-18) ---
   // BUKAN lotere pemenang: metode dari lotRoll (decision 60% / KO 30% /
   // draw 10% — distribusi tetap seperti dulu); pemenang dari SKOR matchup
-  // (opts.matchupScore ∈ [-0,15, +0,15], dihitung server di
-  // stat-effects.ts dari stat + gaya + deck counter + gameplan) + form
+  // (opts.matchupScore ∈ [-0,13, +0,13], dihitung server di
+  // stat-effects.ts dari stat + gaya + deck counter) + form
   // noise kecil (±0,10, deterministik dari winnerRoll). E = skor + form;
   // E >= 0 → R menang. Seed sama + skor sama = hasil sama persis.
   // Dua tarikan rng ini SELALU dilakukan supaya aliran rng setelah
@@ -666,7 +666,7 @@ export function buildFight(left, right, duration, seed, opts = {}) {
   const lotRoll = rng();
   const winnerRoll = rng();
   const matchupScore = typeof opts?.matchupScore === 'number'
-    ? Math.max(-0.15, Math.min(0.15, opts.matchupScore)) : 0;
+    ? Math.max(-0.13, Math.min(0.13, opts.matchupScore)) : 0;
   let result, winner;
   if (lotRoll < 0.60) { result = 'decision'; }
   else if (lotRoll < 0.90) { result = 'ko'; }
