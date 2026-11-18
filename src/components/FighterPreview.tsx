@@ -963,10 +963,15 @@ export default function FighterPreview({
   colors,
   accessories,
   name,
+  hideCaption = false,
 }: {
   colors: FighterColorsLike;
   accessories?: Partial<FighterAccessories> | null;
   name?: string;
+  /** Sembunyikan caption editor ("Preview berubah...") — untuk konteks
+      tampil-saja seperti layar reveal lawan, di mana preview tidak bisa
+      diedit. */
+  hideCaption?: boolean;
 }) {
   const body = asColor(colors.body) ?? "#F97316";
   const gloves = asColor(colors.gloves) ?? "#141210";
@@ -1082,9 +1087,12 @@ export default function FighterPreview({
         <span className="font-display text-lg uppercase tracking-wide text-paper">
           {name?.trim() ? name.trim() : "Fighter-mu"}
         </span>
-        <span className="mt-0.5 block text-xs text-paper-mute">
-          Preview berubah langsung setiap kali kamu mengganti aksesoris atau warna
-        </span>
+        {hideCaption ? null : (
+          <span className="mt-0.5 block text-xs text-paper-mute">
+            Preview berubah langsung setiap kali kamu mengganti aksesoris atau
+            warna
+          </span>
+        )}
       </figcaption>
     </figure>
   );

@@ -40,6 +40,11 @@ const FILES = {
   snapBig: 'audio/snap-synth-big.wav',
   snapAnime: 'audio/snap-anime-01.mp3',
   impactAnime: 'audio/impact-anime-01.mp3',
+  // Sting pembuka/penutup fight: bel ring tinju asli (bukan placeholder
+  // impact). Sumber: Freesound CC0 "Boxing Bell Signals" oleh
+  // Mateusz_Chenc (sound 520998) — dipotong 32,8 -> 1,82 dtk (satu sinyal
+  // ding-ding), dinormalisasi peak -1 dBFS, mono 22,05 kHz 64 kbps.
+  fightSting: 'audio/fight-sting-01.mp3',
   blockTok: 'audio/block-tok-01.wav',
   boom: 'audio/boom-heavy-01.mp3',
   crowdBed: 'audio/crowd-arena-bed-01.mp3',
@@ -209,6 +214,15 @@ export class SFX {
   }
 
   _block(when) { this._play('blockTok', when, { gain: 0.9 }); }
+  // Bel pembuka/penutup fight: bunyi TEPAT di awal fight (event 'bell'
+  // t=0 dari app.js, dijadwalkan di t0 = akhir intro) dan di akhir fight.
+  // Gain 0.5 = sama seperti placeholder impactAnime yang digantikan slot
+  // ini, jadi keseimbangan mix terukur sebelumnya tidak berubah; peak
+  // file -1 dBFS -> kontribusi ~0,34 ke master (0.89*0.5*0.765), di bawah
+  // ambang clipping. Bel berbunyi di atas ekor baris intro "Ini dia!"
+  // (selesai ~0,95 dtk kemudian) — partial bel 1,3/2,25/4,5 kHz berada
+  // di atas formant suara, jadi tidak menutupi ucapan komentator.
+  _fightSting(when) { this._play('fightSting', when, { gain: 0.5 }); }
   _boom(when) {
     this._play('boom', when, { gain: 1.0 });
     this._synthSnap(when, 'big');
@@ -246,7 +260,7 @@ export class SFX {
       else if (ev.type === 'block') this._block(when);
       else if (ev.type === 'ko') { this._boom(when); this._cheer(when + 0.15); }
       else if (ev.type === 'dash') this._play('whooshDash', when, { gain: 0.6 });
-      else if (ev.type === 'bell') this._play('impactAnime', when, { gain: 0.5 });
+      else if (ev.type === 'bell') this._fightSting(when);
     }
   }
 }

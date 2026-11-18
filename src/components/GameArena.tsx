@@ -11,6 +11,7 @@ import {
 } from "@/components/api";
 import type { Fighter, GameFight } from "@/components/types";
 import GlassCard from "@/components/GlassCard";
+import FightReveal from "@/components/FightReveal";
 import Badge from "@/components/Badge";
 import Button, { ButtonLink } from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
@@ -548,6 +549,15 @@ export default function GameArena({
   const [submitError, setSubmitError] = useState("");
   const [dispute, setDispute] = useState("");
   const [shareMsg, setShareMsg] = useState("");
+  // Reveal lawan ditutup (countdown habis / tombol MULAI TARUNG).
+  // Reset tiap pindah fight — pola adjusting-state-during-render
+  // (bukan effect), sama seperti autoPlayed di /gacha-preview.
+  const [revealFightId, setRevealFightId] = useState(fightId);
+  const [revealDone, setRevealDone] = useState(false);
+  if (revealFightId !== fightId) {
+    setRevealFightId(fightId);
+    setRevealDone(false);
+  }
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const submittedRef = useRef(false);
 
@@ -686,6 +696,34 @@ export default function GameArena({
   const disputed = fight.status === "disputed";
   const poster = fight.posterDataUrl ?? null;
 
+  // --- Layar reveal lawan (presentasi saja) ---
+  // Deck asli mengalir dari config.opts.deck { R: string[], B: string[] }
+  // (buildFightSetup -> GameFight.config.fightOpts -> API route) — R =
+  // fighterA (kiri), B = fighterB (kanan). Signature = fighter.signatureMove
+  // (cermin FighterDeck.signature, ditulis PUT /api/deck). Fight lama
+  // pra-stat: opts null -> deck kosong, reveal tetap tampil tanpa kartu.
+  const optsDeck =
+    (detail.config.opts as { deck?: { R?: unknown; B?: unknown } } | null)
+      ?.deck ?? null;
+  const deckKinds = (side: "R" | "B"): string[] => {
+    const v = optsDeck?.[side];
+    return Array.isArray(v)
+      ? v.filter((k): k is string => typeof k === "string")
+      : [];
+  };
+  const opponentIsA = detail.mySide === "B";
+  const opponent = opponentIsA ? fighterA : fighterB;
+  const me = opponentIsA ? fighterB : fighterA;
+  const opponentDeck = deckKinds(opponentIsA ? "R" : "B");
+  // Tampil untuk fight yang belum selesai; di exportMode tetap tampil
+  // (replay fight selesai untuk rekam video) dan bisa diskip — alur
+  // ekspor tidak berubah: arena di bawah tetap ter-mount, autoRecord
+  // tetap jalan saat Tarung diklik setelah reveal hilang.
+  const showReveal =
+    !revealDone &&
+    ((fight.status !== "completed" && fight.status !== "disputed") ||
+      exportMode);
+
   const share = async () => {
     const url = `${window.location.origin}/game/${fightId}`;
     const text = `Tonton fight ${nameOf(fighterA, "?")} vs ${nameOf(fighterB, "?")} di Street Fight Hub!`;
@@ -790,6 +828,19 @@ export default function GameArena({
             />
           </GlassCard>
         </section>
+      ) : null}
+
+      {/* Layar reveal lawan — menutupi arena sampai countdown habis
+          atau tombol MULAI TARUNG ditekan. Iframe arena tetap ter-mount
+          di bawahnya (handshake sfa-ready/sfa-config tidak terganggu). */}
+      {showReveal ? (
+        <FightReveal
+          opponent={opponent}
+          me={me}
+          opponentDeck={opponentDeck}
+          opponentSignature={opponent.signatureMove ?? null}
+          onDone={() => setRevealDone(true)}
+        />
       ) : null}
 
       {/* Arena iframe — rasio 9:16 PERSIS (aspect, bukan tinggi tetap) supaya
