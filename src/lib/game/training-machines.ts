@@ -11,12 +11,26 @@
  *   pelan, besar saat gerak cepat) — smoothing bawaan MediaPipe
  *   dimatikan (landmarker dibuat tanpa smoothLandmarks) supaya gerakan
  *   cepat tidak tertahan filter.
- * - Cek PLANK berbasis TORSO (vektor bahu→pinggul): plank lolos dari
- *   samping (torso nyaris horizontal) maupun dari depan (torso
- *   memendek karena foreshortening); BERDIRI tetap terblokir (torso
- *   vertikal + panjang penuh). Cek lama berbasis sudut badan
- *   bahu–pinggul–pergelangan kaki SUDAH TIDAK dipakai sebagai gate
- *   (tetap ada di debug).
+ * - Cek PLANK berbasis TORSO (bahu→pinggul) + KAKI + LEBAR BAHU.
+ *   Lolos kalau SALAH SATU: (1) SAMPING — torso nyaris horizontal
+ *   (sudut terhadap horizontal <= 50°); (2) DEPAN-TINGGI — torso
+ *   memendek karena foreshortening, rasio torso/badan < 0,25;
+ *   (3) DEPAN-RENDAH — torso vertikal di gambar (sudut >= 70°) TAPI
+ *   torso relatif panjang (rasio >= 0,45) DAN kaki memendek terhadap
+ *   torso (pinggul→pergelangan / torso <= 1,15); (4) DEPAN (butuh
+ *   aspek video W/H, lihat setVideoAspect) — lebar bahu : panjang
+ *   torso dalam piksel >= 1,5 (bahu tidak ikut memendek saat badan
+ *   mengarah ke kamera). BERDIRI tetap terblokir: rasio ~0,35,
+ *   kaki/torso ~1,8, bahu/torso (px) ~0,3–0,9.
+ *   Bukti video user 2026-11-11 (kamera di lantai DEPAN user,
+ *   1080x2400 portrait, 11 dtk): bahu (0,50, 0,385), pinggul
+ *   (0,50, 0,635), lutut ~(0,50, 0,72) → sudut 90°, rasio 0,60,
+ *   kaki/torso 0,66 — GAGAL di gate lama (butuh rasio < 0,25),
+ *   lolos di klausul (3). Landmark BERDIRI di tes diperbaiki jadi
+ *   anatomis — yang lama skematis (pinggul→pergelangan == torso,
+ *   kaki/torso 1,0; tidak ada manusia berdiri seperti itu; kini
+ *   1,82). Cek lama berbasis sudut badan bahu–pinggul–pergelangan
+ *   kaki SUDAH TIDAK dipakai sebagai gate (tetap ada di debug).
  *
  * Mesin ini MURNI (tanpa DOM/MediaPipe) — bisa dites dengan landmark
  * sintetis. `nowMs` di-inject supaya tes deterministik (default
@@ -42,6 +56,17 @@ export const SQUAT_UP_DEG = 156;
 /** Rep yang lebih cepat dari ini dianggap getar/noise, tidak dihitung. */
 export const MIN_REP_MS = 320;
 
+/**
+ * Ambang gate plank — lihat header file. Klausul (3) dan (4) adalah
+ * perbaikan 2026-11-11 untuk kamera lantai di depan user.
+ */
+export const PLANK_SIDE_MAX_DEG = 50;
+export const PLANK_FRONT_HIGH_MAX_RATIO = 0.25;
+export const PLANK_FRONT_LOW_MIN_ANGLE_DEG = 70;
+export const PLANK_FRONT_LOW_MIN_RATIO = 0.45;
+export const PLANK_FRONT_LOW_MAX_LEG_RATIO = 1.15;
+export const PLANK_FRONT_MIN_SHOULDER_RATIO_PX = 1.5;
+
 export interface FrameDebug {
   mode: Mode;
   phase: string;
@@ -51,6 +76,10 @@ export interface FrameDebug {
   hipDev: number | null;
   torsoAngleDeg: number | null;
   torsoLenRatio: number | null;
+  /** |pinggul→pergelangan| / |bahu→pinggul| (kaki memendek = plank depan). */
+  legRatio: number | null;
+  /** Lebar bahu : panjang torso dalam piksel (butuh `aspect`); null tanpa aspek. */
+  shoulderTorsoRatio: number | null;
   plank: boolean;
   minElbow: number | null;
   minKnee: number | null;
@@ -75,6 +104,8 @@ const NO_LANDMARKS = (mode: Mode): FrameDebug => ({
   hipDev: null,
   torsoAngleDeg: null,
   torsoLenRatio: null,
+  legRatio: null,
+  shoulderTorsoRatio: null,
   plank: false,
   minElbow: null,
   minKnee: null,
@@ -101,17 +132,31 @@ function mid(a: Pt, b: Pt): Pt {
 }
 
 /**
- * Cek plank berbasis TORSO (bahu→pinggul).
+ * Cek plank berbasis TORSO (bahu→pinggul) + KAKI + LEBAR BAHU.
  * - Dari samping: torso nyaris horizontal → sudut terhadap horizontal kecil.
- * - Dari depan: torso mengarah menjauhi kamera → panjang proyeksinya
- *   jauh lebih pendek dari panjang badan.
- * - Berdiri: torso vertikal (sudut ~90°) DAN panjang penuh (rasio
- *   ~0,36) → bukan plank.
+ * - Dari depan-tinggi: torso mengarah menjauhi kamera → panjang proyeksinya
+ *   jauh lebih pendek dari panjang badan (rasio < 0,25).
+ * - Dari depan-rendah (kamera di lantai depan user, kasus video 2026-11-11):
+ *   torso TEGAK di gambar (sudut ~90°) dan rasio torso/badan BESAR (~0,6)
+ *   karena kaki yang jauh ikut memendek — tapi kaki memendek JAUH LEBIH
+ *   (pinggul→pergelangan hanya ~0,66x torso) dibanding BERDIRI (~1,8x).
+ *   Klausul ini TIDAK butuh aspek video.
+ * - Dari depan (butuh `aspect` = lebar/tinggi video): lebar bahu TIDAK ikut
+ *   memendek saat badan mengarah ke kamera, jadi bahu : torso (piksel)
+ *   >= 1,5 menandakan plank; BERDIRI ~0,3–0,9 berapa pun jaraknya.
+ * - Berdiri: torso vertikal (sudut ~90°) DAN panjang penuh (rasio ~0,35)
+ *   DAN kaki panjang penuh → bukan plank.
+ *
+ * @param aspect rasio lebar/tinggi frame video (mis. 16/9 landscape,
+ *   9/16 portrait). Tanpa aspek, klausul lebar-bahu dilewati — tiga
+ *   klausul lain tetap jalan.
  */
-export function torsoPlankCheck(lms: Pt[]): {
+export function torsoPlankCheck(lms: Pt[], aspect?: number | null): {
   plank: boolean;
   torsoAngleDeg: number | null;
   torsoLenRatio: number | null;
+  legRatio: number | null;
+  shoulderTorsoRatio: number | null;
 } {
   const shoulderMid = mid(lms[LM.leftShoulder], lms[LM.rightShoulder]);
   const hipMid = mid(lms[LM.leftHip], lms[LM.rightHip]);
@@ -121,13 +166,40 @@ export function torsoPlankCheck(lms: Pt[]): {
   const torsoLen = Math.hypot(dx, dy);
   const bodyLen = dist(shoulderMid, ankleMid);
   if (torsoLen < 1e-6 || bodyLen < 1e-6) {
-    return { plank: false, torsoAngleDeg: null, torsoLenRatio: null };
+    return {
+      plank: false,
+      torsoAngleDeg: null,
+      torsoLenRatio: null,
+      legRatio: null,
+      shoulderTorsoRatio: null,
+    };
   }
   // Sudut torso terhadap horizontal (0° = horizontal, 90° = vertikal).
   const torsoAngleDeg = (Math.atan2(Math.abs(dy), Math.abs(dx)) * 180) / Math.PI;
   const torsoLenRatio = torsoLen / bodyLen;
-  const plank = torsoAngleDeg <= 50 || torsoLenRatio < 0.25;
-  return { plank, torsoAngleDeg, torsoLenRatio };
+  // Kaki memendek terhadap torso saat badan mengarah ke kamera.
+  const legRatio = dist(hipMid, ankleMid) / torsoLen;
+  // Lebar bahu : panjang torso dalam satuan piksel. Koordinat landmark
+  // ternormalisasi per sumbu, jadi x dikali aspek agar jarak sebanding.
+  let shoulderTorsoRatio: number | null = null;
+  if (aspect != null && aspect > 0) {
+    const shoulderW = dist(lms[LM.leftShoulder], lms[LM.rightShoulder]);
+    const torsoLenPx = Math.hypot(dx * aspect, dy);
+    shoulderTorsoRatio =
+      torsoLenPx < 1e-6 ? null : (shoulderW * aspect) / torsoLenPx;
+  }
+  const sidePlank = torsoAngleDeg <= PLANK_SIDE_MAX_DEG;
+  const frontHigh = torsoLenRatio < PLANK_FRONT_HIGH_MAX_RATIO;
+  const frontLow =
+    torsoAngleDeg >= PLANK_FRONT_LOW_MIN_ANGLE_DEG &&
+    torsoLenRatio >= PLANK_FRONT_LOW_MIN_RATIO &&
+    legRatio <= PLANK_FRONT_LOW_MAX_LEG_RATIO;
+  const frontLowWide =
+    shoulderTorsoRatio !== null &&
+    torsoAngleDeg >= PLANK_FRONT_LOW_MIN_ANGLE_DEG &&
+    shoulderTorsoRatio >= PLANK_FRONT_MIN_SHOULDER_RATIO_PX;
+  const plank = sidePlank || frontHigh || frontLow || frontLowWide;
+  return { plank, torsoAngleDeg, torsoLenRatio, legRatio, shoulderTorsoRatio };
 }
 
 /** Push-up: ATAS siku >150° + plank, BAWAH siku <=105°, rep saat kembali ke ATAS. */
@@ -136,12 +208,24 @@ export class PushupMachine {
   private minElbow = 180;
   private downAt = 0;
   private prevElbow: number | null = null;
+  /** Rasio lebar/tinggi frame video (16/9 landscape, 9/16 portrait). */
+  private videoAspect: number | null = null;
 
   reset(): void {
     this.state = 'top';
     this.minElbow = 180;
     this.downAt = 0;
     this.prevElbow = null;
+  }
+
+  /**
+   * Pasang aspek frame video SEKALI saat kamera menyala (dan setiap kali
+   * mesin baru dibuat, mis. ganti mode) — dipakai klausul lebar-bahu di
+   * torsoPlankCheck. Tanpa ini gate tetap jalan via tiga klausul lain,
+   * tapi plank depan sudut menengah/tinggi jadi kurang tertangkap.
+   */
+  setVideoAspect(aspect: number | null): void {
+    this.videoAspect = aspect != null && aspect > 0 ? aspect : null;
   }
 
   step(lms: Pt[] | null, nowMs: number = Date.now()): MachineResult {
@@ -162,7 +246,8 @@ export class PushupMachine {
     const hipDev = signedLineDeviation(lms[ix.shoulder], lms[ix.ankle], lms[ix.hip]);
     const bodyLen = dist(lms[ix.shoulder], lms[ix.ankle]);
     const hipDevNorm = hipDev === null || bodyLen < 1e-6 ? null : hipDev / bodyLen;
-    const { plank, torsoAngleDeg, torsoLenRatio } = torsoPlankCheck(lms);
+    const { plank, torsoAngleDeg, torsoLenRatio, legRatio, shoulderTorsoRatio } =
+      torsoPlankCheck(lms, this.videoAspect);
 
     let counted = false;
     let invalid = false;
@@ -225,6 +310,8 @@ export class PushupMachine {
         hipDev: hipDevNorm,
         torsoAngleDeg,
         torsoLenRatio,
+        legRatio,
+        shoulderTorsoRatio,
         plank,
         minElbow: this.state === 'down' ? this.minElbow : null,
         minKnee: null,
@@ -323,6 +410,8 @@ export class SquatMachine {
         hipDev: hipDrop,
         torsoAngleDeg: null,
         torsoLenRatio: null,
+        legRatio: null,
+        shoulderTorsoRatio: null,
         plank: false,
         minElbow: null,
         minKnee: this.state === 'down' ? this.minKnee : null,
