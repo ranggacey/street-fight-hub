@@ -22,6 +22,7 @@ const PUBLIC_SEGMENTS = new Set([
   "obrolan",
   "profil",
   "latihan",
+  "3d-fight",
 ]);
 
 /** Ikon rumah SVG untuk tombol Beranda — selalu terlihat, bukan cuma logo. */
@@ -44,7 +45,12 @@ function HomeIcon({ className = "" }: { className?: string }) {
   );
 }
 
-const NAV_LINKS = [
+const NAV_LINKS: {
+  href: string;
+  label: string;
+  icon?: boolean;
+  badge?: string;
+}[] = [
   { href: "/", label: "Beranda", icon: true },
   { href: "/turnamen", label: "Turnamen" },
   { href: "/klasemen", label: "Klasemen" },
@@ -52,6 +58,7 @@ const NAV_LINKS = [
   { href: "/obrolan", label: "Obrolan" },
   { href: "/gelar", label: "Gelar" },
   { href: "/latihan", label: "Latihan" },
+  { href: "/3d-fight", label: "Gelud 3D", badge: "BARU" },
 ];
 
 export default function Navbar() {
@@ -123,10 +130,15 @@ export default function Navbar() {
                 aria-current={active ? "page" : undefined}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/10 ${
                   active ? "text-amber-brand" : "text-paper-dim"
-                }`}
+                } ${l.badge ? "min-h-[44px]" : ""}`}
               >
                 {l.icon ? <HomeIcon className="h-4 w-4" /> : null}
                 {l.label}
+                {l.badge ? (
+                  <span className="rounded-full bg-amber-brand px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-on-amber">
+                    {l.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -232,6 +244,11 @@ export default function Navbar() {
                 >
                   {l.icon ? <HomeIcon className="h-5 w-5" /> : null}
                   {l.label}
+                  {l.badge ? (
+                    <span className="rounded-full bg-amber-brand px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-on-amber">
+                      {l.badge}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
