@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { getId, styleColor, styleLabel } from "@/components/api";
 import type { Fighter } from "@/components/types";
 import Badge from "@/components/Badge";
@@ -40,12 +40,21 @@ type OpponentPickerProps = {
   onSelect?: (id: string) => void;
   /** Halaman awal — hanya untuk tes (render statis tidak bisa klik). */
   initialPage?: number;
+  /**
+   * Kata kunci awal kolom pencarian (dipakai demo/tes — mensimulasikan
+   * kata kunci yang sudah diketik user).
+   */
+  initialQuery?: string;
   /** Mode tantang-banyak-orang: pilih beberapa lawan sekaligus. */
   multi?: boolean;
   /** id fighter yang sedang dipilih dalam mode multi. */
   selectedIds?: string[];
   /** Toggle satu lawan dalam mode multi. */
   onToggle?: (id: string) => void;
+  /** Mode multi: pilih SEMUA lawan sekaligus ("Tantang Semua"). */
+  onSelectAll?: (ids: string[]) => void;
+  /** Mode multi: batalkan semua pilihan ("Batalkan Semua"). */
+  onClearAll?: () => void;
 };
 
 export default function OpponentPicker({
@@ -53,16 +62,38 @@ export default function OpponentPicker({
   selectedId = "",
   onSelect,
   initialPage = 1,
+  initialQuery = "",
   multi = false,
   selectedIds = [],
   onToggle,
+  onSelectAll,
+  onClearAll,
 }: OpponentPickerProps) {
   const [page, setPage] = useState(initialPage);
-  const totalPages = Math.max(1, Math.ceil(fighters.length / OPPONENTS_PER_PAGE));
+  const [query, setQuery] = useState(initialQuery);
+
+  // Pencarian lawan (nama + gaya + username IG), client-side. Query
+  // kosong = seluruh daftar. Halaman di-clamp ke total halaman hasil
+  // filter, jadi query yang menyusutkan daftar tidak terjebak di
+  // halaman kosong. Pilihan (selectedId/selectedIds) tetap dihitung
+  // dari daftar penuh — chip "Lihat" membersihkan query dulu lalu
+  // melompat ke halaman lawan itu.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase("id");
+    if (!q) return fighters;
+    return fighters.filter(
+      (f) =>
+        f.displayName.toLocaleLowerCase("id").includes(q) ||
+        f.igUsername.toLocaleLowerCase("id").includes(q) ||
+        styleLabel(f.style, f.styleOther).toLocaleLowerCase("id").includes(q) ||
+        f.style.toLocaleLowerCase("id").includes(q),
+    );
+  }, [fighters, query]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / OPPONENTS_PER_PAGE));
   // Clamp turunan (bukan effect): daftar bisa menyusut setelah load ulang.
   const safePage = Math.min(Math.max(1, page), totalPages);
   const start = (safePage - 1) * OPPONENTS_PER_PAGE;
-  const pageFighters = fighters.slice(start, start + OPPONENTS_PER_PAGE);
+  const pageFighters = filtered.slice(start, start + OPPONENTS_PER_PAGE);
   const selected =
     fighters.find((f) => getId(f) === selectedId) ?? null;
   const selectedOnPage = pageFighters.some((f) => getId(f) === selectedId);
@@ -96,6 +127,28 @@ export default function OpponentPicker({
 
   return (
     <div>
+      {/* Pencarian lawan — jelas terlihat di atas daftar, filter nama +
+          gaya + username IG, client-side, tanpa perubahan API. */}
+      <div className="mb-3">
+        <label htmlFor="opponent-search" className="sr-only">
+          Cari lawan
+        </label>
+        <input
+          id="opponent-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari lawan… (nama, gaya, username)"
+          className="min-h-[44px] w-full rounded-xl border border-white/15 bg-white/5 px-3.5 text-sm text-paper placeholder:text-paper-mute focus:border-amber-brand focus:outline-none focus:ring-2 focus:ring-amber-brand/40"
+        />
+        {query.trim() !== "" && (
+          <p className="mt-2 text-xs text-paper-dim" aria-live="polite">
+            {filtered.length === 0
+              ? `Tidak ada lawan yang cocok dengan “${query.trim()}”.`
+              : `${filtered.length} dari ${fighters.length} lawan cocok dengan “${query.trim()}”.`}
+          </p>
+        )}
+      </div>
       {multi && multiSelected.length > 0 && !multiSelectedOnPage ? (
         <p className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-brand/50 bg-amber-brand/10 px-3 py-2 text-sm text-paper">
           <span className="min-w-0">
@@ -107,7 +160,10 @@ export default function OpponentPicker({
           </span>
           <button
             type="button"
-            onClick={() => setPage(firstMultiPage)}
+            onClick={() => {
+              setQuery("");
+              setPage(firstMultiPage);
+            }}
             className="min-h-[44px] shrink-0 rounded-lg px-3 font-semibold text-amber-brand hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-brand/60"
           >
             Lihat
@@ -133,7 +189,10 @@ export default function OpponentPicker({
           </span>
           <button
             type="button"
-            onClick={() => setPage(selectedPage)}
+            onClick={() => {
+              setQuery("");
+              setPage(selectedPage);
+            }}
             className="min-h-[44px] shrink-0 rounded-lg px-3 font-semibold text-amber-brand hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-brand/60"
           >
             Lihat
@@ -141,6 +200,39 @@ export default function OpponentPicker({
         </p>
       ) : null}
 
+      {/* Mode multi: tombol Tantang Semua / Batalkan Semua — pilih
+          semua lawan YANG TERLIHAT (hasil filter) sekaligus tanpa
+          mengetuk satu per satu. */}
+      {multi ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onSelectAll?.(filtered.map((f) => getId(f)))}
+            disabled={
+              filtered.length === 0 ||
+              filtered.every((f) => selectedIds.includes(getId(f)))
+            }
+            className="min-h-[44px] flex-1 rounded-xl bg-amber-brand px-4 text-sm font-bold text-[#1a1206] transition-colors duration-150 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Tantang Semua ({filtered.length} fighter)
+          </button>
+          <button
+            type="button"
+            onClick={() => onClearAll?.()}
+            disabled={selectedIds.length === 0}
+            className="min-h-[44px] rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-bold text-paper transition-colors duration-150 hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Batalkan Semua
+          </button>
+        </div>
+      ) : null}
+
+      {filtered.length === 0 ? (
+        <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-6 text-center text-sm text-paper-dim">
+          Tidak ada lawan yang cocok — coba kata kunci lain.
+        </p>
+      ) : (
+        <>
       <div
         role={multi ? "group" : "radiogroup"}
         aria-label={multi ? "Pilih lawan (boleh banyak)" : "Pilih lawan"}
@@ -223,7 +315,8 @@ export default function OpponentPicker({
         className="mt-3 flex flex-wrap items-center justify-between gap-2"
       >
         <p className="text-sm text-paper-dim" aria-live="polite">
-          Halaman {safePage} dari {totalPages} • {fighters.length} fighter
+          Halaman {safePage} dari {totalPages} • {filtered.length} fighter
+          {query.trim() !== "" ? ` (dari ${fighters.length})` : ""}
         </p>
         <div className="flex items-center gap-1.5">
           <button
@@ -273,6 +366,8 @@ export default function OpponentPicker({
           </button>
         </div>
       </nav>
+        </>
+      )}
     </div>
   );
 }

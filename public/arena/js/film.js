@@ -1835,7 +1835,7 @@ function cameraFor(R, B) {
 // film.js re-export supaya importir lama dari './film.js' tetap jalan.
 export { DMG_BASE, BLOCK_CHIP } from './damage.js';
 import { DMG_BASE, BLOCK_CHIP } from './damage.js';
-const FINISHER_KINDS = { finisher: 1, flyknee: 1, stickchop: 1 };
+const FINISHER_KINDS = { finisher: 1, flyknee: 1, headkick: 1, stickchop: 1 };
 
 export function hpAt(t) {
   let hpR = 100, hpB = 100;
