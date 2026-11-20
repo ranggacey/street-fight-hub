@@ -58,7 +58,6 @@ const NAV_LINKS: {
   { href: "/obrolan", label: "Obrolan" },
   { href: "/gelar", label: "Gelar" },
   { href: "/latihan", label: "Latihan" },
-  { href: "/3d-fight", label: "Gelud 3D", badge: "BARU" },
 ];
 
 export default function Navbar() {

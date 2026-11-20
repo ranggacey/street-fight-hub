@@ -374,17 +374,6 @@ export default async function Home() {
               Lihat Gelar →
             </ButtonLink>
           </GlassCard>
-          <GlassCard className="flex flex-col items-start gap-3">
-            <Badge tone="amber">Beta</Badge>
-            <h3 className="font-display text-2xl uppercase leading-tight tracking-wide">
-              Gelud 3D
-            </h3>
-            <p className="text-sm leading-relaxed text-paper-dim">
-              Coba-coba pergerakan gelud 3D di ring eksperimen — putar kamera,
-              coba jab, cross, tendangan, dan lutut. Arena utama tetap 2D.
-            </p>
-            <ButtonLink href="/3d-fight">Coba Gelud 3D →</ButtonLink>
-          </GlassCard>
         </div>
       </section>
 
